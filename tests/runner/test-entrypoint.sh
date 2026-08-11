@@ -19,6 +19,10 @@ make_fixture() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"$MOCK_CALLS/curl.log"
+if [[ "$*" != *"Authorization: Bearer ${GITHUB_PAT}"* ]]; then
+  printf 'missing expected authorization header\n' >&2
+  exit 23
+fi
 if [[ "${MOCK_CURL_FAIL:-0}" == "1" ]]; then
   printf 'mock GitHub API failure\n' >&2
   exit 22
@@ -91,6 +95,7 @@ grep -F -- "--ephemeral" "$MOCK_CALLS/config.log" >/dev/null || fail "ephemeral 
 grep -F -- "--unattended" "$MOCK_CALLS/config.log" >/dev/null || fail "unattended flag missing"
 grep -F -- "--disableupdate" "$MOCK_CALLS/config.log" >/dev/null || fail "disableupdate flag missing"
 grep -F -- "--labels aca-runner" "$MOCK_CALLS/config.log" >/dev/null || fail "runner label missing"
+grep -F -- "Authorization: Bearer test-secret-value" "$MOCK_CALLS/curl.log" >/dev/null || fail "authorization header missing"
 grep -F -- "remove --token remove-token-value" "$MOCK_CALLS/config.log" >/dev/null || fail "cleanup missing"
 [[ -f "$MOCK_CALLS/run.log" ]] || fail "runner process was not started"
 [[ "$output" != *"test-secret-value"* ]] || fail "PAT leaked to output"
