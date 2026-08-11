@@ -169,25 +169,14 @@ export GITHUB_OWNER GITHUB_REPO GITHUB_PAT
 1. PAT가 선택한 저장소에 실제로 접근 가능한지 확인한다.
 2. 저장소가 `Private repository`인지 다시 확인한다.
 
-문서와 화면 공유에는 토큰을 노출하지 않기 위해 아래 표기 예시는 인증 헤더 값을 가립니다.
+문서 예시도 실제 검증에 바로 사용할 수 있어야 하므로, PAT를 화면에 출력하지 않으면서 인증 헤더를 별도 변수에 안전하게 구성합니다.
 
 🟢 **실행**
 
-문서 표기용 redacted 예시는 아래와 같습니다.
+아래 예시는 토큰이나 완성된 인증 헤더를 echo하지 않고 그대로 API 호출에만 사용합니다.
 
 ```bash
-curl --fail --silent --show-error \
-  --header 'Accept: application/vnd.github+json' \
-  --header "Authorization: ******" \
-  --header 'X-GitHub-Api-Version: 2022-11-28' \
-  "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO" \
-  | jq '{full_name, private, visibility}'
-```
-
-실제 Cloud Shell에서는 토큰을 출력하지 않도록 헤더를 변수에 담아 실행합니다.
-
-```bash
-AUTH_HEADER="Authorization: Bearer $GITHUB_PAT"
+printf -v AUTH_HEADER '%s: %s %s' 'Authorization' 'Bearer' "$GITHUB_PAT"
 curl --fail --silent --show-error \
   --header 'Accept: application/vnd.github+json' \
   --header "$AUTH_HEADER" \

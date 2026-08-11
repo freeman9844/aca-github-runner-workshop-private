@@ -19,9 +19,16 @@ for text in \
   'az extension add --name containerapp --upgrade --only-show-errors' \
   'az provider register -n Microsoft.App --wait' \
   'az provider register -n Microsoft.OperationalInsights --wait' \
-  'az provider register -n Microsoft.Insights --wait'; do
-  grep -F "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
+  'az provider register -n Microsoft.Insights --wait' \
+  'printf -v AUTH_HEADER '\''%s: %s %s'\'' '\''Authorization'\'' '\''Bearer'\'' "$GITHUB_PAT"' \
+  '--header "$AUTH_HEADER"'; do
+  grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
+
+if grep -F '******' "$PREREQ" >/dev/null; then
+  echo 'FAIL: module 01 contains six-star placeholder auth text' >&2
+  exit 1
+fi
 
 for text in \
   'LOC=koreacentral' \
