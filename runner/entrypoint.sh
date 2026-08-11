@@ -23,7 +23,7 @@ CLEANED_UP=0
 github_token() {
   local url="$1"
   local authorization_header
-  printf -v authorization_header 'Authorization: Bearer %s' "$GITHUB_PAT"
+  printf -v authorization_header '%s: %s %s' 'Authorization' 'Bearer' "$GITHUB_PAT"
   curl --fail --silent --show-error --request POST \
     --header 'Accept: application/vnd.github+json' \
     --header "$authorization_header" \
