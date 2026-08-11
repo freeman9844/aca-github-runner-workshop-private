@@ -1,0 +1,29 @@
+name: ACA Runner Scale Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  parallel-runner:
+    name: Worker ${{ matrix.worker }}
+    runs-on: [self-hosted, linux, x64, aca-runner]
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: [1, 2, 3, 4]
+    steps:
+      - name: Show runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "worker=${{ matrix.worker }}"
+          echo "hostname=$(hostname)"
+          echo "started_at=$(date --utc --iso-8601=seconds)"
+
+      - name: Hold the runner for scale observation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 45
+          echo "completed_at=$(date --utc --iso-8601=seconds)"
