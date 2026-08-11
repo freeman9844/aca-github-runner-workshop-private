@@ -24,7 +24,7 @@ github_token() {
   local url="$1"
   curl --fail --silent --show-error --request POST \
     --header 'Accept: application/vnd.github+json' \
-    --header "Authorization: Bearer ${GITHUB_PAT}" \
+    --header "Authorization: Bearer $GITHUB_PAT" \
     --header 'X-GitHub-Api-Version: 2022-11-28' \
     "$url" |
     jq --exit-status --raw-output '.token'

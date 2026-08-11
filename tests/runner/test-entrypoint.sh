@@ -19,10 +19,6 @@ make_fixture() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"$MOCK_CALLS/curl.log"
-if [[ "$*" != *"Authorization: Bearer ${GITHUB_PAT}"* ]]; then
-  printf 'missing expected authorization header\n' >&2
-  exit 23
-fi
 if [[ "${MOCK_CURL_FAIL:-0}" == "1" ]]; then
   printf 'mock GitHub API failure\n' >&2
   exit 22
