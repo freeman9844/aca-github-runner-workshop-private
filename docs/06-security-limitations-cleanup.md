@@ -174,7 +174,7 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 - PAT를 revoke/delete한 뒤에는 같은 Job secret으로 더 이상 GitHub API 인증이 되지 않습니다.
 - runner가 offline으로 잠깐 보이는 것은 반영 지연일 수 있지만, 오래 남는 stale runner는 직접 정리 대상입니다.
 
-## 7. 트러블슈팅
+## 트러블슈팅
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|

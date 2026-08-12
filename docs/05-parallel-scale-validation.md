@@ -295,7 +295,7 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 - workflow가 모두 끝난 뒤에는 runner가 permanently online 상태로 남아 있지 않아야 합니다.
 - 일시적으로 offline record가 보일 수는 있지만, 장시간 고정된 online runner가 보이면 ephemeral 정리 흐름을 다시 확인해야 합니다.
 
-## 12. 트러블슈팅
+## 트러블슈팅
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
