@@ -1,4 +1,18 @@
+# Agent and worktree artifacts
 .worktrees/
 .superpowers/
+docs/superpowers/
+
+# Local configuration and secrets
 .env
 *.local
+
+# Editor and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Temporary output
+*.log
+*.tmp
