@@ -108,43 +108,76 @@ export GITHUB_OWNER GITHUB_REPO GITHUB_PAT
 🟢 **실행**
 
 ```bash
-az containerapp job create \
-  --name "$JOB" \
-  --resource-group "$RG" \
-  --environment "$ENV" \
-  --trigger-type Event \
-  --replica-timeout 900 \
-  --replica-retry-limit 0 \
-  --replica-completion-count 1 \
-  --parallelism 1 \
-  --container-name github-actions-runner \
-  --image "$ACR_SERVER/$IMAGE" \
-  --min-executions 0 \
-  --max-executions 5 \
-  --polling-interval 30 \
-  --scale-rule-name github-runner \
-  --scale-rule-type github-runner \
+JOB_CREATE_ARGS=(
+  # Job 이름과 배포할 Resource Group, Container Apps Environment를 지정합니다.
+  --name "$JOB"
+  --resource-group "$RG"
+  --environment "$ENV"
+
+  # schedule이 아니라 queued workflow 이벤트를 감시하는 Event Job을 만듭니다.
+  --trigger-type Event
+
+  # runner는 최대 900초 실행하며, 실패 시 ACA가 replica를 자동 재시도하지 않습니다.
+  --replica-timeout 900
+  --replica-retry-limit 0
+
+  # replica 1개가 완료되면 execution을 완료하고, execution마다 runner 1개만 실행합니다.
+  --replica-completion-count 1
+  --parallelism 1
+
+  # 로그와 상태에서 확인할 container 이름과 모듈 03에서 만든 ACR image를 지정합니다.
+  --container-name github-actions-runner
+  --image "$ACR_SERVER/$IMAGE"
+
+  # queue가 비어 있으면 execution을 0개로 유지합니다.
+  --min-executions 0
+
+  # 동시에 최대 5개 execution까지 scale-out하고 GitHub queue를 30초마다 확인합니다.
+  --max-executions 5
+  --polling-interval 30
+
+  # GitHub Actions queue 전용 KEDA scaler와 식별 이름을 지정합니다.
+  --scale-rule-name github-runner
+  --scale-rule-type github-runner
+
+  # GitHub.com API에서 지정한 private repository와 aca-runner label만 감시합니다.
   --scale-rule-metadata \
-    "githubApiURL=https://api.github.com" \
-    "owner=$GITHUB_OWNER" \
-    "runnerScope=repo" \
-    "repos=$GITHUB_REPO" \
-    "labels=aca-runner" \
-    "targetWorkflowQueueLength=1" \
-  --scale-rule-auth "personalAccessToken=personal-access-token" \
-  --secrets "personal-access-token=$GITHUB_PAT" \
-  --env-vars \
-    "GITHUB_PAT=secretref:personal-access-token" \
-    "GH_URL=https://github.com/$GITHUB_OWNER/$GITHUB_REPO" \
-    "REGISTRATION_TOKEN_API_URL=https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners/registration-token" \
-    "RUNNER_LABELS=aca-runner" \
-    "RUNNER_NAME_PREFIX=aca" \
-  --registry-server "$ACR_SERVER" \
-  --mi-user-assigned "$UAMI_RID" \
-  --registry-identity "$UAMI_RID" \
-  --cpu 2.0 \
-  --memory 4Gi \
+  "githubApiURL=https://api.github.com"
+  "owner=$GITHUB_OWNER"
+  "runnerScope=repo"
+  "repos=$GITHUB_REPO"
+  "labels=aca-runner"
+
+  # queued workflow job 1개당 execution 1개가 필요하다고 계산합니다.
+  "targetWorkflowQueueLength=1"
+
+  # scaler는 Job secret에 저장된 PAT를 사용해 GitHub API를 호출합니다.
+  --scale-rule-auth "personalAccessToken=personal-access-token"
+  --secrets "personal-access-token=$GITHUB_PAT"
+
+  # entrypoint에 PAT secret, repository URL, token API URL, runner label과 이름 prefix를 전달합니다.
+  --env-vars
+  "GITHUB_PAT=secretref:personal-access-token"
+  "GH_URL=https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
+  "REGISTRATION_TOKEN_API_URL=https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners/registration-token"
+  "RUNNER_LABELS=aca-runner"
+  "RUNNER_NAME_PREFIX=aca"
+
+  # Job에 UAMI를 연결하고 같은 identity의 AcrPull 권한으로 ACR image를 가져옵니다.
+  --registry-server "$ACR_SERVER"
+  --mi-user-assigned "$UAMI_RID"
+  --registry-identity "$UAMI_RID"
+
+  # execution 하나가 사용할 고정 CPU와 memory 크기입니다.
+  --cpu 2.0
+  --memory 4Gi
+
+  # 성공 시 별도 JSON을 출력하지 않습니다.
   --output none
+)
+
+az containerapp job create "${JOB_CREATE_ARGS[@]}"
+unset JOB_CREATE_ARGS
 ```
 
 📋 **예상 출력**
@@ -152,43 +185,7 @@ az containerapp job create \
 - 명령은 `--output none` 때문에 정상 시 별도 JSON 없이 종료됩니다.
 - 실패 없이 반환되면 Event Job 정의가 저장된 것입니다. 실제 execution은 workflow가 queued 되기 전까지 생성되지 않을 수 있습니다.
 
-## 4. 파라미터 의미 빠르게 읽기
-
-👁️ **설명**
-
-| 항목 | 값 | 의미 |
-|------|------|------|
-| trigger | `--trigger-type Event` | 스케줄이 아니라 queued 이벤트를 감시해 Job execution을 만듭니다. |
-| 실행 제한 | `--replica-timeout 900` | runner 한 개가 최대 900초 동안 workflow job을 처리할 수 있습니다. |
-| 재시도 | `--replica-retry-limit 0` | 실패한 replica를 ACA가 자동 재시도하지 않게 하여 워크숍 결과를 단순하게 유지합니다. |
-| 완료 수 | `--replica-completion-count 1` | replica 1개가 완료되면 execution도 완료됩니다. |
-| 병렬성 | `--parallelism 1` | execution 하나당 runner 컨테이너 1개만 띄웁니다. scale-out은 execution 개수로 관찰합니다. |
-| container 이름 | `--container-name github-actions-runner` | `job show`, `job logs`, 포털 화면에서 동일한 이름으로 확인합니다. |
-| image | `--image "$ACR_SERVER/$IMAGE"` | 모듈 03에서 빌드한 ACR image를 사용합니다. |
-| 최소 실행 수 | `--min-executions 0` | queue가 비어 있으면 항상 0개여도 됩니다. |
-| 최대 실행 수 | `--max-executions 5` | 동시에 최대 5개 execution까지만 scale-out합니다. |
-| polling | `--polling-interval 30` | KEDA가 GitHub queue를 30초마다 확인합니다. |
-| scaler 이름 | `--scale-rule-name github-runner` | scale rule을 식별하는 이름입니다. |
-| scaler 타입 | `--scale-rule-type github-runner` | GitHub Actions queue 전용 KEDA scaler를 사용합니다. |
-| GitHub API URL | <code>githubApiURL=<wbr>https://api.github.com</code> | GitHub.com public API endpoint를 명시합니다. |
-| owner | `owner=$GITHUB_OWNER` | repository owner 또는 organization 이름입니다. |
-| scope | `runnerScope=repo` | 이 워크숍은 repository-scoped runner만 사용합니다. |
-| repo 선택 | `repos=$GITHUB_REPO` | 감시 대상 private repository를 1개로 제한합니다. |
-| label | `labels=aca-runner` | workflow의 `runs-on: [self-hosted, linux, x64, aca-runner]`와 맞아야 합니다. |
-| queue 길이 | <code>targetWorkflowQueueLength=<wbr>1</code> | queued job 1개를 execution 1개로 취급합니다. |
-| scaler 인증 | <code>--scale-rule-auth <wbr>"personalAccessToken=<wbr>personal-access-token"</code> | scale rule이 Job secret 이름 `personal-access-token`을 사용해 GitHub API를 호출합니다. |
-| secret 저장 | <code>--secrets <wbr>"personal-access-token=<wbr>$GITHUB_PAT"</code> | PAT 값을 Job secret으로 저장합니다. 이후 query로 secret 원문을 다시 읽지 않습니다. |
-| 컨테이너 env: PAT | <code>GITHUB_PAT=<wbr>secretref:<wbr>personal-access-token</code> | entrypoint가 secret reference를 통해 PAT를 읽습니다. |
-| 컨테이너 env: repo URL | <code>GH_URL=<wbr>https://github.com/<wbr>$GITHUB_OWNER/<wbr>$GITHUB_REPO</code> | `config.sh --url`에 전달할 대상 저장소 URL입니다. |
-| 컨테이너 env: registration API | <code>REGISTRATION_TOKEN_API_URL=<wbr>https://api.github.com/<wbr>repos/<wbr>$GITHUB_OWNER/<wbr>$GITHUB_REPO/<wbr>actions/runners/<wbr>registration-token</code> | entrypoint가 ephemeral registration token을 요청하는 API URL입니다. |
-| 컨테이너 env: labels | `RUNNER_LABELS=aca-runner` | runner 등록 label을 workflow와 동일하게 맞춥니다. |
-| 컨테이너 env: 이름 prefix | `RUNNER_NAME_PREFIX=aca` | GitHub Settings 화면에서 생성되는 ephemeral runner 이름 prefix입니다. |
-| registry 서버 | `--registry-server "$ACR_SERVER"` | 이미지 pull 대상 registry를 명시합니다. |
-| Job identity | `--mi-user-assigned "$UAMI_RID"` | Job이 사용할 User-Assigned Managed Identity를 연결합니다. |
-| registry identity | `--registry-identity "$UAMI_RID"` | ACR pull에도 같은 UAMI와 `AcrPull` RBAC를 사용합니다. |
-| CPU/메모리 | `--cpu 2.0 --memory 4Gi` | 워크숍의 샘플 workflow 1개를 무난히 처리하는 고정 크기입니다. |
-
-## 5. secret을 노출하지 않고 Job 상태 검증
+## 4. secret을 노출하지 않고 Job 상태 검증
 
 👁️ **설명**
 
@@ -235,7 +232,7 @@ rules:
 
 `az containerapp job execution list`는 workflow를 아직 queue에 넣지 않았다면 표 헤더만 나오거나 행이 0개일 수 있습니다. **배포 직후 active execution이 없는 것이 정상**입니다.
 
-## 6. GitHub 쪽에서 미리 확인할 것
+## 5. GitHub 쪽에서 미리 확인할 것
 
 👁️ **설명**
 

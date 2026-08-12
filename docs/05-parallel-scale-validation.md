@@ -78,25 +78,68 @@ CLI에서 workflow를 commit/push하려고 PAT에 repository contents 쓰기 권
 - Cloud Shell에는 workflow YAML 전체가 출력됩니다.
 - GitHub에는 `.github/workflows/aca-runner-scale-test.yml`가 새로 생기고 workflow 이름이 **ACA Runner Scale Test**로 보입니다.
 
-## 2. matrix 4 Job 핵심 YAML 다시 확인
+## 2. matrix 4 Job 전체 YAML 확인
 
 👁️ **설명**
 
-scale-out 검증에서 가장 중요한 부분은 matrix 4 Job과 runner label입니다. 아래 두 줄이 있어야 KEDA가 queued job 수에 맞춰 execution을 늘릴 수 있습니다.
+아래는 GitHub에 저장한 workflow 전체입니다. 주석을 따라 수동 실행 방식, matrix 4개, runner label, 실행 시간 확보 단계가 어떻게 연결되는지 확인합니다.
 
 🟢 **실행**
 
-GitHub에 저장한 workflow 또는 Cloud Shell 출력에서 아래 excerpt를 다시 확인합니다.
+GitHub에 저장한 workflow 또는 Cloud Shell 출력과 아래 YAML을 비교합니다.
 
 ```yaml
-worker: [1, 2, 3, 4]
-runs-on: [self-hosted, linux, x64, aca-runner]
+# GitHub Actions 화면에 표시할 workflow 이름입니다.
+name: ACA Runner Scale Test
+
+# 수동 실행으로만 scale test를 시작합니다.
+on:
+  workflow_dispatch:
+
+jobs:
+  # 이 job 하나가 matrix 값에 따라 네 개의 GitHub job으로 확장됩니다.
+  parallel-runner:
+    # Actions 화면에는 Worker 1부터 Worker 4까지 표시됩니다.
+    name: Worker ${{ matrix.worker }}
+
+    # GitHub 기본 label과 모듈 04에서 등록한 aca-runner label을 모두 요구합니다.
+    runs-on: [self-hosted, linux, x64, aca-runner]
+
+    # runner 기동이나 workflow가 비정상적으로 지연될 때 무한 대기하지 않습니다.
+    timeout-minutes: 10
+
+    strategy:
+      # 한 Worker가 실패해도 나머지 Worker를 취소하지 않아 전체 scale 결과를 확인할 수 있습니다.
+      fail-fast: false
+      matrix:
+        # queued job 네 개를 만들어 KEDA의 0 → N scale-out을 관찰합니다.
+        worker: [1, 2, 3, 4]
+
+    steps:
+      # 각 Worker가 실행된 runner hostname과 시작 시간을 기록합니다.
+      - name: Show runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "worker=${{ matrix.worker }}"
+          echo "hostname=$(hostname)"
+          echo "started_at=$(date --utc --iso-8601=seconds)"
+
+      # 여러 execution이 동시에 Running 상태가 되는 구간을 관찰할 시간을 확보합니다.
+      - name: Hold the runner for scale observation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 45
+          echo "completed_at=$(date --utc --iso-8601=seconds)"
 ```
 
 📋 **예상 출력**
 
+- `workflow_dispatch`가 있으면 GitHub Actions 화면에서 **Run workflow** 버튼으로 수동 실행할 수 있습니다.
 - `worker: [1, 2, 3, 4]`가 보이면 matrix가 네 개의 GitHub job을 생성합니다.
 - `runs-on: [self-hosted, linux, x64, aca-runner]`가 보이면 모듈 04의 `labels=aca-runner`와 연결됩니다.
+- `sleep 45`는 네 execution이 겹치는 구간을 관찰할 시간을 확보합니다.
 
 ## 3. 실행 전 baseline 이력과 active execution 0 상태 확인
 
@@ -134,6 +177,10 @@ GitHub repository에서 **Actions → ACA Runner Scale Test → Run workflow**�
 
 - GitHub Actions 실행 목록에 `ACA Runner Scale Test`가 새로 생성됩니다.
 - 잠시 후 matrix로 분기된 `Worker 1`부터 `Worker 4`까지 네 개의 GitHub job이 queued/running 상태로 보이기 시작합니다.
+
+> **참고 화면:** workflow를 수동 실행한 직후 네 개의 matrix Job이 `Queued` 상태로 생성된 모습입니다.
+
+![GitHub Actions에서 네 개 matrix Job이 queued 상태인 화면](images/05-github-actions-queued-matrix.png)
 
 ## 5. 첫 30~90초 동안 Running execution만 반복 조회
 
@@ -252,6 +299,10 @@ GitHub Actions 실행 화면에서 `Worker 1` ~ `Worker 4` 로그를 열고 `Sho
 - 네 개 GitHub job이 모두 `Success`여야 합니다.
 - 각 job 로그에는 `worker=...`, `hostname=...`, `started_at=...`, `completed_at=...`가 출력됩니다.
 - 실행 타이밍이 겹친 구간에서는 서로 다른 hostname이 관찰됩니다. 다만 조회 타이밍 때문에 네 개가 항상 동시에 보일 것이라고 기대하지는 마세요.
+
+> **참고 화면:** 네 개의 matrix Job이 모두 성공하고 각 Worker의 `Show runner identity` 단계가 완료된 모습입니다.
+
+![GitHub Actions에서 네 개 matrix Job이 성공한 화면](images/05-github-actions-successful-matrix.png)
 
 ## 10. Running execution이 다시 0으로 돌아오는지 확인
 

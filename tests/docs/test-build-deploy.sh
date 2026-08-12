@@ -18,6 +18,9 @@ for text in \
 done
 
 for text in \
+  'JOB_CREATE_ARGS=(' \
+  '# queue가 비어 있으면 execution을 0개로 유지합니다.' \
+  'az containerapp job create "${JOB_CREATE_ARGS[@]}"' \
   '--trigger-type Event' \
   '--container-name github-actions-runner' \
   '--replica-timeout 900' \
@@ -39,6 +42,11 @@ for text in \
   '--registry-identity "$UAMI_RID"'; do
   grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
 done
+
+if grep -F -- '## 4. 파라미터 의미 빠르게 읽기' "$JOB_DOC" >/dev/null; then
+  echo "FAIL: module 04 keeps parameter explanations in a separate table" >&2
+  exit 1
+fi
 
 if grep -F -- 'githubAPIURL=' "$JOB_DOC" >/dev/null; then
   echo "FAIL: module 04 uses invalid KEDA metadata key githubAPIURL" >&2
