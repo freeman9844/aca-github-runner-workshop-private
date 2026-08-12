@@ -125,7 +125,7 @@ az containerapp job create \
   --scale-rule-name github-runner \
   --scale-rule-type github-runner \
   --scale-rule-metadata \
-    "githubAPIURL=https://api.github.com" \
+    "githubApiURL=https://api.github.com" \
     "owner=$GITHUB_OWNER" \
     "runnerScope=repo" \
     "repos=$GITHUB_REPO" \
@@ -170,7 +170,7 @@ az containerapp job create \
 | polling | `--polling-interval 30` | KEDA가 GitHub queue를 30초마다 확인합니다. |
 | scaler 이름 | `--scale-rule-name github-runner` | scale rule을 식별하는 이름입니다. |
 | scaler 타입 | `--scale-rule-type github-runner` | GitHub Actions queue 전용 KEDA scaler를 사용합니다. |
-| GitHub API URL | `githubAPIURL=https://api.github.com` | GitHub.com public API endpoint를 명시합니다. |
+| GitHub API URL | `githubApiURL=https://api.github.com` | GitHub.com public API endpoint를 명시합니다. |
 | owner | `owner=$GITHUB_OWNER` | repository owner 또는 organization 이름입니다. |
 | scope | `runnerScope=repo` | 이 워크숍은 repository-scoped runner만 사용합니다. |
 | repo 선택 | `repos=$GITHUB_REPO` | 감시 대상 private repository를 1개로 제한합니다. |

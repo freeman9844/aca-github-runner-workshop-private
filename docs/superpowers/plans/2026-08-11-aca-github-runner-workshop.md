@@ -961,7 +961,7 @@ az containerapp job create \
   --scale-rule-name github-runner \
   --scale-rule-type github-runner \
   --scale-rule-metadata \
-    "githubAPIURL=https://api.github.com" \
+    "githubApiURL=https://api.github.com" \
     "owner=$GITHUB_OWNER" \
     "runnerScope=repo" \
     "repos=$GITHUB_REPO" \

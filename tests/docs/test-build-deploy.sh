@@ -28,6 +28,7 @@ for text in \
   '--max-executions 5' \
   '--polling-interval 30' \
   '--scale-rule-type github-runner' \
+  'githubApiURL=https://api.github.com' \
   'runnerScope=repo' \
   'labels=aca-runner' \
   'targetWorkflowQueueLength=1' \
@@ -38,6 +39,11 @@ for text in \
   '--registry-identity "$UAMI_RID"'; do
   grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
 done
+
+if grep -F -- 'githubAPIURL=' "$JOB_DOC" >/dev/null; then
+  echo "FAIL: module 04 uses invalid KEDA metadata key githubAPIURL" >&2
+  exit 1
+fi
 
 for text in \
   '--cpu 2.0' \

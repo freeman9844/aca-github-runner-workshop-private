@@ -29,6 +29,13 @@ for module in \
   grep -F "$module" "$README" >/dev/null || { echo "FAIL: missing link $module" >&2; exit 1; }
 done
 
+for troubleshooting_doc in \
+  "$ROOT/docs/05-parallel-scale-validation.md" \
+  "$ROOT/docs/06-security-limitations-cleanup.md"; do
+  grep -Fx '## 트러블슈팅' "$troubleshooting_doc" >/dev/null ||
+    { echo "FAIL: $(basename "$troubleshooting_doc") must expose #트러블슈팅" >&2; exit 1; }
+done
+
 grep -F '약 90분' "$README" >/dev/null
 grep -F 'Private repository' "$README" >/dev/null
 grep -F 'Docker-in-Docker' "$README" >/dev/null
