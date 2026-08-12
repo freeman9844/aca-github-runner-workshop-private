@@ -29,6 +29,7 @@ for text in \
 done
 
 grep -F '.superpowers/' "$IGNORE" >/dev/null
+grep -F 'docs/superpowers/' "$IGNORE" >/dev/null
 grep -F '.env' "$IGNORE" >/dev/null
 grep -F '*.local' "$IGNORE" >/dev/null
 
