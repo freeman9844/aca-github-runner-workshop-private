@@ -67,6 +67,8 @@ az provider register -n Microsoft.Insights --wait
 
 이 실습은 queued workflow Job을 self-hosted runner가 처리하므로 반드시 `Private repository`에서만 진행합니다. Public repository는 신뢰하지 않는 코드 실행 위험이 있으므로 사용하지 않습니다.
 
+`aca-runner-lab`은 미리 존재하는 저장소가 아니라 이 단계에서 참가자가 새로 만드는 **실습용 repository**입니다. 워크숍 문서와 runner 소스가 들어 있는 workshop repository와는 별개의 저장소이며, 이후 workflow 실행, KEDA queue 감시, self-hosted runner 등록 대상은 모두 `aca-runner-lab`입니다.
+
 🟢 **실행**
 
 GitHub 웹 UI에서 새 저장소를 만들고 아래 값을 사용합니다.
@@ -113,6 +115,8 @@ ls
 
 KEDA `github-runner` scaler와 runner 등록 API는 GitHub API 인증이 필요합니다. 코어 실습은 교육 시간을 줄이기 위해 **30일 만료 Fine-grained PAT**를 사용합니다.
 
+PAT의 repository 범위에는 워크숍 소스 저장소가 아니라 **3단계에서 새로 만든 `aca-runner-lab`**을 선택합니다.
+
 🟢 **실행**
 
 GitHub에서 **Settings → Developer settings → Personal access tokens → Fine-grained tokens**로 이동한 뒤 아래 기준으로 새 토큰을 만듭니다.
@@ -152,13 +156,26 @@ read -rp "Private repository name: " GITHUB_REPO
 read -rsp "GitHub PAT: " GITHUB_PAT
 echo
 export GITHUB_OWNER GITHUB_REPO GITHUB_PAT
+printf 'GITHUB_OWNER=%s\nGITHUB_REPO=%s\nGITHUB_PAT=%s\n' \
+  "$GITHUB_OWNER" \
+  "$GITHUB_REPO" \
+  "${GITHUB_PAT:+SET}"
 ```
 
 📋 **예상 출력**
 
 - `GitHub PAT:` 입력 중에는 커서만 움직이고 토큰 값이 화면에 표시되지 않습니다.
 - `echo` 때문에 입력 뒤 줄바꿈이 한 번 추가됩니다.
-- 이후 셸 세션에서 `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_PAT`를 그대로 재사용할 수 있습니다.
+- `export` 명령은 성공해도 별도 출력을 만들지 않습니다.
+- 마지막 `printf`에서 owner와 repository 이름이 표시되고 `GITHUB_PAT=SET`이 출력되어야 합니다. PAT 원문은 출력하지 않습니다.
+
+```text
+GITHUB_OWNER=octocat
+GITHUB_REPO=aca-runner-lab
+GITHUB_PAT=SET
+```
+
+`GITHUB_OWNER` 값은 본인이 선택한 개인 계정 또는 organization 이름에 따라 달라집니다. 이후 같은 Cloud Shell 세션에서 세 변수를 그대로 재사용할 수 있습니다.
 
 ## 7. GitHub API로 저장소 접근 검증
 
