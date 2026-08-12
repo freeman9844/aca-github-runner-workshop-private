@@ -33,6 +33,16 @@ grep -F '약 90분' "$README" >/dev/null
 grep -F 'Private repository' "$README" >/dev/null
 grep -F 'Docker-in-Docker' "$README" >/dev/null
 grep -F '0 → N → 0' "$README" >/dev/null
+grep -F '리허설 검증' "$README" >/dev/null
+grep -F '`koreacentral`' "$README" >/dev/null
+grep -F '`2.336.0`' "$README" >/dev/null
+grep -F 'matrix 4개 Job' "$README" >/dev/null
+grep -F '이미지 pull' "$README" >/dev/null
+grep -F 'KEDA 확장' "$README" >/dev/null
+grep -F 'ephemeral runner 종료' "$README" >/dev/null
+grep -F '로그 확인' "$README" >/dev/null
+grep -F '리소스 그룹 삭제' "$README" >/dev/null
+grep -F 'GitHub 저장소 삭제' "$README" >/dev/null
 grep -F '🟢 **실행**' "$README" >/dev/null
 grep -F '📋 **예상 출력**' "$README" >/dev/null
 
