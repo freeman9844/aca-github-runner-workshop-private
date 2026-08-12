@@ -14,6 +14,7 @@ for text in \
   'Administration | Read and write' \
   'Metadata | Read-only' \
   'read -rsp "GitHub PAT: " GITHUB_PAT' \
+  '${GITHUB_PAT:+SET}' \
   'read -rp "Workshop repository URL: " WORKSHOP_REPO_URL' \
   'git clone "$WORKSHOP_REPO_URL" ~/aca-github-runner-workshop' \
   'az extension add --name containerapp --upgrade --only-show-errors' \
