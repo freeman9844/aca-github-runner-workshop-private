@@ -12,6 +12,34 @@
 - `az containerapp job logs show`와 `ContainerAppConsoleLogs` KQL로 runner lifecycle marker를 확인한다.
 - GitHub Actions와 **Settings → Actions → Runners**에서 ephemeral runner가 영구 온라인 상태로 남지 않았는지 검증한다.
 
+## 0. 세션 재연결 시 변수 복구 (선택)
+
+👁️ **설명**
+
+같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼거나 다른 브라우저/탭으로 다시 들어왔다면, **원래 저장해 둔 SUFFIX**를 그대로 다시 사용해 모듈 02와 04에서 만든 리소스 이름을 복구하세요. 여기서는 새 suffix를 만들지 말고, 처음 실습에 사용한 값을 다시 넣어야 기존 Job/Log Analytics 조회가 정확히 이어집니다.
+
+🟢 **실행**
+
+```bash
+SUFFIX="<your-saved-suffix>"
+RG="rg-acarunner-$SUFFIX"
+LOG="log-acarunner-$SUFFIX"
+JOB="job-ghrunner-$SUFFIX"
+LOG_ID=$(az monitor log-analytics workspace show \
+  --resource-group "$RG" \
+  --workspace-name "$LOG" \
+  --query customerId \
+  --output tsv)
+
+printf 'RG=%s\nLOG=%s\nJOB=%s\nLOG_ID=%s\n' "$RG" "$LOG" "$JOB" "$LOG_ID"
+```
+
+📋 **예상 출력**
+
+- `RG`, `LOG`, `JOB`는 원래 만든 리소스 이름으로 다시 채워집니다.
+- `LOG_ID`에는 Log Analytics workspace customer ID가 들어갑니다.
+- 값이 비어 있거나 조회가 실패하면 SUFFIX 오타 여부와 원래 실습에서 사용한 suffix 기록을 다시 확인합니다.
+
 ## 태그 범례
 
 | 태그 | 의미 |
