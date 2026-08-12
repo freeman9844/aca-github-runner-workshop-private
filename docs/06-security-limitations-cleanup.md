@@ -12,6 +12,32 @@
 - Azure Container Apps Job과 GitHub runner 모델의 제약을 운영 관점에서 설명할 수 있다.
 - Azure 리소스 그룹과 GitHub 측 실습 흔적을 안전하게 정리할 수 있다.
 
+## 0. 정리 전에 변수 복구
+
+👁️ **설명**
+
+정리 단계는 비용을 멈추기 위해 **정확한 리소스 그룹 이름**을 다시 잡는 것이 중요합니다. 같은 Cloud Shell 세션을 계속 사용 중이라면 기존 변수를 그대로 써도 되지만, 세션이 끊겼다면 원래 저장해 둔 suffix를 다시 넣어 cleanup 대상을 복구하세요.
+
+🟢 **실행**
+
+```bash
+SUFFIX="<your-saved-suffix>"
+RG="rg-acarunner-$SUFFIX"
+
+printf '정리 대상 RG=%s\n' "$RG"
+```
+
+suffix를 잃어버렸다면 아래처럼 워크숍이 만든 RG 후보를 먼저 나열한 뒤, 본인이 처음 사용한 이름과 대조해서 다시 설정합니다.
+
+```bash
+az group list --query "[?starts_with(name, 'rg-acarunner-')].name" --output table
+```
+
+⚠️ **주의**
+
+- fallback 목록에서 비슷한 이름이 여러 개 보이면, 메모해 둔 원래 suffix와 대조한 뒤에만 삭제 명령을 실행하세요.
+- 잘못된 RG를 지우면 다른 실습/리소스까지 함께 삭제될 수 있습니다.
+
 ## 태그 범례
 
 | 태그 | 의미 |

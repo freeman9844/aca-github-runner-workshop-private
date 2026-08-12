@@ -13,7 +13,7 @@ make_fixture() {
   FIXTURE="$ROOT/tests/runner/.fixture-entrypoint"
   rm -rf "$FIXTURE"
   mkdir -p "$FIXTURE/bin" "$FIXTURE/runner"
-  cp "$ENTRYPOINT" "$FIXTURE/runner/entrypoint.sh" 2>/dev/null || true
+  cp "$ENTRYPOINT" "$FIXTURE/runner/entrypoint.sh"
 
   cat >"$FIXTURE/bin/curl" <<'EOF2'
 #!/usr/bin/env bash

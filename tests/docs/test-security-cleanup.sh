@@ -8,6 +8,11 @@ IGNORE="$ROOT/.gitignore"
 [[ -f "$IGNORE" ]] || { echo "FAIL: .gitignore missing" >&2; exit 1; }
 
 for text in \
+  'SUFFIX="<your-saved-suffix>"' \
+  'RG="rg-acarunner-$SUFFIX"' \
+  "starts_with(name, 'rg-acarunner-')" \
+  'az group list --query' \
+  'suffix를 잃어버렸다면' \
   'GitHub App' \
   'Azure Key Vault' \
   'VNet' \
