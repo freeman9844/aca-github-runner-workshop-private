@@ -89,6 +89,10 @@ flowchart LR
 | 버퍼 | 진행 지연 흡수 | 5분 |
 | 합계 | 코어 워크숍 | 90분 |
 
+> ✅ **리허설 검증** — 2026-08-12 기준 `koreacentral`, runner `2.336.0`,
+> matrix 4개 Job으로 이미지 pull, KEDA 확장, active execution 관찰, ephemeral runner 종료,
+> 로그 확인, 리소스 그룹 삭제, 폐기용 GitHub 저장소 삭제까지 검증했습니다.
+
 ---
 
 ## 비용 개요
