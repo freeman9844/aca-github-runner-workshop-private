@@ -20,6 +20,7 @@ done
 for text in \
   '--trigger-type Event' \
   '--container-name github-actions-runner' \
+  '--replica-timeout 900' \
   '--replica-retry-limit 0' \
   '--replica-completion-count 1' \
   '--parallelism 1' \
@@ -33,7 +34,14 @@ for text in \
   'personalAccessToken=personal-access-token' \
   'GITHUB_PAT=secretref:personal-access-token' \
   'RUNNER_LABELS=aca-runner' \
+  '--mi-user-assigned "$UAMI_RID"' \
   '--registry-identity "$UAMI_RID"'; do
+  grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
+done
+
+for text in \
+  '--cpu 2.0' \
+  '--memory 4Gi'; do
   grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
 done
 
