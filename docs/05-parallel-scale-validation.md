@@ -7,7 +7,7 @@
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
 - `samples/parallel-runner-workflow.yml` 전체를 확인한 뒤 GitHub 웹 UI로 workflow를 만든다.
-- PAT에 `Contents: Read and write`를 추가하지 않고도 workflow를 등록하는 이유를 설명할 수 있다.
+- GitHub App runner 인증과 workflow 작성 경로를 분리하는 이유를 설명할 수 있다.
 - execution 이력과 현재 active execution을 구분해 `0 → N → 0` 상태를 읽는다.
 - `az containerapp job logs show`와 `ContainerAppConsoleLogs` KQL로 runner lifecycle marker를 확인한다.
 - GitHub Actions와 **Settings → Actions → Runners**에서 ephemeral runner가 영구 온라인 상태로 남지 않았는지 검증한다.
@@ -53,7 +53,7 @@ printf 'RG=%s\nLOG=%s\nJOB=%s\nLOG_ID=%s\n' "$RG" "$LOG" "$JOB" "$LOG_ID"
 
 👁️ **설명**
 
-이 워크숍은 로컬 편집기나 `git push` 대신 GitHub 웹 UI로 workflow 파일을 만듭니다. 이렇게 하면 PAT는 모듈 01에서 정의한 최소 권한(`Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`)만 유지해도 되고, `Contents: Read and write`를 추가로 부여할 필요가 없습니다.
+이 워크숍은 로컬 편집기나 `git push` 대신 GitHub 웹 UI로 workflow 파일을 만듭니다. 이렇게 하면 runner 인증은 모듈 01/04에서 준비한 GitHub App 설정(`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, private key)으로 유지하고, workflow 작성은 브라우저 세션으로 처리해 Cloud Shell에 별도의 repository write credential을 둘 필요가 없습니다.
 
 🟢 **실행**
 
@@ -71,7 +71,7 @@ sed -n '1,200p' samples/parallel-runner-workflow.yml
 
 ⚠️ **주의**
 
-CLI에서 workflow를 commit/push하려고 PAT에 repository contents 쓰기 권한을 넓히지 마세요. 이 모듈은 **웹 UI로만 workflow를 생성**해 PAT 권한을 least-privilege로 유지합니다.
+CLI에서 workflow를 commit/push하려고 Cloud Shell에 별도의 repository write credential을 추가하지 마세요. 이 모듈은 **웹 UI로만 workflow를 생성**해 runner 인증용 GitHub App 자격 증명과 workflow 작성 경로를 분리합니다.
 
 📋 **예상 출력**
 
@@ -300,9 +300,9 @@ GitHub Actions 실행 화면에서 `Worker 1` ~ `Worker 4` 로그를 열고 `Sho
 - 각 job 로그에는 `worker=...`, `hostname=...`, `started_at=...`, `completed_at=...`가 출력됩니다.
 - 실행 타이밍이 겹친 구간에서는 서로 다른 hostname이 관찰됩니다. 다만 조회 타이밍 때문에 네 개가 항상 동시에 보일 것이라고 기대하지는 마세요.
 
-> **참고 화면:** 네 개의 matrix Job이 모두 성공하고 각 Worker의 `Show runner identity` 단계가 완료된 모습입니다.
+> **참고 화면:** 체크인된 이미지는 **Worker 1은 성공했고 Worker 4는 아직 진행 중인 중간 상태**를 보여 줍니다. 이 화면은 scale-out 진행 상황 예시일 뿐이며, 실제 검증은 `Worker 1`~`Worker 4`가 최종적으로 모두 `Success`인지까지 확인해야 완료입니다.
 
-![GitHub Actions에서 네 개 matrix Job이 성공한 화면](images/05-github-actions-successful-matrix.png)
+![GitHub Actions에서 Worker 1은 성공했고 Worker 4는 아직 진행 중인 중간 상태 화면](images/05-github-actions-successful-matrix.png)
 
 ## 10. Running execution이 다시 0으로 돌아오는지 확인
 
@@ -350,11 +350,12 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| GitHub job이 계속 queued 상태로 남음 | PAT 권한 부족, PAT 만료, 또는 workflow가 다른 label을 사용함 | 모듈 01의 Fine-grained PAT 권한(`Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`)과 만료 상태를 다시 확인하고, workflow가 `runs-on: [self-hosted, linux, x64, aca-runner]`를 그대로 쓰는지 검토합니다. |
+| GitHub job이 계속 queued 상태로 남음 | GitHub App installation이 제거되었거나 `aca-runner-lab` repository에 아직 부여되지 않았거나, workflow가 다른 label을 사용함 | GitHub App installation이 lab repository에 연결되어 있는지 확인하고, workflow가 `runs-on: [self-hosted, linux, x64, aca-runner]`를 그대로 쓰는지 검토합니다. |
 | Running execution이 항상 1개만 보임 | polling 타이밍상 동시에 관찰하지 못했거나 Azure quota/시작 지연이 있음 | 먼저 GitHub에서 네 job이 모두 생성되었는지 확인하고, 30~90초 동안 같은 `Running` query를 반복합니다. 네 개가 항상 한 번에 보여야 한다고 가정하지 마세요. |
 | `az containerapp job logs show`에 아직 로그가 거의 없음 | execution 시작 직후라 runner bootstrap 로그가 아직 수집되지 않음 | 10~20초 정도 기다렸다가 같은 `EXECUTION`으로 다시 조회하고, 필요하면 가장 최근 execution 이름을 다시 잡아 확인합니다. |
 | ACA 쪽 execution은 끝났는데 과거 replica 로그가 안 보이거나 일부만 남음 | 로그 보존/수집 지연 또는 조회 대상을 잘못 잡음 | `EXECUTION=$(...)`로 최신 execution 이름을 다시 구한 뒤 `ContainerAppConsoleLogs | where ContainerGroupName startswith '$EXECUTION'` KQL로 조회 범위를 좁힙니다. |
-| GitHub API 또는 scaler 동작이 401/403을 반환함 | PAT scope 부족, 만료, 또는 잘못된 repo owner/repo 값 | 모듈 01/04의 GitHub owner, repo, PAT secret 값을 다시 확인하고 Job secret을 갱신합니다. |
+| GitHub API 또는 scaler 동작이 401/403을 반환함 | App permission 변경이 installation에 아직 반영되지 않았거나 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, private key 조합이 맞지 않음 | GitHub App 설정에서 permission 변경을 승인했는지 확인하고, 모듈 01/04의 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, private key 값이 같은 App installation을 가리키는지 다시 점검합니다. |
+| KEDA scaler가 registration token을 받지 못함 | KEDA GitHub App credential이 invalid 하거나 secret 갱신 후 Job 정의가 이전 값을 참조함 | Container Apps Job secret과 scaler metadata를 다시 적용하고, 가장 최근 deployment에서 GitHub App credential이 새 PEM과 일치하는지 확인합니다. |
 | workflow가 오래 걸리다가 timeout으로 실패함 | execution 기동 지연, GitHub queue 적체, 또는 외부 서비스 일시 지연 | GitHub Actions와 ACA execution 시작 시간을 함께 비교합니다. 필요하면 잠시 후 같은 workflow를 다시 실행해 재현성을 확인합니다. |
 | **Settings → Actions → Runners**에 stale offline runner가 남아 보임 | GitHub UI의 기록 반영 지연 또는 cleanup metadata 잔존 | 몇 분 후 새로고침해 사라지는지 확인하고, 계속 남으면 최신 execution 로그에서 `Runner process exited`가 있었는지 먼저 검토합니다. persistent online runner가 남는 경우만 문제로 취급합니다. |
 

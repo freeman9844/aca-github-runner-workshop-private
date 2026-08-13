@@ -24,7 +24,7 @@ for text in \
   'samples/parallel-runner-workflow.yml' \
   '.github/workflows/aca-runner-scale-test.yml' \
   '![GitHub Actions에서 네 개 matrix Job이 queued 상태인 화면](images/05-github-actions-queued-matrix.png)' \
-  '![GitHub Actions에서 네 개 matrix Job이 성공한 화면](images/05-github-actions-successful-matrix.png)' \
+  'Worker 1은 성공했고 Worker 4는 아직 진행 중인 중간 상태' \
   '# 수동 실행으로만 scale test를 시작합니다.' \
   'name: ACA Runner Scale Test' \
   'workflow_dispatch:' \
@@ -42,8 +42,16 @@ for text in \
   'ContainerGroupName startswith' \
   'Runner configured' \
   'Runner process exited' \
+  'GitHub App installation' \
+  'GITHUB_APP_ID' \
+  'GITHUB_APP_INSTALLATION_ID' \
+  'App permission 변경' \
+  'KEDA GitHub App credential' \
   'active execution 수는 0'; do
   grep -F -- "$text" "$DOC" >/dev/null || { echo "FAIL: module 05 missing $text" >&2; exit 1; }
 done
+
+! grep -F -- 'PAT' "$DOC" >/dev/null || { echo "FAIL: module 05 still references PAT" >&2; exit 1; }
+! grep -F -- '네 개 matrix Job이 성공한 화면' "$DOC" >/dev/null || { echo "FAIL: module 05 still describes screenshot as four-job success" >&2; exit 1; }
 
 printf 'PASS: parallel scale validation doc\n'
