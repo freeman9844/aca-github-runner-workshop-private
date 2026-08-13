@@ -10,21 +10,37 @@ FOUNDATION="$ROOT/docs/02-azure-foundation.md"
 
 for text in \
   'Visibility | **Private**' \
+  'GitHub Apps' \
+  'Webhook | **Inactive**' \
   'Actions | Read-only' \
   'Administration | Read and write' \
   'Metadata | Read-only' \
-  'read -rsp "GitHub PAT: " GITHUB_PAT' \
-  '${GITHUB_PAT:+SET}' \
+  'Only select repositories' \
+  'aca-runner-lab' \
+  'GITHUB_APP_ID' \
+  'GITHUB_APP_INSTALLATION_ID' \
+  'GITHUB_APP_PRIVATE_KEY_PATH' \
+  'GITHUB_APP_PRIVATE_KEY="$(<"$GITHUB_APP_PRIVATE_KEY_PATH")"' \
+  'openssl dgst -sha256' \
+  'printf -v APP_AUTH_HEADER '\''%s: %s %s'\'' '\''Authorization'\'' '\''Bearer'\'' "$APP_JWT"' \
+  'printf -v INSTALLATION_AUTH_HEADER '\''%s: %s %s'\''' \
+  '/app/installations/$GITHUB_APP_INSTALLATION_ID/access_tokens' \
+  '--header "$APP_AUTH_HEADER"' \
+  '--header "$INSTALLATION_AUTH_HEADER"' \
+  'X-GitHub-Api-Version: 2026-03-10' \
   'read -rp "Workshop repository URL: " WORKSHOP_REPO_URL' \
   'git clone "$WORKSHOP_REPO_URL" ~/aca-github-runner-workshop' \
   'az extension add --name containerapp --upgrade --only-show-errors' \
   'az provider register -n Microsoft.App --wait' \
   'az provider register -n Microsoft.OperationalInsights --wait' \
-  'az provider register -n Microsoft.Insights --wait' \
-  'printf -v AUTH_HEADER '\''%s: %s %s'\'' '\''Authorization'\'' '\''Bearer'\'' "$GITHUB_PAT"' \
-  '--header "$AUTH_HEADER"'; do
+  'az provider register -n Microsoft.Insights --wait'; do
   grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
+
+if grep -E 'Fine-grained PAT|GITHUB_PAT|personal access token' "$PREREQ" >/dev/null; then
+  echo 'FAIL: module 01 still documents PAT authentication' >&2
+  exit 1
+fi
 
 if grep -F '******' "$PREREQ" >/dev/null; then
   echo 'FAIL: module 01 contains six-star placeholder auth text' >&2
