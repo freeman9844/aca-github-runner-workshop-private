@@ -15,6 +15,7 @@ for text in \
   'Actions | Read-only' \
   'Administration | Read and write' \
   'Metadata | Read-only' \
+  'Where can this GitHub App be installed? | **Only on this account**' \
   'Only select repositories' \
   'aca-runner-lab' \
   'GITHUB_APP_ID' \
@@ -39,6 +40,12 @@ done
 
 if grep -E 'Fine-grained PAT|GITHUB_PAT|personal access token' "$PREREQ" >/dev/null; then
   echo 'FAIL: module 01 still documents PAT authentication' >&2
+  exit 1
+fi
+
+if grep -nE '^[[:space:]]*(printf|echo|cat)\b.*\$GITHUB_APP_PRIVATE_KEY([^[:alnum:]_]|$)' "$PREREQ" | \
+  grep -v '\${GITHUB_APP_PRIVATE_KEY:+SET}' >/dev/null; then
+  echo 'FAIL: module 01 prints the raw GitHub App private key' >&2
   exit 1
 fi
 

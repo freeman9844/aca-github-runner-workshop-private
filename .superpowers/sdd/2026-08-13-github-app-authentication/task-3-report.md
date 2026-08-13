@@ -44,3 +44,12 @@ Exit status: `0`
 
 ## Concerns
 - `tests/validate-workshop.sh` remains intentionally red until later tasks migrate the operational PAT flow outside module 01.
+
+## Round 1 Fix Evidence
+- Added an exact contract assertion for `Where can this GitHub App be installed? | **Only on this account**`.
+- Added a focused rejection that fails if module 01 prints `GITHUB_APP_PRIVATE_KEY` directly, while preserving the JWT signing use of the PEM contents.
+- Verified the safe redaction pattern remains `${GITHUB_APP_PRIVATE_KEY:+SET}`.
+- Validation rerun:
+  - `bash tests/docs/test-prerequisites-foundation.sh` → `PASS: prerequisites and foundation docs`
+  - `bash -n tests/docs/test-prerequisites-foundation.sh` → pass
+  - `git diff --check` → pass
