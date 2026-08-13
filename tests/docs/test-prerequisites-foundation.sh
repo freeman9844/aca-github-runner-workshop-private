@@ -72,9 +72,12 @@ for text in \
   '--role AcrPull' \
   '--assignee-principal-type ServicePrincipal' \
   'ACR="acracarunner$(openssl rand -hex 4)"' \
+  '이 시점부터 `ACR`은 더 이상 `SUFFIX`에서 유도되지 않습니다.' \
+  '이전에 적어 둔 `ACR` 값은 이 새 값으로 교체하세요.' \
+  '다음 모듈 재접속에 대비해 `SUFFIX`와 실제 `ACR` 이름을 각각 별도 값으로 저장해 둔다.' \
   '이미 앞 단계의 RG, workspace, environment를 만들었다면 전체 `SUFFIX`를 바꾸지 마세요.' \
   '리소스 이름을 모두 새 suffix로 통일하려면 기존 실습 리소스를 정리하고 모듈 02의 1단계부터 다시 시작합니다.' \
-  'SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3'; do
+  'SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3'; do
   grep -F -- "$text" "$FOUNDATION" >/dev/null || { echo "FAIL: module 02 missing $text" >&2; exit 1; }
 done
 

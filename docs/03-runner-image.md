@@ -6,7 +6,7 @@
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
-- 저장해 둔 `SUFFIX`로 모듈 02의 Azure 변수들을 복구한다.
+- 저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 모듈 02의 Azure 변수들을 복구한다.
 - `runner/Dockerfile`과 `runner/entrypoint.sh`의 핵심 동작을 이해한다.
 - 로컬 정적 검사를 먼저 실행해 runner 스크립트 품질을 확인한다.
 - ACR Tasks의 `az acr build`로 cloud build를 수행한다.
@@ -21,11 +21,11 @@
 | 📋 **예상 출력** | 실행 결과와 비교할 기준 출력 |
 | ⚠️ **주의** | 보안, 비용, 제약 사항 안내 |
 
-## 1. 저장해 둔 `SUFFIX`로 Azure 변수 복구
+## 1. 저장해 둔 `SUFFIX`와 `ACR`로 Azure 변수 복구
 
 👁️ **설명**
 
-Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 모듈 02에서 기록해 둔 `SUFFIX`만 있으면 동일한 리소스 이름과 조회형 변수들을 다시 복구할 수 있습니다.
+Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 모듈 02에서 기록해 둔 `SUFFIX`와 실제 `ACR` 이름이 있으면 동일한 리소스 이름과 조회형 변수들을 다시 복구할 수 있습니다. `ACR`은 이름 충돌 복구가 있었다면 `SUFFIX`에서 유도되지 않는 별도 값이므로, 모듈 02에서 저장해 둔 실제 `ACR` 값을 그대로 입력하세요.
 
 🟢 **실행**
 
@@ -33,11 +33,11 @@ Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 모듈 02에서 �
 
 ```bash
 read -rp "Saved SUFFIX: " SUFFIX
+read -rp "Saved ACR name: " ACR
 LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
-ACR="acracarunner$SUFFIX"
 UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
@@ -79,6 +79,8 @@ printf 'SUFFIX=%s ACR=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$IMAGE"
 ```text
 SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 ```
+
+`ACR` 값은 위 형식이 기본값일 뿐이며, 모듈 02에서 이름 충돌 복구를 했다면 입력한 실제 `ACR` 값이 그대로 출력되어야 합니다.
 
 ## 2. runner 이미지 파일 읽기
 
