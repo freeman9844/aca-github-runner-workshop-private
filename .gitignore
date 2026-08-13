@@ -16,3 +16,5 @@ Thumbs.db
 # Temporary output
 *.log
 *.tmp
+tests/runner/.fixture-entrypoint/
+tests/runner/aca-runner-entrypoint-test.log
