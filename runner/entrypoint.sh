@@ -2,9 +2,7 @@
 set -Eeuo pipefail
 
 required_variables=(
-  GITHUB_APP_ID
-  GITHUB_APP_INSTALLATION_ID
-  GITHUB_APP_PRIVATE_KEY
+  GITHUB_PAT
   GH_URL
   REGISTRATION_TOKEN_API_URL
 )
@@ -16,19 +14,6 @@ for variable_name in "${required_variables[@]}"; do
   fi
 done
 
-for variable_name in GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID; do
-  if [[ ! "${!variable_name}" =~ ^[0-9]+$ ]]; then
-    printf 'ERROR: %s must be numeric\n' "$variable_name" >&2
-    exit 64
-  fi
-done
-
-if ! grep -qE '^-----BEGIN (RSA )?PRIVATE KEY-----$' \
-  <<<"$GITHUB_APP_PRIVATE_KEY"; then
-  printf 'ERROR: GITHUB_APP_PRIVATE_KEY must contain a PEM private key\n' >&2
-  exit 64
-fi
-
 if [[ "$REGISTRATION_TOKEN_API_URL" != */registration-token ]]; then
   printf 'ERROR: REGISTRATION_TOKEN_API_URL must end with /registration-token\n' >&2
   exit 64
@@ -38,58 +23,30 @@ RUNNER_LABELS="${RUNNER_LABELS:-aca-runner}"
 RUNNER_NAME_PREFIX="${RUNNER_NAME_PREFIX:-aca-runner}"
 RUNNER_NAME="${RUNNER_NAME_PREFIX}-$(hostname)-${RANDOM}"
 REMOVAL_TOKEN_API_URL="${REGISTRATION_TOKEN_API_URL%/registration-token}/remove-token"
-INSTALLATION_TOKEN_API_URL="https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID/access_tokens"
 CLEANED_UP=0
-github_app_private_key="$GITHUB_APP_PRIVATE_KEY"
-unset GITHUB_APP_PRIVATE_KEY
-
-base64url() {
-  openssl base64 -A | tr '+/' '-_' | tr -d '='
-}
-
-github_app_jwt() {
-  local now issued_at expires_at header payload unsigned signature
-  now="$(date +%s)"
-  issued_at=$((now - 60))
-  expires_at=$((now + 540))
-  header="$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | base64url)"
-  payload="$(
-    printf '{"iat":%s,"exp":%s,"iss":"%s"}' \
-      "$issued_at" "$expires_at" "$GITHUB_APP_ID" |
-      base64url
-  )"
-  unsigned="$header.$payload"
-  signature="$(
-    printf '%s' "$unsigned" |
-      openssl dgst -sha256 \
-        -sign <(printf '%s' "$github_app_private_key") |
-      base64url
-  )"
-  printf '%s.%s\n' "$unsigned" "$signature"
-}
+github_pat="$GITHUB_PAT"
+unset GITHUB_PAT
+runner_pid=""
 
 github_api_token() {
   local url="$1"
-  local bearer_token="$2"
+  local response
   local authorization_header
   printf -v authorization_header '%s: %s %s' \
-    'Authorization' 'Bearer' "$bearer_token"
-  curl --fail --silent --show-error --request POST \
-    --header 'Accept: application/vnd.github+json' \
-    --header "$authorization_header" \
-    --header 'X-GitHub-Api-Version: 2026-03-10' \
-    "$url" |
-    jq --exit-status --raw-output '.token'
-}
-
-github_installation_token() {
-  local app_jwt
-  app_jwt="$(github_app_jwt)"
-  github_api_token "$INSTALLATION_TOKEN_API_URL" "$app_jwt"
+    'Authorization' 'Bearer' "$github_pat"
+  response="$(
+    curl --fail --silent --show-error --request POST \
+      --header 'Accept: application/vnd.github+json' \
+      --header "$authorization_header" \
+      --header 'X-GitHub-Api-Version: 2026-03-10' \
+      "$url"
+  )" || return $?
+  jq --exit-status --raw-output \
+    '.token | select(type == "string" and length > 0)' <<<"$response"
 }
 
 cleanup() {
-  local cleanup_status=0 installation_token="" removal_token=""
+  local cleanup_status=0 removal_token=""
 
   if [[ "$CLEANED_UP" == "1" ]]; then
     return 0
@@ -101,12 +58,8 @@ cleanup() {
   fi
 
   set +e
-  installation_token="$(github_installation_token)"
+  removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL")"
   cleanup_status=$?
-  if [[ "$cleanup_status" == "0" ]]; then
-    removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL" "$installation_token")"
-    cleanup_status=$?
-  fi
   if [[ "$cleanup_status" == "0" ]]; then
     ./config.sh remove --token "$removal_token"
     cleanup_status=$?
@@ -119,15 +72,23 @@ cleanup() {
   return 0
 }
 
+forward_signal() {
+  local signal_name="$1"
+  local exit_status="$2"
+  if [[ -n "$runner_pid" ]]; then
+    kill -s "$signal_name" "$runner_pid" 2>/dev/null || true
+    wait "$runner_pid" 2>/dev/null || true
+    runner_pid=""
+  fi
+  exit "$exit_status"
+}
+
 trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'forward_signal INT 130' INT
+trap 'forward_signal TERM 143' TERM
 
 printf 'Requesting registration token\n'
-registration_token="$(
-  installation_token="$(github_installation_token)"
-  github_api_token "$REGISTRATION_TOKEN_API_URL" "$installation_token"
-)"
+registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
 
 ./config.sh \
   --url "$GH_URL" \
@@ -140,8 +101,11 @@ registration_token="$(
 
 printf 'Runner configured: %s\n' "$RUNNER_NAME"
 set +e
-./run.sh
+./run.sh &
+runner_pid=$!
+wait "$runner_pid"
 runner_status=$?
+runner_pid=""
 set -e
 printf 'Runner process exited with status %s\n' "$runner_status"
 exit "$runner_status"

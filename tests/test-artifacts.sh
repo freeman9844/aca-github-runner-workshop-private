@@ -11,16 +11,25 @@ CI_WORKFLOW="$ROOT/.github/workflows/validate-workshop.yml"
 [[ -f "$CI_WORKFLOW" ]] || { echo "FAIL: validation workflow missing" >&2; exit 1; }
 
 grep -F 'FROM ghcr.io/actions/actions-runner:2.336.0' "$DOCKERFILE" >/dev/null
-grep -F 'apt-get install -y --no-install-recommends ca-certificates curl jq openssl' \
+grep -F 'apt-get install -y --no-install-recommends ca-certificates curl jq' \
   "$DOCKERFILE" >/dev/null
 grep -F 'USER runner' "$DOCKERFILE" >/dev/null
 grep -F 'ENTRYPOINT ["/home/runner/entrypoint.sh"]' "$DOCKERFILE" >/dev/null
 
-grep -F 'GITHUB_APP_ID' "$ROOT/runner/entrypoint.sh" >/dev/null
-grep -F 'GITHUB_APP_INSTALLATION_ID' "$ROOT/runner/entrypoint.sh" >/dev/null
-grep -F 'github_app_jwt' "$ROOT/runner/entrypoint.sh" >/dev/null
-if grep -F 'GITHUB_PAT' "$ROOT/runner/entrypoint.sh" >/dev/null; then
-  echo "FAIL: runner entrypoint still depends on GITHUB_PAT" >&2
+grep -F 'GITHUB_PAT' "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F 'github_pat="$GITHUB_PAT"' "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F 'unset GITHUB_PAT' "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F 'Authorization' "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F "trap 'forward_signal INT 130' INT" "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F "trap 'forward_signal TERM 143' TERM" "$ROOT/runner/entrypoint.sh" >/dev/null
+if grep -E 'GITHUB_APP_|github_app_jwt|INSTALLATION_TOKEN_API_URL|openssl dgst' \
+  "$ROOT/runner/entrypoint.sh" >/dev/null; then
+  echo "FAIL: runner entrypoint still contains GitHub App authentication" >&2
+  exit 1
+fi
+
+if grep -F 'openssl' "$DOCKERFILE" >/dev/null; then
+  echo "FAIL: runner image still installs OpenSSL for removed App JWT signing" >&2
   exit 1
 fi
 
