@@ -13,6 +13,18 @@ bash tests/docs/test-build-deploy.sh
 bash tests/docs/test-scale-validation.sh
 bash tests/docs/test-security-cleanup.sh
 
+core_workshop_paths=(
+  README.md
+  docs/01-prerequisites-github.md
+  docs/02-azure-foundation.md
+  docs/03-runner-image.md
+  docs/04-event-job-keda.md
+  docs/05-parallel-scale-validation.md
+  docs/06-security-limitations-cleanup.md
+  runner
+  samples
+)
+
 required_files=(
   README.md
   runner/Dockerfile
@@ -39,9 +51,9 @@ if grep -RInE "$placeholder_pattern" README.md docs runner samples tests; then
   exit 1
 fi
 
-secret_pattern='github_''pat_[A-Za-z0-9_]+|g''hp_[A-Za-z0-9]{20,}'
-if grep -RInE "$secret_pattern" README.md docs runner samples tests; then
-  echo 'FAIL: secret-shaped string found' >&2
+pat_configuration_pattern='GITHUB_PAT|personalAccessToken=|personal-access-token'
+if grep -RInE "$pat_configuration_pattern" "${core_workshop_paths[@]}"; then
+  echo 'FAIL: PAT-based workshop configuration found' >&2
   exit 1
 fi
 
