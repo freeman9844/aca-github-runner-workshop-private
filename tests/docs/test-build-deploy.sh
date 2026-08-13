@@ -14,13 +14,23 @@ for text in \
   '--image "$IMAGE"' \
   './runner' \
   'ghcr.io/actions/actions-runner:2.336.0' \
-  'openssl' \
   'read -rp "Saved SUFFIX: " SUFFIX' \
   'read -rp "Saved ACR name: " ACR' \
   'SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0' \
-  'App credentials are removed from the environment before the workflow runner starts.'; do
+  'ca-certificates`, `curl`, `jq`' \
+  'Fine-grained PAT' \
+  'GITHUB_PAT' \
+  'non-exported wrapper-shell variable' \
+  'unset' \
+  'workflow process cannot inherit the PAT'; do
   grep -F -- "$text" "$IMAGE_DOC" >/dev/null || { echo "FAIL: module 03 missing $text" >&2; exit 1; }
 done
+
+if grep -E 'GitHub App|GITHUB_APP_|installation token|openssl' \
+  "$IMAGE_DOC" >/dev/null; then
+  echo "FAIL: module 03 still describes GitHub App bootstrap" >&2
+  exit 1
+fi
 
 if grep -F -- 'ACR="acracarunner$SUFFIX"' "$IMAGE_DOC" >/dev/null; then
   echo "FAIL: module 03 reconstructs ACR from SUFFIX instead of reading the saved actual ACR name" >&2
@@ -45,13 +55,6 @@ for text in \
   'runnerScope=repo' \
   'labels=aca-runner' \
   'targetWorkflowQueueLength=1' \
-  'applicationID=$GITHUB_APP_ID' \
-  'installationID=$GITHUB_APP_INSTALLATION_ID' \
-  'appKey=github-app-private-key' \
-  'github-app-private-key=$GITHUB_APP_PRIVATE_KEY' \
-  'GITHUB_APP_ID=$GITHUB_APP_ID' \
-  'GITHUB_APP_INSTALLATION_ID=$GITHUB_APP_INSTALLATION_ID' \
-  'GITHUB_APP_PRIVATE_KEY=secretref:github-app-private-key' \
   'JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io' \
   'read -rp "Saved SUFFIX: " SUFFIX' \
   'read -rp "Saved ACR name: " ACR' \
@@ -59,20 +62,25 @@ for text in \
   'RUNNER_NAME_PREFIX=aca' \
   '--mi-user-assigned "$UAMI_RID"' \
   '--registry-identity "$UAMI_RID"' \
-  'read -rp "GitHub App ID: " GITHUB_APP_ID' \
-  'read -rp "GitHub App installation ID: " GITHUB_APP_INSTALLATION_ID' \
-  'read -rp "GitHub App private key PEM path: " GITHUB_APP_PRIVATE_KEY_PATH' \
-  '[[ -f "$GITHUB_APP_PRIVATE_KEY_PATH" ]] || {' \
-  'GITHUB_APP_PRIVATE_KEY="$(<"$GITHUB_APP_PRIVATE_KEY_PATH")"' \
-  'export GITHUB_APP_INSTALLATION_ID GITHUB_APP_PRIVATE_KEY' \
-  '--scale-rule-auth "appKey=github-app-private-key"' \
-  '--secrets "github-app-private-key=$GITHUB_APP_PRIVATE_KEY"' \
-  'unset JOB_CREATE_ARGS GITHUB_APP_PRIVATE_KEY' \
+  'read -rsp "Fine-grained PAT: " GITHUB_PAT' \
+  'personalAccessToken=personal-access-token' \
+  'personal-access-token=$GITHUB_PAT' \
+  'GITHUB_PAT=secretref:personal-access-token' \
+  'unset JOB_CREATE_ARGS GITHUB_PAT' \
+  'Actions: Read-only' \
+  'Administration: Read and write' \
+  'Metadata: Read-only' \
   'az containerapp job show --name "$JOB" --resource-group "$RG" --output none' \
   'az containerapp job delete \' \
   'Do not instruct participants to recreate the whole resource group for a Job configuration error.'; do
   grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
 done
+
+if grep -E 'GITHUB_APP_|applicationID=|installationID=|appKey=|github-app-private-key|PEM' \
+  "$JOB_DOC" >/dev/null; then
+  echo "FAIL: module 04 still contains GitHub App configuration" >&2
+  exit 1
+fi
 
 if grep -nE 'SUFFIX=[0-9a-f]{5}\b|acracarunner[0-9a-f]{5}\b' "$IMAGE_DOC" >/dev/null; then
   echo "FAIL: module 03 regressed to a five-character suffix example" >&2
@@ -98,16 +106,6 @@ if grep -F -- 'githubAPIURL=' "$JOB_DOC" >/dev/null; then
   echo "FAIL: module 04 uses invalid KEDA metadata key githubAPIURL" >&2
   exit 1
 fi
-
-for text in \
-  'GITHUB_PAT' \
-  'personalAccessToken' \
-  'personal-access-token'; do
-  if grep -F -- "$text" "$JOB_DOC" >/dev/null; then
-    echo "FAIL: module 04 still references $text" >&2
-    exit 1
-  fi
-done
 
 for text in \
   '--cpu 2.0' \
