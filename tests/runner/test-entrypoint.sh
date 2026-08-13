@@ -36,19 +36,63 @@ EOF2
   cat >"$FIXTURE/bin/curl" <<'EOF2'
 #!/usr/bin/env bash
 set -euo pipefail
-printf '%s\n' "$*" | sed -E 's/Authorization: Bearer [^ ]+/Authorization: ******/g' >>"$MOCK_CALLS/curl.log"
+url=""
+authorization=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --header)
+      if [[ "${2:-}" == Authorization:\ Bearer\ * ]]; then
+        authorization="${2#Authorization: Bearer }"
+      fi
+      shift 2
+      ;;
+    http://*|https://*)
+      url="$1"
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
 if [[ "${MOCK_CURL_FAIL:-0}" == "1" ]]; then
   printf 'mock GitHub API failure\n' >&2
   exit 22
 fi
-case "$*" in
-  *"/app/installations/"*"/access_tokens"*)
-    printf '{"token":"installation-token-value"}\n'
+
+if [[ "$authorization" == installation-token-value-* ]]; then
+  auth_type="installation_token"
+elif [[ "$authorization" == *.*.* ]]; then
+  auth_type="app_jwt"
+else
+  auth_type="unexpected"
+fi
+
+case "$url" in
+  *"/app/installations/"*"/access_tokens")
+    count_file="$MOCK_CALLS/access_tokens.count"
+    count=0
+    if [[ -f "$count_file" ]]; then
+      count="$(<"$count_file")"
+    fi
+    count="$((count + 1))"
+    printf '%s\n' "$count" >"$count_file"
+    printf 'curl endpoint=access_tokens call=%s auth_type=%s\n' "$count" "$auth_type" >>"$MOCK_CALLS/events.log"
+    printf '%s\n' "$authorization" >"$MOCK_CALLS/access_tokens_${count}.auth"
+    printf '%s|%s|%s\n' "$url" "access_tokens" "$auth_type" >>"$MOCK_CALLS/curl.log"
+    printf '{"token":"installation-token-value-%s"}\n' "$count"
     ;;
-  *"/remove-token"*)
+  *"/remove-token")
+    printf 'curl endpoint=remove-token auth_type=%s\n' "$auth_type" >>"$MOCK_CALLS/events.log"
+    printf '%s\n' "$authorization" >"$MOCK_CALLS/remove-token.auth"
+    printf '%s|%s|%s\n' "$url" "remove-token" "$auth_type" >>"$MOCK_CALLS/curl.log"
     printf '{"token":"remove-token-value"}\n'
     ;;
-  *"/registration-token"*)
+  *"/registration-token")
+    printf 'curl endpoint=registration-token auth_type=%s\n' "$auth_type" >>"$MOCK_CALLS/events.log"
+    printf '%s\n' "$authorization" >"$MOCK_CALLS/registration-token.auth"
+    printf '%s|%s|%s\n' "$url" "registration-token" "$auth_type" >>"$MOCK_CALLS/curl.log"
     printf '{"token":"registration-token-value"}\n'
     ;;
   *)
@@ -76,6 +120,7 @@ EOF2
   cat >"$FIXTURE/runner/run.sh" <<'EOF2'
 #!/usr/bin/env bash
 set -euo pipefail
+printf 'run\n' >>"$MOCK_CALLS/events.log"
 env | sort >"$MOCK_CALLS/run-env.log"
 printf 'run\n' >>"$MOCK_CALLS/run.log"
 exit "${MOCK_RUN_EXIT:-0}"
@@ -138,17 +183,39 @@ grep -F -- "--ephemeral" "$MOCK_CALLS/config.log" >/dev/null || fail "ephemeral 
 grep -F -- "--unattended" "$MOCK_CALLS/config.log" >/dev/null || fail "unattended flag missing"
 grep -F -- "--disableupdate" "$MOCK_CALLS/config.log" >/dev/null || fail "disableupdate flag missing"
 grep -F -- "--labels aca-runner" "$MOCK_CALLS/config.log" >/dev/null || fail "runner label missing"
-grep -F -- "/app/installations/67890/access_tokens" "$MOCK_CALLS/curl.log" >/dev/null ||
-  fail "installation token was not requested"
-grep -F -- "Authorization: ******" "$MOCK_CALLS/curl.log" >/dev/null ||
-  fail "installation token was not used"
+grep -F -- "https://api.github.com/app/installations/67890/access_tokens|access_tokens|app_jwt" "$MOCK_CALLS/curl.log" >/dev/null ||
+  fail "installation token was not requested with the app JWT"
+grep -F -- "https://api.github.com/repos/example/private-repo/actions/runners/registration-token|registration-token|installation_token" "$MOCK_CALLS/curl.log" >/dev/null ||
+  fail "registration token did not use the installation token"
+grep -F -- "https://api.github.com/repos/example/private-repo/actions/runners/remove-token|remove-token|installation_token" "$MOCK_CALLS/curl.log" >/dev/null ||
+  fail "removal token did not use the installation token"
+[[ "$(<"$MOCK_CALLS/registration-token.auth")" == "installation-token-value-1" ]] ||
+  fail "registration token did not use the startup installation token"
+[[ "$(<"$MOCK_CALLS/remove-token.auth")" == "installation-token-value-2" ]] ||
+  fail "cleanup did not use a fresh installation token"
 grep -F -- "remove --token remove-token-value" "$MOCK_CALLS/config.log" >/dev/null || fail "cleanup missing"
 [[ -f "$MOCK_CALLS/run.log" ]] || fail "runner process was not started"
+run_line="$(grep -n '^run$' "$MOCK_CALLS/events.log" | cut -d: -f1)"
+cleanup_installation_line="$(grep -n 'endpoint=access_tokens call=2 auth_type=app_jwt' "$MOCK_CALLS/events.log" | cut -d: -f1)"
+cleanup_removal_line="$(grep -n 'endpoint=remove-token auth_type=installation_token' "$MOCK_CALLS/events.log" | cut -d: -f1)"
+[[ -n "$run_line" && -n "$cleanup_installation_line" && -n "$cleanup_removal_line" ]] ||
+  fail "cleanup token flow was not fully recorded"
+(( run_line < cleanup_installation_line )) ||
+  fail "cleanup did not request a fresh installation token after runner exit"
+(( cleanup_installation_line < cleanup_removal_line )) ||
+  fail "cleanup removal token order was incorrect"
 [[ "$output" != *"mock-private-key"* ]] || fail "private key leaked to output"
-[[ "$output" != *"installation-token-value"* ]] || fail "installation token leaked to output"
+[[ "$output" != *"installation-token-value-1"* ]] || fail "startup installation token leaked to output"
+[[ "$output" != *"installation-token-value-2"* ]] || fail "cleanup installation token leaked to output"
 if grep -E 'GITHUB_APP_PRIVATE_KEY|installation-token-value|mock-private-key' \
   "$MOCK_CALLS/run-env.log" >/dev/null; then
   fail "long-lived GitHub App credentials reached the runner process"
+fi
+if grep -F -- "$(<"$MOCK_CALLS/access_tokens_1.auth")" "$MOCK_CALLS/run-env.log" >/dev/null; then
+  fail "startup GitHub App JWT reached the runner process"
+fi
+if grep -F -- "$(<"$MOCK_CALLS/access_tokens_2.auth")" "$MOCK_CALLS/run-env.log" >/dev/null; then
+  fail "cleanup GitHub App JWT reached the runner process"
 fi
 rm -rf "$FIXTURE"
 
@@ -169,6 +236,8 @@ status=$?
 set -e
 [[ "$status" == "17" ]] || fail "runner exit status was not preserved"
 grep -F -- "remove --token remove-token-value" "$MOCK_CALLS/config.log" >/dev/null || fail "failed run was not cleaned up"
+[[ "$(<"$MOCK_CALLS/remove-token.auth")" == "installation-token-value-2" ]] ||
+  fail "failed run cleanup did not use a fresh installation token"
 rm -rf "$FIXTURE" "$ROOT/tests/runner/aca-runner-entrypoint-test.log"
 
 printf 'PASS: entrypoint behavior\n'
