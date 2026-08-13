@@ -101,6 +101,12 @@ Fine-grained PAT instructions are removed. The replacement module documents:
 
 The suffix uses six hexadecimal characters generated with OpenSSL. If an ACR name still conflicts, the participant changes only the ACR name or restarts resource creation consistently; they do not rerun the full naming block midway through the module.
 
+Final-review amendment: the actual `ACR` name is treated as a separately saved workshop value, distinct from `SUFFIX`, because ACR collision recovery replaces it with a new globally unique name that is no longer derivable from `SUFFIX`. Module 02 prints and explicitly instructs participants to save both `SUFFIX` and the actual `ACR` name after the initial naming block, and the collision-recovery procedure explicitly instructs participants to save/replace the saved `ACR` value with the new one. All other resource names (`RG`, `LOG`, `ENV`, `UAMI`, `JOB`) remain derived from `SUFFIX` only.
+
+### Module 03 and Module 04
+
+Final-review amendment: the reconnect-variable-recovery blocks in modules 03 and 04 prompt for both the saved `SUFFIX` and the saved actual `ACR` name (`read -rp "Saved ACR name: " ACR`) instead of reconstructing `ACR="acracarunner$SUFFIX"`. This keeps reconnect recovery correct even after an ACR collision-recovery rename in module 02, while every other resource name continues to derive from `SUFFIX`.
+
 ### Module 04
 
 PAT inputs and secrets are removed. The job uses:
@@ -163,6 +169,7 @@ A repository GitHub Actions workflow runs `bash tests/validate-workshop.sh` for 
 - Workflow processes cannot inherit the App private key or installation token.
 - Correct Azure RBAC prerequisites are documented.
 - ACR collision recovery does not switch all resource names midway through the workshop.
+- Modules 03 and 04 recover the actual saved `ACR` name (not a `SUFFIX`-derived reconstruction) after a Cloud Shell reconnect.
 - Screenshot wording matches the checked-in image.
 - All repository tests and CI validation pass.
 - The updated workshop timeline totals approximately 105 minutes.

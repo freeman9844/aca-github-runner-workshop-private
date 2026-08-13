@@ -6,7 +6,7 @@
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
-- 저장해 둔 `SUFFIX`로 Azure 변수들을 복구한다.
+- 저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 Azure 변수들을 복구한다.
 - 세션이 재시작되었더라도 GitHub owner/repo/App ID/installation ID/private key를 안전하게 다시 입력한다.
 - `github-actions-runner`라는 container name으로 ACA Event Job을 만든다.
 - `github-runner` scaler의 execution/scale/auth/metadata 값을 이해한다.
@@ -21,21 +21,21 @@
 | 📋 **예상 출력** | 실행 결과와 비교할 기준 출력 |
 | ⚠️ **주의** | 보안, 비용, 제약 사항 안내 |
 
-## 1. 저장해 둔 `SUFFIX`로 Azure 변수 복구
+## 1. 저장해 둔 `SUFFIX`와 `ACR`로 Azure 변수 복구
 
 👁️ **설명**
 
-이 모듈은 모듈 02와 03의 출력값을 모두 사용합니다. Cloud Shell을 다시 열었다면 `SUFFIX`를 기준으로 Azure 리소스 이름과 조회형 변수들을 다시 채웁니다.
+이 모듈은 모듈 02와 03의 출력값을 모두 사용합니다. Cloud Shell을 다시 열었다면 `SUFFIX`를 기준으로 Azure 리소스 이름과 조회형 변수들을 다시 채웁니다. `ACR`은 이름 충돌 복구가 있었다면 `SUFFIX`에서 유도되지 않는 별도 값이므로, 모듈 02에서 저장해 둔 실제 `ACR` 값을 그대로 입력하세요.
 
 🟢 **실행**
 
 ```bash
 read -rp "Saved SUFFIX: " SUFFIX
+read -rp "Saved ACR name: " ACR
 LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
-ACR="acracarunner$SUFFIX"
 UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
@@ -77,6 +77,8 @@ printf 'JOB=%s ENV=%s ACR_SERVER=%s\n' "$JOB" "$ENV" "$ACR_SERVER"
 ```text
 JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io
 ```
+
+`ACR_SERVER`는 입력한 `ACR` 값을 그대로 조회한 결과이므로, 모듈 02에서 이름 충돌 복구를 했다면 다른 registry 이름으로 출력되어야 정상입니다.
 
 ## 2. GitHub App 입력값 다시 로드
 

@@ -694,6 +694,8 @@ ACR="acracarunner$(openssl rand -hex 4)"
 리소스 이름을 모두 새 suffix로 통일하려면 기존 실습 리소스를 정리하고 모듈 02의 1단계부터 다시 시작합니다.
 ```
 
+Final-review amendment: this step's collision recovery must also print the new `ACR` value and explicitly tell participants to save/replace it, because the actual `ACR` name becomes a workshop value tracked separately from `SUFFIX` once it changes. Modules 03 and 04 must read this saved actual `ACR` name (`read -rp "Saved ACR name: " ACR`) during their reconnect-recovery blocks instead of reconstructing `ACR="acracarunner$SUFFIX"`, while `RG`, `LOG`, `ENV`, `UAMI`, and `JOB` continue to derive from `SUFFIX` only. See Task 5's Step 1 for the corresponding module 03/04 update.
+
 - [ ] **Step 6: Add RBAC prerequisite warning before role assignment**
 
 Immediately before `az role assignment create`, state that Contributor cannot assign Azure roles and the participant must have `Microsoft.Authorization/roleAssignments/write` at the ACR scope or above.
@@ -787,6 +789,15 @@ export GITHUB_APP_INSTALLATION_ID GITHUB_APP_PRIVATE_KEY
 ```
 
 Validate the PEM file exists before reading it.
+
+Final-review amendment: the module 03 and module 04 Azure-variable reconnect blocks (the section preceding this GitHub App reconnect block) must prompt for the saved actual `ACR` name instead of reconstructing `ACR="acracarunner$SUFFIX"`:
+
+```bash
+read -rp "Saved SUFFIX: " SUFFIX
+read -rp "Saved ACR name: " ACR
+```
+
+`RG`, `LOG`, `ENV`, `UAMI`, and `JOB` still derive from `SUFFIX` only. This keeps reconnect recovery correct when module 02's ACR collision recovery has renamed `ACR` to a value no longer derivable from `SUFFIX`.
 
 - [ ] **Step 5: Replace KEDA authentication**
 
