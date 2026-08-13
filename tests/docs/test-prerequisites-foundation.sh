@@ -56,6 +56,8 @@ fi
 
 for text in \
   'LOC=koreacentral' \
+  'SUFFIX="$(openssl rand -hex 3)"' \
+  'ACR="acracarunner$SUFFIX"' \
   'az containerapp env create' \
   '--logs-destination azure-monitor' \
   'az monitor diagnostic-settings create' \
@@ -64,9 +66,26 @@ for text in \
   '--admin-enabled false' \
   'az acr config authentication-as-arm update' \
   'az identity create' \
+  'Contributor만으로는 Azure RBAC 역할을 할당할 수 없습니다.' \
+  'Microsoft.Authorization/roleAssignments/write' \
+  'Role Based Access Control Administrator' \
   '--role AcrPull' \
-  '--assignee-principal-type ServicePrincipal'; do
+  '--assignee-principal-type ServicePrincipal' \
+  'ACR="acracarunner$(openssl rand -hex 4)"' \
+  '이미 앞 단계의 RG, workspace, environment를 만들었다면 전체 `SUFFIX`를 바꾸지 마세요.' \
+  '리소스 이름을 모두 새 suffix로 통일하려면 기존 실습 리소스를 정리하고 모듈 02의 1단계부터 다시 시작합니다.' \
+  'SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3'; do
   grep -F -- "$text" "$FOUNDATION" >/dev/null || { echo "FAIL: module 02 missing $text" >&2; exit 1; }
 done
+
+if grep -F 'RANDOM % 100000' "$FOUNDATION" >/dev/null; then
+  echo 'FAIL: module 02 still uses low-entropy RANDOM suffixes' >&2
+  exit 1
+fi
+
+if grep -F 'SUFFIX 블록을 다시 실행해 새 값을 만든 뒤 `az acr create`부터 다시 수행합니다.' "$FOUNDATION" >/dev/null; then
+  echo 'FAIL: module 02 still tells readers to rerun the entire suffix block for ACR collisions' >&2
+  exit 1
+fi
 
 printf 'PASS: prerequisites and foundation docs\n'

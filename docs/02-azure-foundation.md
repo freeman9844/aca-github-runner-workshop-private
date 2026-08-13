@@ -25,12 +25,12 @@
 
 👁️ **설명**
 
-각 참가자가 충돌 없이 리소스를 만들 수 있도록 무작위 `SUFFIX`를 붙입니다. `ACR` 이름은 전역 고유해야 하므로 이 블록을 그대로 사용하세요.
+각 참가자가 충돌 없이 리소스를 만들 수 있도록 6자리 소문자 16진수 `SUFFIX`를 붙입니다. `ACR` 이름은 전역 고유해야 하므로 이 블록을 그대로 사용하세요.
 
 🟢 **실행**
 
 ```bash
-SUFFIX=$(printf "%05d" $((RANDOM % 100000)))
+SUFFIX="$(openssl rand -hex 3)"
 LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
@@ -45,7 +45,7 @@ printf 'SUFFIX=%s RG=%s\n' "$SUFFIX" "$RG"
 📋 **예상 출력**
 
 ```text
-SUFFIX=01234 RG=rg-acarunner-01234
+SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3
 ```
 
 ## 2. Resource group과 Log Analytics workspace 만들기
@@ -172,7 +172,13 @@ UAMI_PID=$(az identity show \
   --name "$UAMI" \
   --query principalId \
   --output tsv)
+```
 
+⚠️ **주의**
+
+Contributor만으로는 Azure RBAC 역할을 할당할 수 없습니다. 아래 `az role assignment create`를 실행하려면 ACR 범위 이상에서 `Microsoft.Authorization/roleAssignments/write`가 필요합니다. 일반적으로 `Role Based Access Control Administrator`, `User Access Administrator`, `Owner` 중 하나가 해당합니다.
+
+```bash
 az role assignment create \
   --assignee-object-id "$UAMI_PID" \
   --assignee-principal-type ServicePrincipal \
@@ -254,10 +260,21 @@ az role assignment list \
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| `az acr create`가 이름 중복 오류를 반환함 | `ACR` 이름은 전역 고유인데 이미 다른 구독에서 사용 중 | `SUFFIX` 블록을 다시 실행해 새 값을 만든 뒤 `az acr create`부터 다시 수행합니다. |
+| `az acr create`가 이름 중복 오류를 반환함 | `ACR` 이름은 전역 고유인데 이미 다른 구독에서 사용 중 | 아래 복구 절차에 따라 ACR 이름만 바꿔 다시 시도합니다. |
 | ACA environment 또는 workspace 생성이 provider 오류로 실패함 | `Microsoft.App`, `Microsoft.OperationalInsights`, `Microsoft.Insights` 등록이 끝나지 않음 | [모듈 01](01-prerequisites-github.md)의 provider 등록 명령을 다시 실행하고 `--wait`가 끝날 때까지 기다립니다. |
 | `az monitor diagnostic-settings create`가 권한 오류를 반환함 | 현재 구독/리소스 그룹에서 diagnostic setting을 만들 권한이 없음 | Contributor 이상 권한인지 확인하고, 잘못된 구독에 배포했다면 `az account show`로 현재 구독을 다시 확인합니다. |
 | role assignment는 성공했는데 image pull이 아직 실패함 | RBAC propagation 지연 | 몇 분 기다린 뒤 `az role assignment list --assignee "$UAMI_PID" --scope "$ACR_ID" --query "[].roleDefinitionName" -o tsv`로 `AcrPull`을 확인하고 다음 모듈을 재시도합니다. |
+
+### ACR 이름 충돌 복구
+
+이미 앞 단계의 RG, workspace, environment를 만들었다면 전체 `SUFFIX`를 바꾸지 마세요.
+ACR 이름만 새 전역 고유 값으로 변경한 뒤 `az acr create`부터 다시 실행합니다.
+
+```bash
+ACR="acracarunner$(openssl rand -hex 4)"
+```
+
+리소스 이름을 모두 새 suffix로 통일하려면 기존 실습 리소스를 정리하고 모듈 02의 1단계부터 다시 시작합니다.
 
 ---
 
