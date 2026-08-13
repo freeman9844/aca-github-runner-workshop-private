@@ -8,7 +8,7 @@
 
 - 워크숍 구성을 production 기준으로 어떻게 확장할지 설명할 수 있다.
 - `Private repository`와 trusted workflow author 전제를 지키며 self-hosted runner 노출면을 줄일 수 있다.
-- GitHub App private key, registration token, 그리고 필요 시 사용하는 보조 토큰의 `PAT 만료`/비노출 원칙을 다시 확인할 수 있다.
+- GitHub App installation, App ID/installation ID/private key, 그리고 ACA Job secret 동기화 원칙을 다시 확인할 수 있다.
 - Azure Container Apps Job과 GitHub runner 모델의 제약을 운영 관점에서 설명할 수 있다.
 - Azure 리소스 그룹과 GitHub 측 실습 흔적을 안전하게 정리할 수 있다.
 
@@ -77,7 +77,6 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 - workflow를 수정할 수 있는 사람은 **trusted workflow authors**로 제한하세요.
 - GitHub App installation은 필요한 repository에만 연결하고 permission 변경 후 installation 동의 화면을 다시 승인하세요.
 - GitHub App private key PEM, registration token, remove token은 `echo`, 로그, 스크린샷, Git 기록에 출력하지 마세요.
-- 보조 용도로 사람 사용자 토큰을 따로 쓰는 경우에도 **least-privilege**와 짧은 `PAT 만료` 정책을 유지하세요.
 - runner image는 `ghcr.io/actions/actions-runner:2.336.0`처럼 **pinned runner image**로 고정하고 정기적으로 rebuild/scanning 하세요.
 - 오래 남은 offline runner나 stale registration record는 주기적으로 삭제하세요.
 - 실습에서는 ACA secret에 PEM을 저장했지만 production에서는 Azure Key Vault 또는 외부 token broker를 우선 고려하세요.
@@ -180,7 +179,7 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 | `az group delete` 후에도 RG가 한동안 보임 | asynchronous deletion 진행 중 | 몇 분 기다린 뒤 같은 `az group show --name "$RG" --output table`를 다시 실행합니다. 최종 기준은 `(ResourceGroupNotFound)`입니다. |
 | 삭제가 계속 실패하거나 멈춤 | resource lock 존재 | 포털 또는 CLI로 delete lock/read-only lock을 확인한 뒤 해제하고 다시 시도합니다. |
 | GitHub에 stale offline runner가 남음 | UI 반영 지연 또는 이전 execution metadata 잔존 | 몇 분 후 새로고침하고, 계속 남으면 runner 목록에서 stale runner를 수동 제거합니다. |
-| 새 workflow가 갑자기 401/403을 반환 | GitHub App installation 삭제, PEM 교체 누락, 또는 보조 토큰의 PAT 만료 | 실습을 계속해야 한다면 GitHub App installation과 PEM/secret 동기화 상태를 먼저 확인하고, 별도로 사용하는 사람 사용자 토큰이 있다면 만료 여부도 함께 점검합니다. 이미 종료 단계라면 installation 삭제 상태를 정상으로 간주합니다. |
+| 새 workflow가 갑자기 401/403을 반환 | GitHub App installation permission 미승인, App ID/installation ID/private key mismatch, 또는 ACA Job secret 동기화 누락 | GitHub App installation이 lab repository에 연결돼 있는지, permission 변경 후 installation 승인 화면을 다시 통과했는지, App ID/installation ID/private key PEM이 같은 App/installation 조합인지, ACA Job secret이 최신 PEM과 일치하는지 확인합니다. |
 | 예상보다 비용이 계속 발생함 | RG 삭제 미완료, Log Analytics/ACR 등 잔존 리소스 존재 | `az group show` 결과와 Azure Portal 비용 분석을 함께 확인하고, RG가 남아 있으면 삭제 완료까지 추적합니다. |
 | workflow의 Docker 단계가 실패함 | Docker-in-Docker 또는 Docker daemon/service container 의존 | 이 플랫폼 제약은 우회하지 말고, Docker daemon이 필요한 작업은 다른 runner 환경으로 분리합니다. |
 
