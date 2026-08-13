@@ -1,6 +1,6 @@
 # Azure Container Apps GitHub Actions Runner 워크숍
 
-> Azure Cloud Shell만 사용해 **약 105분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 참가자는 runner image 빌드, Event Job 배포, 병렬 workflow 검증, Log Analytics 확인, 리소스 정리까지 한 흐름으로 완료합니다.
+> Azure Cloud Shell만 사용해 **약 90분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 참가자는 runner image 빌드, Event Job 배포, 병렬 workflow 검증, Log Analytics 확인, 리소스 정리까지 한 흐름으로 완료합니다.
 
 ---
 
@@ -51,7 +51,7 @@ flowchart LR
 | Cloud Shell Bash | 모든 필수 단계는 Azure Cloud Shell Bash 기준으로 진행합니다. |
 | GitHub account | GitHub Actions와 self-hosted runner 등록에 사용할 계정이 필요합니다. |
 | Private repository 권한 | 새 `Private repository`를 만들거나 실습용 저장소에 접근할 수 있어야 합니다. |
-| GitHub App 생성 권한 | repository-scoped GitHub App을 만들고 private key를 내려받을 수 있어야 합니다. |
+| Fine-grained PAT 생성·승인 | lab repository만 선택한 Fine-grained PAT를 만들 수 있어야 하며, organization 정책이 요구하면 승인을 받아야 합니다. |
 | 기본 지식 | Azure 리소스 그룹, 컨테이너 image, GitHub Actions 기본 흐름을 알고 있으면 수월합니다. |
 
 > ⚠️ **주의**
@@ -67,14 +67,13 @@ flowchart LR
 | # | 모듈 | 한 줄 설명 | 시간 |
 |---|------|------------|---:|
 | 00 | (현재 문서) | 전체 개요, 아키텍처, 목표, 비용, 이동 경로 | 5분 |
-| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | Cloud Shell 변수, `Private repository`, GitHub App 준비 | 25분 |
+| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | Cloud Shell 변수, `Private repository`, Fine-grained PAT 준비 | 15분 |
 | 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | RG, Log Analytics, ACA environment, ACR, UAMI, `AcrPull` 구성 | 15분 |
 | 03 | [Runner image 빌드](docs/03-runner-image.md) | runner/entrypoint 이해와 ACR Tasks 빌드 | 10분 |
 | 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | ACA Event Job, secret, KEDA `github-runner` rule 설정 | 15분 |
 | 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4 Job, 0 → N → 0, GitHub·CLI·로그 확인 | 20분 |
 | 06 | [보안·제약·정리](docs/06-security-limitations-cleanup.md) | 보안 주의사항, 한계, 리소스 삭제와 최종 확인 | 10분 |
-|  | 진행 버퍼 | 예상 지연과 질의 응답 반영 | 5분 |
-|  | **합계** |  | **105분** |
+|  | **합계** |  | **90분** |
 
 ---
 
@@ -83,18 +82,17 @@ flowchart LR
 | 구간 | 내용 | 예상 시간 |
 |------|------|-----------|
 | 시작 | 개요 및 실습 범위 확인 | 5분 |
-| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 40분 |
+| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 30분 |
 | 2부 | runner image 빌드 + Event Job/KEDA 구성 | 25분 |
 | 3부 | 병렬 workflow 검증 + 로그 확인 | 20분 |
 | 마무리 | 보안·제약 정리 + 리소스 삭제 | 10분 |
-| 버퍼 | 진행 지연 흡수 | 5분 |
-| 합계 | 코어 워크숍 | 105분 |
+| 합계 | 코어 워크숍 | 90분 |
 
 > ✅ **검증 범위 안내** — 체크인된 자동 검증은 README/문서 계약과 스크립트 인터페이스를 확인합니다.
 > `koreacentral`, runner `2.336.0`, matrix 4개 Job, 이미지 pull, KEDA 확장,
 > active execution 관찰, ephemeral runner 종료, 로그 확인, 리소스 그룹 삭제,
 > 폐기용 GitHub 저장소 삭제는 이전 실습 흐름 메모로 남겨 두되,
-> GitHub App 인증 경로의 라이브 Azure/GitHub App 리허설은 아직 별도로 수행하지 않았습니다.
+> Fine-grained PAT 인증 경로의 라이브 Azure/GitHub 리허설은 아직 별도로 수행하지 않았습니다.
 
 ---
 
