@@ -10,25 +10,30 @@ FOUNDATION="$ROOT/docs/02-azure-foundation.md"
 
 for text in \
   'Visibility | **Private**' \
-  'GitHub Apps' \
-  'Webhook | **Inactive**' \
+  'Fine-grained personal access token' \
+  'Personal access tokens' \
+  'Fine-grained tokens' \
+  'Generate new token' \
+  'Resource owner' \
+  'Expiration | **30 days**' \
+  'Only select repositories' \
   'Actions | Read-only' \
   'Administration | Read and write' \
   'Metadata | Read-only' \
-  'Where can this GitHub App be installed? | **Only on this account**' \
-  'Only select repositories' \
   'aca-runner-lab' \
-  'GITHUB_APP_ID' \
-  'GITHUB_APP_INSTALLATION_ID' \
-  'GITHUB_APP_PRIVATE_KEY_PATH' \
-  'GITHUB_APP_PRIVATE_KEY="$(<"$GITHUB_APP_PRIVATE_KEY_PATH")"' \
-  'openssl dgst -sha256' \
-  'printf -v APP_AUTH_HEADER '\''%s: %s %s'\'' '\''Authorization'\'' '\''Bearer'\'' "$APP_JWT"' \
-  'printf -v INSTALLATION_AUTH_HEADER '\''%s: %s %s'\''' \
-  '/app/installations/$GITHUB_APP_INSTALLATION_ID/access_tokens' \
-  '--header "$APP_AUTH_HEADER"' \
-  '--header "$INSTALLATION_AUTH_HEADER"' \
+  'Enterprise Managed User' \
+  'organization approval' \
+  'read -rsp "Fine-grained PAT: " GITHUB_PAT' \
+  'printf '\''\n'\''' \
+  'GITHUB_OWNER' \
+  'GITHUB_REPO' \
+  'GITHUB_PAT' \
   'X-GitHub-Api-Version: 2026-03-10' \
+  '/actions/runs?per_page=1' \
+  '/actions/runners/registration-token' \
+  'Repository access: OK' \
+  'Actions read: OK' \
+  'Runner administration: OK' \
   'read -rp "Workshop repository URL: " WORKSHOP_REPO_URL' \
   'git clone "$WORKSHOP_REPO_URL" ~/aca-github-runner-workshop' \
   'az extension add --name containerapp --upgrade --only-show-errors' \
@@ -38,14 +43,15 @@ for text in \
   grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
 
-if grep -E 'Fine-grained PAT|GITHUB_PAT|personal access token' "$PREREQ" >/dev/null; then
-  echo 'FAIL: module 01 still documents PAT authentication' >&2
+if grep -E 'GITHUB_APP_|GitHub Apps|Generate a private key|installation ID|PEM' \
+  "$PREREQ" >/dev/null; then
+  echo 'FAIL: module 01 still documents GitHub App authentication' >&2
   exit 1
 fi
 
-if grep -nE '^[[:space:]]*(printf|echo|cat)\b.*\$GITHUB_APP_PRIVATE_KEY([^[:alnum:]_]|$)' "$PREREQ" | \
-  grep -v '\${GITHUB_APP_PRIVATE_KEY:+SET}' >/dev/null; then
-  echo 'FAIL: module 01 prints the raw GitHub App private key' >&2
+if grep -nE '^[[:space:]]*(printf|echo|cat)\b.*\$GITHUB_PAT([^[:alnum:]_]|$)' \
+  "$PREREQ" >/dev/null; then
+  echo 'FAIL: module 01 prints the Fine-grained PAT' >&2
   exit 1
 fi
 

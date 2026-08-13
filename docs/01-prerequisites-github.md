@@ -1,6 +1,6 @@
 # 01. GitHub 사전 준비
 
-> Azure Cloud Shell Bash에서 구독, GitHub `Private repository`, repository-scoped GitHub App을 준비하고 다음 모듈에서 재사용할 `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`를 검증합니다.
+> Azure Cloud Shell Bash에서 구독, GitHub `Private repository`, Fine-grained personal access token을 준비하고 다음 모듈에서 재사용할 `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_PAT`를 검증합니다.
 
 ## 목표
 
@@ -9,8 +9,8 @@
 - Cloud Shell에서 실습에 사용할 Azure 구독을 선택한다.
 - Azure Container Apps 관련 CLI extension과 provider 등록 상태를 맞춘다.
 - `aca-runner-lab` 이름의 `Private repository`를 준비한다.
-- repository-scoped GitHub App을 만들고 `aca-runner-lab`에만 설치한다.
-- `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`를 안전하게 로드하고 GitHub API로 검증한다.
+- `aca-runner-lab`에만 접근 가능한 Fine-grained personal access token을 준비한다.
+- `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_PAT`를 안전하게 로드하고 GitHub API로 검증한다.
 
 ## 태그 범례
 
@@ -109,74 +109,59 @@ ls
 - `samples`
 - `tests`
 
-## 5. Repository-scoped GitHub App 만들기
+## 5. Fine-grained PAT 만들기
 
 👁️ **설명**
 
-이 워크숍의 runner 등록 토큰 발급과 installation access token 발급은 GitHub App 인증 흐름을 사용합니다. App은 참가자의 개인 계정 또는 organization이 소유해도 되지만, 설치 대상은 반드시 실습용 `aca-runner-lab` 하나로 제한합니다.
+Fine-grained personal access token (PAT)을 사용해 GitHub App 설치 없이
+repository-scoped 인증을 구성합니다.
 
-GitHub에서 **Settings → Developer settings → GitHub Apps**로 이동한 뒤 새 App을 만들고 아래 값을 사용합니다.
+GitHub에서 **Settings → Developer settings → Personal access tokens →
+Fine-grained tokens → Generate new token**으로 이동합니다.
 
 | 항목 | 값 |
 |---|---|
-| GitHub App name | `aca-runner-lab-<unique-name>` |
-| Homepage URL | 실습 repository URL |
-| Webhook | **Inactive** |
-| Where can this GitHub App be installed? | **Only on this account** |
-
-🟢 **실행**
-
-1. **GitHub Apps** 화면에서 새 App을 만듭니다.
-2. App 생성 직후 아래 repository permissions를 **정확히** 설정합니다.
+| Token name | `aca-runner-lab` |
+| Resource owner | `aca-runner-lab`을 소유한 user 또는 organization |
+| Expiration | **30 days** |
+| Repository access | **Only select repositories** |
+| Selected repository | `aca-runner-lab` |
 
 | Permission | Access |
-|------------|--------|
+|---|---|
 | Actions | Read-only |
 | Administration | Read and write |
 | Metadata | Read-only |
 
-3. **Generate a private key**를 눌러 PEM 파일을 다운로드합니다.
-4. 다운로드한 PEM을 Cloud Shell에 직접 저장하거나 업로드합니다.
-5. **Install App**을 선택하고 대상 owner 아래에서 **Only select repositories**를 고른 뒤 `aca-runner-lab`만 선택합니다.
-6. App의 **General** 설정 화면에서 **App ID**를 확인합니다.
-7. 설치 상세 화면의 URL에서 installation ID를 확인합니다.
+- Enterprise Managed User는 개인 계정 GitHub App 설치가 금지될 수 있으므로
+  이 워크숍은 App 설치를 요구하지 않습니다.
+- organization 정책이 Fine-grained PAT 승인을 요구하면 승인 완료 후 다음
+  단계로 진행합니다.
+- enterprise 정책이 PAT 생성을 금지하면 관리자의 정책 변경 또는 승인 없이
+  이 인증 경로를 진행할 수 없습니다.
 
-⚠️ **주의**
-
-- PEM 파일은 App 서명에 사용하는 민감한 credential입니다. Git에 commit하거나 터미널에 원문을 출력하지 마세요.
-- App이 개인 계정 소유든 organization 소유든, 설치 범위는 `aca-runner-lab` 하나만 선택해야 합니다.
-- installation settings URL은 일반적으로 `/settings/installations/<installation_id>` 형태이므로 마지막 숫자를 읽어 `GITHUB_APP_INSTALLATION_ID`로 사용합니다.
-
-## 6. Cloud Shell 변수로 GitHub App 정보 로드
+## 6. Cloud Shell 변수로 PAT 안전하게 로드
 
 👁️ **설명**
 
-다음 모듈에서는 owner, repository, App ID, installation ID, private key 본문을 그대로 재사용합니다. PEM 경로를 먼저 읽고 파일 존재 여부를 확인한 뒤 메모리 변수로 로드합니다.
+다음 모듈에서는 owner, repository, PAT를 그대로 재사용합니다. PAT 입력
+프롬프트는 화면에 값을 에코하지 않고, 셸 히스토리에는 사용자가 실행한
+명령문 자체만 남습니다. 토큰은 명령행 텍스트, 로그, 스크린샷, 파일에
+붙여넣지 마세요.
 
 🟢 **실행**
 
 ```bash
 read -rp "GitHub owner: " GITHUB_OWNER
 read -rp "Private repository name: " GITHUB_REPO
-read -rp "GitHub App ID: " GITHUB_APP_ID
-read -rp "GitHub App installation ID: " GITHUB_APP_INSTALLATION_ID
-read -rp "GitHub App private key PEM path: " GITHUB_APP_PRIVATE_KEY_PATH
+read -rsp "Fine-grained PAT: " GITHUB_PAT
+printf '\n'
 
-[[ -f "$GITHUB_APP_PRIVATE_KEY_PATH" ]] || {
-  printf 'Private key file not found: %s\n' "$GITHUB_APP_PRIVATE_KEY_PATH" >&2
-  return 1 2>/dev/null || exit 1
-}
-
-GITHUB_APP_PRIVATE_KEY="$(<"$GITHUB_APP_PRIVATE_KEY_PATH")"
-export GITHUB_OWNER GITHUB_REPO GITHUB_APP_ID
-export GITHUB_APP_INSTALLATION_ID GITHUB_APP_PRIVATE_KEY
-
-printf 'GITHUB_OWNER=%s\nGITHUB_REPO=%s\nGITHUB_APP_ID=%s\nINSTALLATION_ID=%s\nPRIVATE_KEY=%s\n' \
+export GITHUB_OWNER GITHUB_REPO GITHUB_PAT
+printf 'GITHUB_OWNER=%s\nGITHUB_REPO=%s\nGITHUB_PAT=%s\n' \
   "$GITHUB_OWNER" \
   "$GITHUB_REPO" \
-  "$GITHUB_APP_ID" \
-  "$GITHUB_APP_INSTALLATION_ID" \
-  "${GITHUB_APP_PRIVATE_KEY:+SET}"
+  "${GITHUB_PAT:+SET}"
 ```
 
 📋 **예상 출력**
@@ -184,109 +169,94 @@ printf 'GITHUB_OWNER=%s\nGITHUB_REPO=%s\nGITHUB_APP_ID=%s\nINSTALLATION_ID=%s\nP
 ```text
 GITHUB_OWNER=octocat
 GITHUB_REPO=aca-runner-lab
-GITHUB_APP_ID=123456
-INSTALLATION_ID=78901234
-PRIVATE_KEY=SET
+GITHUB_PAT=SET
 ```
 
-- PEM 본문은 출력하지 않고 `PRIVATE_KEY=SET`만 보여야 합니다.
-- 이후 같은 Cloud Shell 세션에서 다섯 변수를 그대로 재사용할 수 있습니다.
+- PAT 원문은 출력하지 않고 `GITHUB_PAT=SET`만 보여야 합니다.
+- 이후 같은 Cloud Shell 세션에서 세 변수를 그대로 재사용할 수 있습니다.
 
-## 7. GitHub App JWT와 installation token 검증
+## 7. 저장소·Actions·runner administration 권한 검증
 
 👁️ **설명**
 
-Task 1의 `runner/entrypoint.sh`와 동일한 흐름으로 로컬에서 JWT를 만들고 installation access token으로 교환한 뒤, 선택한 저장소를 조회해 App 설치와 권한이 올바른지 확인합니다.
+저장소 메타데이터 읽기, GitHub Actions 읽기, self-hosted runner 등록 토큰
+생성 권한을 순서대로 확인합니다. 검증 과정에서 발급되는 짧은 수명의 runner
+registration token은 화면에 출력하지 않고 바로 폐기하며, `GITHUB_PAT`는
+module 04에서 재사용할 수 있도록 현재 Cloud Shell 세션에 그대로 유지합니다.
 
 🟢 **실행**
 
 ```bash
-base64url() {
-  openssl base64 -A | tr '+/' '-_' | tr -d '='
-}
+printf -v PAT_AUTH_HEADER '%s: %s %s' \
+  'Authorization' 'Bearer' "$GITHUB_PAT"
 
-now="$(date +%s)"
-issued_at=$((now - 60))
-expires_at=$((now + 540))
-header="$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | base64url)"
-payload="$(
-  printf '{"iat":%s,"exp":%s,"iss":"%s"}' \
-    "$issued_at" "$expires_at" "$GITHUB_APP_ID" |
-    base64url
-)"
-unsigned="$header.$payload"
-signature="$(
-  printf '%s' "$unsigned" |
-    openssl dgst -sha256 \
-      -sign <(printf '%s' "$GITHUB_APP_PRIVATE_KEY") |
-    base64url
-)"
-APP_JWT="$unsigned.$signature"
-
-printf -v APP_AUTH_HEADER '%s: %s %s' 'Authorization' 'Bearer' "$APP_JWT"
-GITHUB_APP_INSTALLATION_TOKEN="$(
-  curl --fail --silent --show-error --request POST \
-    --header 'Accept: application/vnd.github+json' \
-    --header "$APP_AUTH_HEADER" \
-    --header 'X-GitHub-Api-Version: 2026-03-10' \
-    "https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID/access_tokens" |
-    jq --exit-status --raw-output '.token'
-)"
-
-printf -v INSTALLATION_AUTH_HEADER '%s: %s %s' \
-  'Authorization' 'Bearer' "$GITHUB_APP_INSTALLATION_TOKEN"
 curl --fail --silent --show-error \
   --header 'Accept: application/vnd.github+json' \
-  --header "$INSTALLATION_AUTH_HEADER" \
+  --header "$PAT_AUTH_HEADER" \
   --header 'X-GitHub-Api-Version: 2026-03-10' \
   "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO" |
-  jq '{full_name, private, visibility}'
-unset APP_AUTH_HEADER INSTALLATION_AUTH_HEADER APP_JWT
-unset GITHUB_APP_INSTALLATION_TOKEN
+  jq --exit-status '.private == true' >/dev/null
+printf 'Repository access: OK\n'
+
+curl --fail --silent --show-error \
+  --header 'Accept: application/vnd.github+json' \
+  --header "$PAT_AUTH_HEADER" \
+  --header 'X-GitHub-Api-Version: 2026-03-10' \
+  "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runs?per_page=1" |
+  jq --exit-status '.total_count >= 0' >/dev/null
+printf 'Actions read: OK\n'
+
+curl --fail --silent --show-error --request POST \
+  --header 'Accept: application/vnd.github+json' \
+  --header "$PAT_AUTH_HEADER" \
+  --header 'X-GitHub-Api-Version: 2026-03-10' \
+  "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners/registration-token" |
+  jq --exit-status '.token | type == "string" and length > 0' >/dev/null
+printf 'Runner administration: OK\n'
+
+unset PAT_AUTH_HEADER
 ```
 
 📋 **예상 출력**
 
-```json
-{
-  "full_name": "<owner>/<repo>",
-  "private": true,
-  "visibility": "private"
-}
+```text
+Repository access: OK
+Actions read: OK
+Runner administration: OK
 ```
 
-- 첫 번째 POST는 App JWT를 installation token으로 교환합니다.
-- 두 번째 GET은 installation token으로 `aca-runner-lab` 접근 여부를 검증합니다.
-- 검증 뒤 `APP_JWT`, installation token, 임시 Authorization 헤더는 모두 `unset`합니다.
+- 첫 번째 GET은 private repository 메타데이터 접근을 검증합니다.
+- 두 번째 GET은 GitHub Actions 읽기 권한을 검증합니다.
+- 마지막 POST는 runner registration token 생성 권한만 확인하고, 반환된 token은
+  표시하지 않은 채 버립니다.
+- 검증 뒤 `PAT_AUTH_HEADER`는 `unset`하고 `GITHUB_PAT`만 현재 세션에 남깁니다.
 
 ## 8. 검증
 
 🟢 **실행**
 
 ```bash
-printf 'OWNER=%s REPO=%s APP_ID=%s INSTALLATION_ID=%s PRIVATE_KEY=%s\n' \
+printf 'OWNER=%s REPO=%s PAT=%s\n' \
   "$GITHUB_OWNER" \
   "$GITHUB_REPO" \
-  "$GITHUB_APP_ID" \
-  "$GITHUB_APP_INSTALLATION_ID" \
-  "${GITHUB_APP_PRIVATE_KEY:+SET}"
+  "${GITHUB_PAT:+SET}"
 ```
 
 📋 **예상 출력**
 
-- owner, repository, App ID, installation ID만 표시되고 PEM 본문은 출력되지 않아야 합니다.
-- 바로 앞 단계의 `jq` 출력에서 `"private": true`가 보여야 합니다.
+- owner와 repository만 평문으로 표시되고 PAT는 `SET`만 보여야 합니다.
+- 바로 앞 단계에서 세 줄의 `OK` 메시지가 모두 보여야 합니다.
 
 ## 트러블슈팅
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| 저장소 JSON에서 `"private": false`가 보임 | 저장소를 Public으로 만들었거나 잘못된 저장소를 조회함 | GitHub 저장소 설정에서 visibility를 다시 확인하고, 필요하면 새 `Private repository`를 다시 만듭니다. |
-| `401 Unauthorized` | 잘못된 App ID, installation ID, 또는 PEM 불일치 | App 설정 화면의 App ID, 설치 URL의 installation ID, PEM을 다시 확인하고 같은 App에서 다시 발급한 키로 재시도합니다. |
-| `403 Forbidden` | App이 `aca-runner-lab`에 설치되지 않았거나 필요한 권한이 승인되지 않음 | App 설치 범위가 `Only select repositories`인지, `aca-runner-lab`만 선택했는지, `Actions | Read-only`, `Administration | Read and write`, `Metadata | Read-only`가 모두 반영되었는지 확인합니다. |
-| installation token 발급은 되지만 저장소 조회 실패 | App이 다른 owner에 설치되었거나 설치 권한 변경을 아직 수락하지 않음 | 해당 owner 아래 설치 대상을 다시 열어 `aca-runner-lab`가 선택되어 있는지 확인하고, permission 변경 후 필요한 승인 절차를 완료합니다. |
-| PEM 파일 로드 단계에서 실패 | Cloud Shell 경로 오입력 또는 파일 업로드 누락 | `ls`와 `pwd`로 PEM 위치를 확인하고 `GITHUB_APP_PRIVATE_KEY_PATH`를 정확한 경로로 다시 입력합니다. |
-| `jq: command not found` | Cloud Shell 세션 문제 또는 로컬 셸 사용 | Azure Cloud Shell Bash에서 다시 실행하거나 `sudo apt-get update && sudo apt-get install -y jq`를 실행한 뒤 재시도합니다. |
+| `401 Unauthorized` | copied token is wrong, expired, or revoked. | GitHub에서 토큰 값을 다시 복사하거나 새 Fine-grained PAT를 발급한 뒤 6단계 입력 블록을 다시 실행합니다. |
+| `403 Forbidden` | organization approval is pending or enterprise policy blocks Fine-grained PAT use. | organization approval 상태를 확인하고, enterprise 정책 제한이 있으면 관리자 승인 또는 정책 변경 후 다시 시도합니다. |
+| Repository check failure | wrong resource owner or selected repository. | Token의 Resource owner와 Selected repository가 `aca-runner-lab`인지 다시 확인하고, `GITHUB_OWNER`와 `GITHUB_REPO` 입력값도 함께 점검합니다. |
+| Actions check failure | Actions permission is not read-only or higher. | Fine-grained PAT permission에서 Actions를 `Read-only` 이상으로 수정한 뒤 다시 검증합니다. |
+| Runner administration failure | Administration is not read and write. | Fine-grained PAT permission에서 Administration을 `Read and write`로 수정한 뒤 다시 검증합니다. |
+| Empty variable after reconnect | rerun the non-echoing input block. | Cloud Shell 세션이 바뀌면 export가 유지되지 않으므로 6단계의 non-echoing 입력 블록을 다시 실행합니다. |
 
 ---
 
