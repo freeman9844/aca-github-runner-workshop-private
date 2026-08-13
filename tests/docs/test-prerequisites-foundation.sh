@@ -5,8 +5,41 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PREREQ="$ROOT/docs/01-prerequisites-github.md"
 FOUNDATION="$ROOT/docs/02-azure-foundation.md"
 
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
+
+operational_github_app_pattern='GITHUB_APP_|Developer settings → GitHub Apps|Generate a private key|App ID|installation ID|private key PEM|github-app-private-key'
+stdout_pat_print_pattern='^[[:space:]]*(printf|echo|cat)\b.*\$GITHUB_PAT([^[:alnum:]_]|$)'
+safe_printf_v_pattern='^[0-9]+:[[:space:]]*printf[[:space:]]+-v\b'
+
+grep_forbidden_pat_stdout_prints() {
+  grep -nE "$stdout_pat_print_pattern" "$@" | grep -Ev "$safe_printf_v_pattern"
+}
+
 [[ -f "$PREREQ" ]] || { echo "FAIL: module 01 missing" >&2; exit 1; }
 [[ -f "$FOUNDATION" ]] || { echo "FAIL: module 02 missing" >&2; exit 1; }
+
+if grep -E "$operational_github_app_pattern" <(
+  printf '%s\n' 'Enterprise Managed User may be unable to install a GitHub App.'
+) >/dev/null; then
+  fail "EMU explanatory GitHub App prose should remain allowed"
+fi
+
+grep -E "$operational_github_app_pattern" <(
+  printf '%s\n' 'Settings → Developer settings → GitHub Apps → New GitHub App'
+) >/dev/null || fail "operational GitHub App setup markers must stay rejected"
+
+if grep_forbidden_pat_stdout_prints <(
+  printf '%s\n' 'printf -v PAT_AUTH_HEADER '\''%s: %s %s'\'' '\''Authorization'\'' '\''Bearer'\'' "$GITHUB_PAT"'
+) >/dev/null; then
+  fail "printf -v PAT assignments should remain allowed"
+fi
+
+grep_forbidden_pat_stdout_prints <(
+  printf '%s\n' 'printf '\''%s\n'\'' "$GITHUB_PAT"'
+) >/dev/null || fail "stdout printf PAT output must stay rejected"
 
 for text in \
   'Visibility | **Private**' \
@@ -43,14 +76,12 @@ for text in \
   grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
 
-if grep -E 'GITHUB_APP_|GitHub Apps|Generate a private key|installation ID|PEM' \
-  "$PREREQ" >/dev/null; then
+if grep -E "$operational_github_app_pattern" "$PREREQ" >/dev/null; then
   echo 'FAIL: module 01 still documents GitHub App authentication' >&2
   exit 1
 fi
 
-if grep -nE '^[[:space:]]*(printf|echo|cat)\b.*\$GITHUB_PAT([^[:alnum:]_]|$)' \
-  "$PREREQ" >/dev/null; then
+if grep_forbidden_pat_stdout_prints "$PREREQ" >/dev/null; then
   echo 'FAIL: module 01 prints the Fine-grained PAT' >&2
   exit 1
 fi

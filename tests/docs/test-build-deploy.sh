@@ -4,8 +4,30 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE_DOC="$ROOT/docs/03-runner-image.md"
 JOB_DOC="$ROOT/docs/04-event-job-keda.md"
+
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
+
+operational_github_app_pattern='GITHUB_APP_|github_app_jwt|/app/installations/|openssl dgst|BEGIN [A-Z0-9 ]*PRIVATE KEY|applicationID=|installationID=|appKey=|github-app-private-key'
+
 [[ -f "$IMAGE_DOC" ]] || { echo "FAIL: module 03 missing" >&2; exit 1; }
 [[ -f "$JOB_DOC" ]] || { echo "FAIL: module 04 missing" >&2; exit 1; }
+
+if grep -E "$operational_github_app_pattern" <(
+  printf '%s\n' 'The old GitHub App installation token path is intentionally not used in this workshop.'
+) >/dev/null; then
+  fail "historical GitHub App prose should not trigger operational App checks"
+fi
+
+grep -E "$operational_github_app_pattern" <(
+  printf '%s\n' 'openssl dgst -sha256 -sign app-private-key.pem'
+) >/dev/null || fail "JWT signing markers must stay rejected"
+
+grep -E "$operational_github_app_pattern" <(
+  printf '%s\n' '--scale-rule-auth "applicationID=12345"'
+) >/dev/null || fail "operational KEDA App configuration must stay rejected"
 
 for text in \
   'bash -n runner/entrypoint.sh' \
@@ -26,8 +48,7 @@ for text in \
   grep -F -- "$text" "$IMAGE_DOC" >/dev/null || { echo "FAIL: module 03 missing $text" >&2; exit 1; }
 done
 
-if grep -E 'GitHub App|GITHUB_APP_|installation token|openssl' \
-  "$IMAGE_DOC" >/dev/null; then
+if grep -E "$operational_github_app_pattern" "$IMAGE_DOC" >/dev/null; then
   echo "FAIL: module 03 still describes GitHub App bootstrap" >&2
   exit 1
 fi
@@ -76,7 +97,7 @@ for text in \
   grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
 done
 
-if grep -E 'GITHUB_APP_|applicationID=|installationID=|appKey=|github-app-private-key|PEM' \
+if grep -E "$operational_github_app_pattern|PEM" \
   "$JOB_DOC" >/dev/null; then
   echo "FAIL: module 04 still contains GitHub App configuration" >&2
   exit 1
