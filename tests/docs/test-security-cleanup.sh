@@ -14,13 +14,16 @@ for text in \
   'az group list --query' \
   'suffix를 잃어버렸다면' \
   'GitHub App' \
+  'GitHub App installation permission 미승인' \
+  'App ID/installation ID/private key mismatch' \
+  'ACA Job secret 동기화 누락' \
+  'permission 변경 후 installation 승인' \
   'Azure Key Vault' \
   'VNet' \
   'egress' \
   'organization' \
   'Docker-in-Docker' \
   'public repository' \
-  'PAT 만료' \
   'az group delete' \
   '--yes --no-wait' \
   'az group show' \
@@ -36,6 +39,7 @@ done
 
 ! grep -F -- '| Fine-grained PAT | GitHub App | higher rate limit and centralized lifecycle |' "$DOC" >/dev/null || { echo "FAIL: module 06 still has old PAT production row" >&2; exit 1; }
 ! grep -F -- 'PAT 폐기' "$DOC" >/dev/null || { echo "FAIL: module 06 still has PAT cleanup step" >&2; exit 1; }
+! grep -F -- 'PAT 만료' "$DOC" >/dev/null || { echo "FAIL: module 06 still has PAT troubleshooting guidance" >&2; exit 1; }
 ! grep -F -- '## 8. 전체 워크숍 완료 확인' "$DOC" >/dev/null || { echo "FAIL: module 06 still has old completion section number" >&2; exit 1; }
 
 grep -F '.superpowers/' "$IGNORE" >/dev/null
