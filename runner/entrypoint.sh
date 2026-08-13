@@ -40,7 +40,8 @@ RUNNER_NAME="${RUNNER_NAME_PREFIX}-$(hostname)-${RANDOM}"
 REMOVAL_TOKEN_API_URL="${REGISTRATION_TOKEN_API_URL%/registration-token}/remove-token"
 INSTALLATION_TOKEN_API_URL="https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID/access_tokens"
 CLEANED_UP=0
-removal_token=""
+github_app_private_key="$GITHUB_APP_PRIVATE_KEY"
+unset GITHUB_APP_PRIVATE_KEY
 
 base64url() {
   openssl base64 -A | tr '+/' '-_' | tr -d '='
@@ -61,7 +62,7 @@ github_app_jwt() {
   signature="$(
     printf '%s' "$unsigned" |
       openssl dgst -sha256 \
-        -sign <(printf '%s' "$GITHUB_APP_PRIVATE_KEY") |
+        -sign <(printf '%s' "$github_app_private_key") |
       base64url
   )"
   printf '%s.%s\n' "$unsigned" "$signature"
@@ -81,8 +82,14 @@ github_api_token() {
     jq --exit-status --raw-output '.token'
 }
 
+github_installation_token() {
+  local app_jwt
+  app_jwt="$(github_app_jwt)"
+  github_api_token "$INSTALLATION_TOKEN_API_URL" "$app_jwt"
+}
+
 cleanup() {
-  local cleanup_status=0
+  local cleanup_status=0 installation_token="" removal_token=""
 
   if [[ "$CLEANED_UP" == "1" ]]; then
     return 0
@@ -93,14 +100,17 @@ cleanup() {
     return 0
   fi
 
-  if [[ -z "$removal_token" ]]; then
-    printf 'ERROR: Runner cleanup token is unavailable\n' >&2
-    return 0
-  fi
-
   set +e
-  ./config.sh remove --token "$removal_token"
+  installation_token="$(github_installation_token)"
   cleanup_status=$?
+  if [[ "$cleanup_status" == "0" ]]; then
+    removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL" "$installation_token")"
+    cleanup_status=$?
+  fi
+  if [[ "$cleanup_status" == "0" ]]; then
+    ./config.sh remove --token "$removal_token"
+    cleanup_status=$?
+  fi
   set -e
 
   if [[ "$cleanup_status" != "0" ]]; then
@@ -113,21 +123,11 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-printf 'Requesting GitHub App installation token\n'
-app_jwt="$(github_app_jwt)"
-installation_token="$(github_api_token "$INSTALLATION_TOKEN_API_URL" "$app_jwt")"
-
 printf 'Requesting registration token\n'
 registration_token="$(
+  installation_token="$(github_installation_token)"
   github_api_token "$REGISTRATION_TOKEN_API_URL" "$installation_token"
 )"
-
-printf 'Requesting runner removal token\n'
-removal_token="$(
-  github_api_token "$REMOVAL_TOKEN_API_URL" "$installation_token"
-)"
-
-unset GITHUB_APP_PRIVATE_KEY app_jwt installation_token
 
 ./config.sh \
   --url "$GH_URL" \
