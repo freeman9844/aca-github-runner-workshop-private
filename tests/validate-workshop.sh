@@ -52,17 +52,7 @@ if grep -RInE "$placeholder_pattern" README.md docs runner samples tests; then
 fi
 
 pat_configuration_pattern='GITHUB_PAT|personalAccessToken=|personal-access-token'
-pat_configuration_paths=(
-  README.md
-  samples/parallel-runner-workflow.yml
-  docs/01-prerequisites-github.md
-  docs/02-azure-foundation.md
-  docs/03-runner-image.md
-  docs/04-event-job-keda.md
-  docs/05-parallel-scale-validation.md
-  docs/06-security-limitations-cleanup.md
-)
-if grep -RInE "$pat_configuration_pattern" "${pat_configuration_paths[@]}"; then
+if grep -RInE "$pat_configuration_pattern" "${core_workshop_paths[@]}"; then
   echo 'FAIL: PAT-based workshop configuration found' >&2
   exit 1
 fi
