@@ -51,11 +51,31 @@ if grep -RInE "$placeholder_pattern" README.md docs runner samples tests; then
   exit 1
 fi
 
-pat_configuration_pattern='GITHUB_PAT|personalAccessToken=|personal-access-token'
-if grep -RInE "$pat_configuration_pattern" "${core_workshop_paths[@]}"; then
-  echo 'FAIL: PAT-based workshop configuration found' >&2
+github_app_configuration_pattern='GITHUB_APP_ID|GITHUB_APP_INSTALLATION_ID|GITHUB_APP_PRIVATE_KEY|applicationID=|installationID=|appKey=|github-app-private-key|/app/installations/|github_app_jwt|openssl dgst'
+if grep -RInE "$github_app_configuration_pattern" "${core_workshop_paths[@]}"; then
+  echo 'FAIL: GitHub App workshop configuration found' >&2
   exit 1
 fi
+
+for text in \
+  'GITHUB_PAT' \
+  'github_pat="$GITHUB_PAT"' \
+  'unset GITHUB_PAT'; do
+  grep -F -- "$text" runner/entrypoint.sh >/dev/null || {
+    printf 'FAIL: runner entrypoint missing %s\n' "$text" >&2
+    exit 1
+  }
+done
+
+for text in \
+  'personalAccessToken=personal-access-token' \
+  'personal-access-token=$GITHUB_PAT' \
+  'GITHUB_PAT=secretref:personal-access-token'; do
+  grep -F -- "$text" docs/04-event-job-keda.md >/dev/null || {
+    printf 'FAIL: module 04 missing %s\n' "$text" >&2
+    exit 1
+  }
+done
 
 navigation_checks=(
   'docs/01-prerequisites-github.md:docs/02-azure-foundation.md'
