@@ -4,9 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCKERFILE="$ROOT/runner/Dockerfile"
 WORKFLOW="$ROOT/samples/parallel-runner-workflow.yml"
+CI_WORKFLOW="$ROOT/.github/workflows/validate-workshop.yml"
 
 [[ -f "$DOCKERFILE" ]] || { echo "FAIL: runner/Dockerfile missing" >&2; exit 1; }
 [[ -f "$WORKFLOW" ]] || { echo "FAIL: workflow sample missing" >&2; exit 1; }
+[[ -f "$CI_WORKFLOW" ]] || { echo "FAIL: validation workflow missing" >&2; exit 1; }
 
 grep -F 'FROM ghcr.io/actions/actions-runner:2.336.0' "$DOCKERFILE" >/dev/null
 grep -F 'apt-get install -y --no-install-recommends ca-certificates curl jq openssl' \
@@ -27,6 +29,7 @@ grep -F 'worker: [1, 2, 3, 4]' "$WORKFLOW" >/dev/null
 grep -F 'runs-on: [self-hosted, linux, x64, aca-runner]' "$WORKFLOW" >/dev/null
 grep -F 'fail-fast: false' "$WORKFLOW" >/dev/null
 grep -F 'sleep 45' "$WORKFLOW" >/dev/null
+grep -F 'bash tests/validate-workshop.sh' "$CI_WORKFLOW" >/dev/null
 
 if grep -E '(^|[[:space:]])docker([[:space:]]|$)|services:' "$WORKFLOW" >/dev/null; then
   echo "FAIL: workflow must not depend on Docker" >&2
