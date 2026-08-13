@@ -4,7 +4,7 @@
 
 **Goal:** Replace PAT authentication with a repository-scoped GitHub App for KEDA scaling and ephemeral runner registration, while correcting the workshop review findings.
 
-**Architecture:** Store one GitHub App private key as an Azure Container Apps secret. KEDA consumes it through `appKey`; the runner entrypoint creates a short-lived JWT and installation token, obtains registration and removal tokens, then removes long-lived credentials from the environment before starting the runner.
+**Architecture:** Store one GitHub App private key as an Azure Container Apps secret. KEDA consumes it through `appKey`; the runner entrypoint copies the PEM into a non-exported wrapper-shell variable, unsets the exported secret variable, creates short-lived JWTs and installation tokens for registration, and during cleanup mints a fresh JWT, installation token, and removal token before removing local runner state. This human-approved cleanup amendment supersedes the earlier pre-acquired removal-token draft.
 
 **Tech Stack:** Bash, OpenSSL, curl, jq, Azure CLI Container Apps extension, KEDA `github-runner` scaler, GitHub REST API `2026-03-10`, GitHub Actions.
 
@@ -50,7 +50,7 @@
 **Interfaces:**
 - Consumes environment variables: `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`, `GH_URL`, `REGISTRATION_TOKEN_API_URL`, optional `RUNNER_LABELS`, optional `RUNNER_NAME_PREFIX`.
 - Produces functions: `base64url()`, `github_app_jwt()`, `github_api_token(url, bearer_token)`, and existing `cleanup()`.
-- Produces behavior: private key and installation token are unset before `./run.sh`.
+- Produces behavior: the exported private key is removed before `./run.sh`, while App JWTs and installation tokens stay non-exported and command-scoped.
 
 - [ ] **Step 1: Rewrite the fixture inputs and mocks to express the GitHub App flow**
 
@@ -282,42 +282,52 @@ github_api_token() {
 }
 ```
 
-- [ ] **Step 8: Acquire all short-lived tokens before runner startup**
+- [ ] **Step 8: Keep startup credentials scoped and mint cleanup credentials on demand**
 
-Before `./config.sh`, add:
+Human-approved amendment: do **not** switch the working implementation back to a pre-acquired removal token. Keep the PEM only in a non-exported wrapper-shell variable, request the registration token with a command-scoped installation token, and mint fresh cleanup credentials only after `run.sh` exits.
+
+During startup, use:
 
 ```bash
 INSTALLATION_TOKEN_API_URL="https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID/access_tokens"
+github_app_private_key="$GITHUB_APP_PRIVATE_KEY"
+unset GITHUB_APP_PRIVATE_KEY
 
-printf 'Requesting GitHub App installation token\n'
-app_jwt="$(github_app_jwt)"
-installation_token="$(github_api_token "$INSTALLATION_TOKEN_API_URL" "$app_jwt")"
-
-printf 'Requesting runner registration token\n'
+printf 'Requesting registration token\n'
 registration_token="$(
+  installation_token="$(github_installation_token)"
   github_api_token "$REGISTRATION_TOKEN_API_URL" "$installation_token"
 )"
-
-printf 'Requesting runner removal token\n'
-removal_token="$(
-  github_api_token "$REMOVAL_TOKEN_API_URL" "$installation_token"
-)"
-
-unset GITHUB_APP_PRIVATE_KEY app_jwt installation_token
 ```
 
-Define `removal_token=""` before the traps. Change cleanup to use the pre-acquired token and never call GitHub after `run.sh`:
+Keep cleanup aligned with the checked-in implementation:
 
 ```bash
-if [[ -z "$removal_token" ]]; then
-  printf 'ERROR: Runner cleanup token is unavailable\n' >&2
-  return 0
-fi
+cleanup() {
+  local cleanup_status=0 installation_token="" removal_token=""
 
-set +e
-./config.sh remove --token "$removal_token"
-cleanup_status=$?
-set -e
+  if [[ "$CLEANED_UP" == "1" ]]; then
+    return 0
+  fi
+  CLEANED_UP=1
+
+  if [[ ! -f .runner ]]; then
+    return 0
+  fi
+
+  set +e
+  installation_token="$(github_installation_token)"
+  cleanup_status=$?
+  if [[ "$cleanup_status" == "0" ]]; then
+    removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL" "$installation_token")"
+    cleanup_status=$?
+  fi
+  if [[ "$cleanup_status" == "0" ]]; then
+    ./config.sh remove --token "$removal_token"
+    cleanup_status=$?
+  fi
+  set -e
+}
 ```
 
 - [ ] **Step 9: Run targeted runner tests**
@@ -1102,8 +1112,8 @@ Confirm:
 
 - The private key is stored as an ACA secret.
 - KEDA references it through `appKey`.
-- The runner unsets the private key and installation token before `run.sh`.
-- Cleanup uses a pre-acquired removal token.
+- The runner keeps the PEM only in a non-exported wrapper-shell variable before `run.sh`, and startup tokens never become exported workflow-process environment variables.
+- Cleanup mints a fresh JWT, installation token, and removal token after `run.sh` exits when local runner state remains.
 - No PAT fallback remains.
 
 - [ ] **Step 2: Review documentation continuity**

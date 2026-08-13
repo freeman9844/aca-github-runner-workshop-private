@@ -46,15 +46,14 @@ The participant records:
 
 The Azure Container Apps Job stores the PEM as an ACA secret. KEDA uses that secret through the `appKey` authentication parameter together with `applicationID` and `installationID`.
 
-The runner container receives the same secret only during bootstrap. Its entrypoint:
+The runner container receives the same secret only during bootstrap. A later human-approved cleanup amendment supersedes the earlier pre-acquired removal-token draft: the entrypoint keeps the PEM only in a non-exported wrapper-shell variable, removes the exported secret variable before the runner starts, and mints fresh cleanup credentials only when cleanup runs. Its entrypoint:
 
-1. Creates a short-lived RS256 GitHub App JWT with OpenSSL.
-2. Exchanges the JWT for a one-hour installation access token.
-3. Requests repository runner registration and removal tokens.
+1. Copies the PEM into a non-exported wrapper-shell variable and unsets the exported `GITHUB_APP_PRIVATE_KEY`.
+2. Creates a short-lived RS256 GitHub App JWT with OpenSSL.
+3. Exchanges the JWT for a one-hour installation access token and requests a repository runner registration token.
 4. Configures the runner with `--ephemeral --disableupdate`.
-5. Removes the private key and installation token from the process environment.
-6. Starts the runner.
-7. Uses the previously acquired removal token during cleanup when local runner state remains.
+5. Starts the runner without exporting the private key, App JWT, or installation token into workflow process environments.
+6. During cleanup, mints a fresh JWT, installation token, and removal token when local runner state remains.
 
 The private key and installation token must not be inherited by workflow processes.
 
@@ -70,7 +69,7 @@ The private key and installation token must not be inherited by workflow process
 - `GH_URL`
 - `REGISTRATION_TOKEN_API_URL`
 
-The script validates numeric IDs, a PEM-shaped private key, and the registration-token URL before making API calls. GitHub REST calls use API version `2026-03-10`.
+The script validates numeric IDs, a PEM-shaped private key, and the registration-token URL before making API calls. It retains the PEM only in a wrapper-shell variable after startup and keeps installation tokens scoped to command substitutions or cleanup locals rather than exported environment variables. GitHub REST calls use API version `2026-03-10`.
 
 Authentication failures must stop runner configuration. Cleanup failures remain visible in logs without replacing the runner process exit code.
 
