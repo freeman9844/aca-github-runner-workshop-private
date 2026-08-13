@@ -15,6 +15,7 @@ for text in \
   './runner' \
   'ghcr.io/actions/actions-runner:2.336.0' \
   'openssl' \
+  'SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0' \
   'App credentials are removed from the environment before the workflow runner starts.'; do
   grep -F -- "$text" "$IMAGE_DOC" >/dev/null || { echo "FAIL: module 03 missing $text" >&2; exit 1; }
 done
@@ -44,6 +45,7 @@ for text in \
   'GITHUB_APP_ID=$GITHUB_APP_ID' \
   'GITHUB_APP_INSTALLATION_ID=$GITHUB_APP_INSTALLATION_ID' \
   'GITHUB_APP_PRIVATE_KEY=secretref:github-app-private-key' \
+  'JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io' \
   'RUNNER_LABELS=aca-runner' \
   'RUNNER_NAME_PREFIX=aca' \
   '--mi-user-assigned "$UAMI_RID"' \
@@ -62,6 +64,16 @@ for text in \
   'Do not instruct participants to recreate the whole resource group for a Job configuration error.'; do
   grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
 done
+
+if grep -nE 'SUFFIX=[0-9a-f]{5}\b|acracarunner[0-9a-f]{5}\b' "$IMAGE_DOC" >/dev/null; then
+  echo "FAIL: module 03 regressed to a five-character suffix example" >&2
+  exit 1
+fi
+
+if grep -nE 'job-ghrunner-[0-9a-f]{5}\b|env-acarunner-[0-9a-f]{5}\b|acracarunner[0-9a-f]{5}\.azurecr\.io\b' "$JOB_DOC" >/dev/null; then
+  echo "FAIL: module 04 regressed to a five-character suffix example" >&2
+  exit 1
+fi
 
 if grep -F -- '## 4. 파라미터 의미 빠르게 읽기' "$JOB_DOC" >/dev/null; then
   echo "FAIL: module 04 keeps parameter explanations in a separate table" >&2

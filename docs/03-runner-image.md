@@ -77,7 +77,7 @@ printf 'SUFFIX=%s ACR=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$IMAGE"
 📋 **예상 출력**
 
 ```text
-SUFFIX=01234 ACR=acracarunner01234 IMAGE=github-actions-runner:2.336.0
+SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 ```
 
 ## 2. runner 이미지 파일 읽기

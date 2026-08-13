@@ -26,8 +26,10 @@ for text in \
   'public repository' \
   'az group delete' \
   '--yes --no-wait' \
+  '리소스 그룹 삭제 요청됨: rg-acarunner-a1b2c3' \
   'az group show' \
   'ResourceGroupNotFound' \
+  "Resource group 'rg-acarunner-a1b2c3' could not be found." \
   '| ACA secret의 GitHub App private key | Azure Key Vault 또는 외부 token broker | stronger key isolation and centralized rotation |' \
   '| registration token 방식 | GitHub JIT runner | reduced registration lifecycle exposure |' \
   'GitHub App installation 삭제' \
@@ -41,6 +43,7 @@ done
 ! grep -F -- 'PAT 폐기' "$DOC" >/dev/null || { echo "FAIL: module 06 still has PAT cleanup step" >&2; exit 1; }
 ! grep -F -- 'PAT 만료' "$DOC" >/dev/null || { echo "FAIL: module 06 still has PAT troubleshooting guidance" >&2; exit 1; }
 ! grep -F -- '## 8. 전체 워크숍 완료 확인' "$DOC" >/dev/null || { echo "FAIL: module 06 still has old completion section number" >&2; exit 1; }
+! grep -nE 'rg-acarunner-[0-9a-f]{5}\b' "$DOC" >/dev/null || { echo "FAIL: module 06 regressed to a five-character suffix example" >&2; exit 1; }
 
 grep -F '.superpowers/' "$IGNORE" >/dev/null
 grep -F 'docs/superpowers/' "$IGNORE" >/dev/null

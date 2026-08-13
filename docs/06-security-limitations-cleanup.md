@@ -122,7 +122,7 @@ printf '리소스 그룹 삭제 요청됨: %s\n' "$RG"
 📋 **예상 출력**
 
 ```text
-리소스 그룹 삭제 요청됨: rg-acarunner-01234
+리소스 그룹 삭제 요청됨: rg-acarunner-a1b2c3
 ```
 
 - `--yes --no-wait`를 사용하므로 삭제는 비동기로 진행됩니다.
@@ -146,7 +146,7 @@ az group show --name "$RG" --output table
 - 삭제가 완료되면 최종적으로 아래와 비슷한 결과를 기대합니다.
 
 ```text
-(ResourceGroupNotFound) Resource group 'rg-acarunner-01234' could not be found.
+(ResourceGroupNotFound) Resource group 'rg-acarunner-a1b2c3' could not be found.
 ```
 
 - 즉, asynchronous deletion이 끝난 뒤 `(ResourceGroupNotFound)`가 보이면 정리가 완료된 것입니다.

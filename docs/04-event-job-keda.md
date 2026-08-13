@@ -75,7 +75,7 @@ printf 'JOB=%s ENV=%s ACR_SERVER=%s\n' "$JOB" "$ENV" "$ACR_SERVER"
 📋 **예상 출력**
 
 ```text
-JOB=job-ghrunner-01234 ENV=env-acarunner-01234 ACR_SERVER=acracarunner01234.azurecr.io
+JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io
 ```
 
 ## 2. GitHub App 입력값 다시 로드
