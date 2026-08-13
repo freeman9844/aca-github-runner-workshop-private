@@ -13,11 +13,6 @@ for text in \
   "starts_with(name, 'rg-acarunner-')" \
   'az group list --query' \
   'suffix를 잃어버렸다면' \
-  'GitHub App' \
-  'GitHub App installation permission 미승인' \
-  'App ID/installation ID/private key mismatch' \
-  'ACA Job secret 동기화 누락' \
-  'permission 변경 후 installation 승인' \
   'Azure Key Vault' \
   'VNet' \
   'egress' \
@@ -30,14 +25,33 @@ for text in \
   'az group show' \
   'ResourceGroupNotFound' \
   "Resource group 'rg-acarunner-a1b2c3' could not be found." \
-  '| ACA secret의 GitHub App private key | Azure Key Vault 또는 외부 token broker | stronger key isolation and centralized rotation |' \
-  '| registration token 방식 | GitHub JIT runner | reduced registration lifecycle exposure |' \
-  'GitHub App installation 삭제' \
-  'GitHub App private key PEM 삭제' \
   'aca-runner-lab' \
   '## 7. 전체 워크숍 완료 확인'; do
   grep -F -- "$text" "$DOC" >/dev/null || { echo "FAIL: module 06 missing $text" >&2; exit 1; }
 done
+
+for text in \
+  'Fine-grained PAT' \
+  'Actions: Read-only' \
+  'Administration: Read and write' \
+  'Metadata: Read-only' \
+  'Only select repositories' \
+  '30 days' \
+  'PAT rotation' \
+  'ACA secret을 새 PAT로 먼저 갱신' \
+  '기존 PAT를 revoke' \
+  'PAT 삭제' \
+  'Azure Key Vault' \
+  'external token broker'; do
+  grep -F -- "$text" "$DOC" >/dev/null ||
+    { echo "FAIL: module 06 missing $text" >&2; exit 1; }
+done
+
+if grep -E 'GitHub App|GITHUB_APP_|App ID/installation ID|private key PEM' \
+  "$DOC" >/dev/null; then
+  echo "FAIL: module 06 still contains GitHub App cleanup" >&2
+  exit 1
+fi
 
 ! grep -F -- '| Fine-grained PAT | GitHub App | higher rate limit and centralized lifecycle |' "$DOC" >/dev/null || { echo "FAIL: module 06 still has old PAT production row" >&2; exit 1; }
 ! grep -F -- 'PAT 폐기' "$DOC" >/dev/null || { echo "FAIL: module 06 still has PAT cleanup step" >&2; exit 1; }

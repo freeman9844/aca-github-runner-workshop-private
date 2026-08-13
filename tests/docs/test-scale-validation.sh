@@ -42,16 +42,28 @@ for text in \
   'ContainerGroupName startswith' \
   'Runner configured' \
   'Runner process exited' \
-  'GitHub App installation' \
-  'GITHUB_APP_ID' \
-  'GITHUB_APP_INSTALLATION_ID' \
-  'App permission 변경' \
-  'KEDA GitHub App credential' \
   'active execution 수는 0'; do
   grep -F -- "$text" "$DOC" >/dev/null || { echo "FAIL: module 05 missing $text" >&2; exit 1; }
 done
 
-! grep -F -- 'PAT' "$DOC" >/dev/null || { echo "FAIL: module 05 still references PAT" >&2; exit 1; }
+for text in \
+  'Fine-grained PAT' \
+  'GITHUB_PAT' \
+  'personal-access-token' \
+  'token approval' \
+  'Actions: Read-only' \
+  'Administration: Read and write' \
+  'Metadata: Read-only'; do
+  grep -F -- "$text" "$DOC" >/dev/null ||
+    { echo "FAIL: module 05 missing $text" >&2; exit 1; }
+done
+
+if grep -E 'GitHub App|GITHUB_APP_|KEDA GitHub App credential|private key' \
+  "$DOC" >/dev/null; then
+  echo "FAIL: module 05 still contains GitHub App guidance" >&2
+  exit 1
+fi
+
 ! grep -F -- '네 개 matrix Job이 성공한 화면' "$DOC" >/dev/null || { echo "FAIL: module 05 still describes screenshot as four-job success" >&2; exit 1; }
 
 printf 'PASS: parallel scale validation doc\n'

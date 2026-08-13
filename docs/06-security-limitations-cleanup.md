@@ -8,7 +8,7 @@
 
 - 워크숍 구성을 production 기준으로 어떻게 확장할지 설명할 수 있다.
 - `Private repository`와 trusted workflow author 전제를 지키며 self-hosted runner 노출면을 줄일 수 있다.
-- GitHub App installation, App ID/installation ID/private key, 그리고 ACA Job secret 동기화 원칙을 다시 확인할 수 있다.
+- Fine-grained PAT permission, rotation, revoke 순서를 다시 확인할 수 있다.
 - Azure Container Apps Job과 GitHub runner 모델의 제약을 운영 관점에서 설명할 수 있다.
 - Azure 리소스 그룹과 GitHub 측 실습 흔적을 안전하게 정리할 수 있다.
 
@@ -55,7 +55,7 @@ az group list --query "[?starts_with(name, 'rg-acarunner-')].name" --output tabl
 
 | Workshop choice | Production extension | Reason |
 |---|---|---|
-| ACA secret의 GitHub App private key | Azure Key Vault 또는 외부 token broker | stronger key isolation and centralized rotation |
+| ACA secret의 단일 Fine-grained PAT | separate credentials, Azure Key Vault 또는 external token broker | stronger credential isolation and centralized rotation |
 | registration token 방식 | GitHub JIT runner | reduced registration lifecycle exposure |
 | Public egress | VNet, firewall, restricted egress | control reachable destinations |
 | Repository runner | organization runner group | controlled reuse across repositories |
@@ -63,7 +63,7 @@ az group list --query "[?starts_with(name, 'rg-acarunner-')].name" --output tabl
 
 📋 **예상 출력**
 
-- 참가자는 워크숍이 교육용 최소 구성이고, production에서는 GitHub App, Azure Key Vault, VNet, organization runner group 같은 확장이 필요하다는 점을 설명할 수 있어야 합니다.
+- 참가자는 워크숍이 교육용 최소 구성이고, production에서는 separate credentials, Azure Key Vault, external token broker, VNet, organization runner group 같은 확장이 필요하다는 점을 설명할 수 있어야 합니다.
 
 ## 2. 반드시 지킬 보안 규칙
 
@@ -74,12 +74,22 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 ⚠️ **주의**
 
 - 이 워크숍은 **private repository only**를 전제로 합니다. `public repository`에 self-hosted runner를 연결하지 마세요.
+- Fine-grained PAT의 repository access는 반드시 **Only select repositories**로 제한하고 `aca-runner-lab` 같은 실습 대상 repository만 선택하세요.
+- repository permission은 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`만 유지하세요.
+- 워크숍용 PAT는 **30 days** 만료를 선호하고, 만료 전에 rotation을 끝내세요.
 - workflow를 수정할 수 있는 사람은 **trusted workflow authors**로 제한하세요.
-- GitHub App installation은 필요한 repository에만 연결하고 permission 변경 후 installation 동의 화면을 다시 승인하세요.
-- GitHub App private key PEM, registration token, remove token은 `echo`, 로그, 스크린샷, Git 기록에 출력하지 마세요.
+- Fine-grained PAT, registration token, remove token은 `echo`, 로그, 스크린샷, Git 기록에 출력하지 마세요.
 - runner image는 `ghcr.io/actions/actions-runner:2.336.0`처럼 **pinned runner image**로 고정하고 정기적으로 rebuild/scanning 하세요.
 - 오래 남은 offline runner나 stale registration record는 주기적으로 삭제하세요.
-- 실습에서는 ACA secret에 PEM을 저장했지만 production에서는 Azure Key Vault 또는 외부 token broker를 우선 고려하세요.
+- 실습에서는 ACA secret에 PAT를 저장했지만 production에서는 separate credentials, Azure Key Vault 또는 external token broker를 우선 고려하세요.
+
+### PAT rotation
+
+1. 새 Fine-grained PAT를 같은 repository와 permission으로 생성하고 필요한
+   organization approval을 완료합니다.
+2. ACA secret을 새 PAT로 먼저 갱신하고 Job이 queue 감시와 runner 등록을
+   정상 수행하는지 확인합니다.
+3. 정상 동작 확인 후 기존 PAT를 revoke합니다.
 
 ## 3. 현재 워크숍 구성의 제약 사항
 
@@ -93,7 +103,7 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 | service containers | Docker daemon이 필요한 service container 미지원 | DB/service container가 필요한 테스트는 다른 실행 환경을 고려합니다. |
 | workspace 지속성 | execution 간 persistent workspace 없음 | 캐시나 산출물 재사용을 기본 가정으로 두지 않습니다. |
 | cold start / polling | 기동 시간 + 30초 polling 지연 가능 | queued 후 즉시 execution이 보이지 않아도 정상일 수 있습니다. |
-| GitHub API limits | rate limit 영향 가능 | 대규모 동시성이나 잦은 polling은 GitHub App 전환을 검토합니다. |
+| GitHub API limits | rate limit 또는 approval policy 영향 가능 | 대규모 동시성은 separate credentials 또는 external token broker 같은 고도화 구성을 검토합니다. |
 | KEDA version | managed KEDA version을 사용 | scaler 세부 동작을 임의 버전으로 고정하지 않습니다. |
 | lab scale ceiling | maximum five lab executions | 이 워크숍은 `--max-executions 5`를 넘는 확장을 다루지 않습니다. |
 | history visibility | execution history limited to recent records | 오래된 이력을 영구 기록처럼 기대하지 말고 별도 관측 체계를 둡니다. |
@@ -155,20 +165,19 @@ az group show --name "$RG" --output table
 
 👁️ **설명**
 
-Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이나 불필요한 token이 계속 남을 수 있습니다.
+Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이나 불필요한 PAT가 계속 남을 수 있습니다.
 
 🟢 **실행**
 
 아래 체크리스트를 순서대로 확인합니다.
 
-1. `aca-runner-lab`에서 **GitHub App installation 삭제** 여부를 확인합니다.
-2. 재사용하지 않을 계획이라면 실습용 GitHub App 자체를 삭제합니다.
-3. 다운로드한 **GitHub App private key PEM 삭제**와 Cloud Shell 복사본 삭제를 완료합니다.
-4. `.github/workflows/aca-runner-scale-test.yml`, stale runner record, lab repository 보존 여부를 함께 정리합니다.
+1. 실습용 Fine-grained PAT를 revoke하여 PAT 삭제를 완료합니다.
+2. Cloud Shell에서 `unset GITHUB_PAT`를 실행합니다.
+3. `aca-runner-lab`의 `.github/workflows/aca-runner-scale-test.yml`, stale runner record, lab repository 보존 여부를 정리합니다.
 
 ⚠️ **주의**
 
-- GitHub App installation 삭제 후에는 같은 Job secret으로 더 이상 새 registration token을 발급할 수 없습니다.
+- PAT를 revoke한 뒤에는 같은 Job secret으로 더 이상 새 registration token을 발급할 수 없습니다.
 - runner가 offline으로 잠깐 보이는 것은 반영 지연일 수 있지만, 오래 남는 stale runner는 직접 정리 대상입니다.
 
 ## 트러블슈팅
@@ -179,7 +188,7 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 | `az group delete` 후에도 RG가 한동안 보임 | asynchronous deletion 진행 중 | 몇 분 기다린 뒤 같은 `az group show --name "$RG" --output table`를 다시 실행합니다. 최종 기준은 `(ResourceGroupNotFound)`입니다. |
 | 삭제가 계속 실패하거나 멈춤 | resource lock 존재 | 포털 또는 CLI로 delete lock/read-only lock을 확인한 뒤 해제하고 다시 시도합니다. |
 | GitHub에 stale offline runner가 남음 | UI 반영 지연 또는 이전 execution metadata 잔존 | 몇 분 후 새로고침하고, 계속 남으면 runner 목록에서 stale runner를 수동 제거합니다. |
-| 새 workflow가 갑자기 401/403을 반환 | GitHub App installation permission 미승인, App ID/installation ID/private key mismatch, 또는 ACA Job secret 동기화 누락 | GitHub App installation이 lab repository에 연결돼 있는지, permission 변경 후 installation 승인 화면을 다시 통과했는지, App ID/installation ID/private key PEM이 같은 App/installation 조합인지, ACA Job secret이 최신 PEM과 일치하는지 확인합니다. |
+| 새 workflow가 갑자기 401/403을 반환 | PAT가 revoked/expired 되었거나 organization approval 미완료, 또는 permission 불일치 | Fine-grained PAT가 아직 유효한지 확인하고, approval 상태와 함께 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`가 유지되는지 확인합니다. |
 | 예상보다 비용이 계속 발생함 | RG 삭제 미완료, Log Analytics/ACR 등 잔존 리소스 존재 | `az group show` 결과와 Azure Portal 비용 분석을 함께 확인하고, RG가 남아 있으면 삭제 완료까지 추적합니다. |
 | workflow의 Docker 단계가 실패함 | Docker-in-Docker 또는 Docker daemon/service container 의존 | 이 플랫폼 제약은 우회하지 말고, Docker daemon이 필요한 작업은 다른 runner 환경으로 분리합니다. |
 
@@ -192,17 +201,17 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 | 모듈 | 완료 결과 |
 |------|-----------|
 | 00 개요 | 아키텍처, 시간표, 비용, 학습 목표를 설명할 수 있다. |
-| 01 GitHub 사전 준비 | `Private repository`, GitHub App, GitHub 변수 검증을 마쳤다. |
+| 01 GitHub 사전 준비 | `Private repository`, Fine-grained PAT, GitHub 변수 검증을 마쳤다. |
 | 02 Azure 기반 리소스 준비 | RG, Log Analytics, ACA environment, ACR, UAMI, `AcrPull` 구성을 완료했다. |
 | 03 Runner image 빌드 | runner image와 entrypoint 검증 및 ACR 빌드를 수행했다. |
 | 04 Event Job + KEDA 구성 | `github-runner` scaler와 Event Job 배포를 완료했다. |
 | 05 병렬 실행과 스케일 검증 | `0 → N → 0` execution 변화와 runner lifecycle marker를 확인했다. |
-| 06 보안·제약·정리 | production 확장 포인트, 제한 사항, Azure/GitHub cleanup 절차를 점검했다. |
+| 06 보안·제약·정리 | PAT lifecycle cleanup, production 확장 포인트, 제한 사항, Azure/GitHub cleanup 절차를 점검했다. |
 
 📋 **예상 출력**
 
 - 참가자는 여섯 개 모듈을 처음부터 끝까지 연결해 설명할 수 있어야 합니다.
-- Azure에서는 최종적으로 `(ResourceGroupNotFound)` 확인까지 끝내고, GitHub에서는 lab workflow/App installation/PEM/stale runner 정리 여부를 판단할 수 있어야 합니다.
+- Azure에서는 최종적으로 `(ResourceGroupNotFound)` 확인까지 끝내고, GitHub에서는 lab workflow/PAT/stale runner 정리 여부를 판단할 수 있어야 합니다.
 
 ---
 
