@@ -70,14 +70,18 @@ for text in \
   'Repository access: OK' \
   'Actions read: OK' \
   'Runner administration: OK' \
-  'read -rp "Workshop repository URL: " WORKSHOP_REPO_URL' \
-  'git clone "$WORKSHOP_REPO_URL" ~/aca-github-runner-workshop' \
+  'git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' \
+  'cd ~/aca-github-runner-workshop' \
   'az extension add --name containerapp --upgrade --only-show-errors' \
   'az provider register -n Microsoft.App --wait' \
   'az provider register -n Microsoft.OperationalInsights --wait' \
   'az provider register -n Microsoft.Insights --wait'; do
   grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
+
+if grep -E 'gh auth|gh repo clone|WORKSHOP_REPO(_URL)?' "$PREREQ" >/dev/null; then
+  fail "module 01 clone flow is not the requested simple git clone"
+fi
 
 if grep -Fx '## 8. 검증' "$PREREQ" >/dev/null; then
   fail "module 01 still has a redundant final validation section"

@@ -88,13 +88,13 @@ GitHub 웹 UI에서 새 저장소를 만들고 아래 값을 사용합니다.
 
 👁️ **설명**
 
-문서, 샘플 workflow, runner 이미지 파일은 워크숍 소스 저장소에 들어 있습니다. 실습용 GitHub owner가 누구인지 미리 가정하지 않고 URL을 직접 받습니다.
+문서, 샘플 workflow, runner 이미지 파일이 들어 있는 워크숍 소스
+저장소를 지정된 경로에 clone합니다.
 
 🟢 **실행**
 
 ```bash
-read -rp "Workshop repository URL: " WORKSHOP_REPO_URL
-git clone "$WORKSHOP_REPO_URL"
+git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
 cd ~/aca-github-runner-workshop
 ls
 ```
