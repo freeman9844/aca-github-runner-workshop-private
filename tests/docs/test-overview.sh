@@ -48,17 +48,17 @@ grep -F '|  | **합계** |  | **90분** |' "$README" >/dev/null
 grep -F '| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 30분 |' "$README" >/dev/null
 grep -F '| 합계 | 코어 워크숍 | 90분 |' "$README" >/dev/null
 grep -F '자동 검증' "$README" >/dev/null
-grep -F 'Fine-grained PAT 인증 경로의 라이브 Azure/GitHub 리허설' "$README" >/dev/null
-grep -F '아직 별도로 수행하지 않았습니다.' "$README" >/dev/null
+grep -F '라이브 Azure/GitHub 실행' "$README" >/dev/null
+grep -F '기존 GitHub OAuth credential' "$README" >/dev/null
+grep -F 'Fine-grained PAT의 최소권한·승인 경로는 아직 별도로 검증하지 않았습니다.' "$README" >/dev/null
 grep -F '`koreacentral`' "$README" >/dev/null
 grep -F '`2.336.0`' "$README" >/dev/null
 grep -F 'matrix 4개 Job' "$README" >/dev/null
 grep -F '이미지 pull' "$README" >/dev/null
-grep -F 'KEDA 확장' "$README" >/dev/null
+grep -F 'KEDA `0 → 4 → 0` 확장' "$README" >/dev/null
 grep -F 'ephemeral runner 종료' "$README" >/dev/null
-grep -F '로그 확인' "$README" >/dev/null
+grep -F 'Log Analytics 수집' "$README" >/dev/null
 grep -F '리소스 그룹 삭제' "$README" >/dev/null
-grep -F 'GitHub 저장소 삭제' "$README" >/dev/null
 grep -F '🟢 **실행**' "$README" >/dev/null
 grep -F '📋 **예상 출력**' "$README" >/dev/null
 
