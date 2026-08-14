@@ -94,7 +94,7 @@ GitHub 웹 UI에서 새 저장소를 만들고 아래 값을 사용합니다.
 
 ```bash
 read -rp "Workshop repository URL: " WORKSHOP_REPO_URL
-git clone "$WORKSHOP_REPO_URL" ~/aca-github-runner-workshop
+git clone "$WORKSHOP_REPO_URL"
 cd ~/aca-github-runner-workshop
 ls
 ```
