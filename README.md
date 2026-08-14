@@ -88,11 +88,14 @@ flowchart LR
 | 마무리 | 보안·제약 정리 + 리소스 삭제 | 10분 |
 | 합계 | 코어 워크숍 | 90분 |
 
+> 리소스 그룹 삭제 요청은 90분 일정에 포함되지만, ACA managed environment의
+> 비동기 삭제 완료는 워크숍 종료 후까지 이어질 수 있습니다.
+
 > ✅ **검증 범위 안내** — 체크인된 자동 검증은 README/문서 계약과 스크립트 인터페이스를 확인합니다.
-> `koreacentral`, runner `2.336.0`, matrix 4개 Job, 이미지 pull, KEDA 확장,
-> active execution 관찰, ephemeral runner 종료, 로그 확인, 리소스 그룹 삭제,
-> 폐기용 GitHub 저장소 삭제는 이전 실습 흐름 메모로 남겨 두되,
-> Fine-grained PAT 인증 경로의 라이브 Azure/GitHub 리허설은 아직 별도로 수행하지 않았습니다.
+> 라이브 Azure/GitHub 실행에서 `koreacentral`, runner `2.336.0`, matrix 4개 Job,
+> 이미지 pull, KEDA `0 → 4 → 0` 확장, ephemeral runner 종료, Log Analytics 수집,
+> 리소스 그룹 삭제를 확인했습니다. 이 실행은 기존 GitHub OAuth credential을
+> 사용했으므로 Fine-grained PAT의 최소권한·승인 경로는 아직 별도로 검증하지 않았습니다.
 
 ---
 

@@ -274,6 +274,9 @@ az monitor log-analytics query \
 
 - `ContainerAppConsoleLogs` 표에서 `ContainerGroupName`이 `$EXECUTION`으로 시작하는 행들이 시간순으로 출력됩니다.
 - CLI 로그와 같은 execution의 메시지를 Azure Monitor 쪽에서도 재확인할 수 있습니다.
+- Log Analytics ingestion은 즉시 완료되지 않을 수 있습니다. 결과가 비어 있으면
+  같은 query를 반복하되 전체 lifecycle marker 수집에 **5~10분** 정도 걸릴 수
+  있음을 감안합니다.
 
 ## 8. runner lifecycle marker를 명시적으로 검증
 
@@ -308,6 +311,9 @@ GitHub Actions 실행 화면에서 `Worker 1` ~ `Worker 4` 로그를 열고 `Sho
 
 - 네 개 GitHub job이 모두 `Success`여야 합니다.
 - 각 job 로그에는 `worker=...`, `hostname=...`, `started_at=...`, `completed_at=...`가 출력됩니다.
+- 각 `hostname`은 현재 Job에서 유도된 `job-ghrunner-$SUFFIX-...` 형식이어야
+  합니다. 다른 suffix가 보이면 다른 Event Job이 같은 repository와
+  `aca-runner` label을 감시하며 queue를 가져간 것입니다.
 - 실행 타이밍이 겹친 구간에서는 서로 다른 hostname이 관찰됩니다. 다만 조회 타이밍 때문에 네 개가 항상 동시에 보일 것이라고 기대하지는 마세요.
 
 > **참고 화면:** 체크인된 이미지는 **Worker 1은 성공했고 Worker 4는 아직 진행 중인 중간 상태**를 보여 줍니다. 이 화면은 scale-out 진행 상황 예시일 뿐이며, 실제 검증은 `Worker 1`~`Worker 4`가 최종적으로 모두 `Success`인지까지 확인해야 완료입니다.
@@ -361,6 +367,7 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
 | GitHub job이 계속 queued 상태로 남음 | Fine-grained PAT가 revoked 또는 expired 되었거나, `token approval`이 아직 끝나지 않았거나, 다른 repository 기준으로 발급되었거나, workflow label이 다름 | Fine-grained PAT가 `aca-runner-lab` repository에 대해 아직 유효한지, approval 상태인지, selected repository가 맞는지 확인하고, workflow가 `runs-on: [self-hosted, linux, x64, aca-runner]`를 그대로 쓰는지 검토합니다. |
+| workflow hostname의 suffix가 현재 `$SUFFIX`와 다르거나 현재 execution이 timeout됨 | 다른 Event Job이 같은 repository와 `aca-runner` label을 감시함 | 모듈 04의 중복 watcher query로 이전 Job을 찾습니다. 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 다시 실행합니다. |
 | Running execution이 항상 1개만 보임 | polling 타이밍상 동시에 관찰하지 못했거나 Azure quota/시작 지연이 있음 | 먼저 GitHub에서 네 job이 모두 생성되었는지 확인하고, 30~90초 동안 같은 `Running` query를 반복합니다. 네 개가 항상 한 번에 보여야 한다고 가정하지 마세요. |
 | `az containerapp job logs show`에 아직 로그가 거의 없음 | execution 시작 직후라 runner bootstrap 로그가 아직 수집되지 않음 | 10~20초 정도 기다렸다가 같은 `EXECUTION`으로 다시 조회하고, 필요하면 가장 최근 execution 이름을 다시 잡아 확인합니다. |
 | ACA 쪽 execution은 끝났는데 과거 replica 로그가 안 보이거나 일부만 남음 | 로그 보존/수집 지연 또는 조회 대상을 잘못 잡음 | `EXECUTION=$(...)`로 최신 execution 이름을 다시 구한 뒤 `ContainerAppConsoleLogs | where ContainerGroupName startswith '$EXECUTION'` KQL로 조회 범위를 좁힙니다. |

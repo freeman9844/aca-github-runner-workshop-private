@@ -102,7 +102,50 @@ export GITHUB_OWNER GITHUB_REPO GITHUB_PAT
 - 프롬프트는 owner, repository, Fine-grained PAT를 순서대로 요청합니다.
 - 입력하는 PAT는 모듈 01에서 검증한 approved, unexpired 토큰이어야 하며, lab repository 하나에만 접근할 수 있어야 합니다.
 
-## 3. ACA Event Job 생성
+## 3. 기존 Job과 중복 queue watcher 확인
+
+👁️ **설명**
+
+같은 GitHub repository와 `aca-runner` label을 감시하는 이전 Event Job이 남아
+있으면, 새 Job과 동시에 runner를 만들고 queued workflow를 먼저 가져갈 수
+있습니다. 그러면 새 execution은 Job을 받지 못한 채 대기하다가
+`--replica-timeout 900`에 도달해 `Failed`로 끝날 수 있습니다.
+
+먼저 현재 구독의 Container Apps Job 중 동일한 repository와 label을 감시하는
+Job을 찾습니다.
+
+🟢 **실행**
+
+```bash
+az containerapp job list \
+  --query "[?properties.configuration.eventTriggerConfig.scale.rules[?metadata.owner=='$GITHUB_OWNER' && metadata.repos=='$GITHUB_REPO' && metadata.labels=='aca-runner']].{Name:name,ResourceGroup:resourceGroup}" \
+  --output table
+```
+
+📋 **예상 출력**
+
+- 처음 실습하는 repository라면 행이 없어야 합니다.
+- 다른 이름 또는 다른 Resource Group의 Job이 보이면 **여기서 중단**합니다.
+  동일한 repository와 label을 감시하는 이전 Job을 정리하거나, 새 private
+  lab repository를 준비한 뒤 진행하세요.
+
+같은 `$RG`에 현재 `$JOB`이 이미 있다면 새로 만들기 전에 이 워크숍 Job만
+삭제합니다.
+
+```bash
+if az containerapp job show --name "$JOB" --resource-group "$RG" --output none 2>/dev/null; then
+  az containerapp job delete \
+    --name "$JOB" \
+    --resource-group "$RG" \
+    --yes
+fi
+```
+
+⚠️ **주의**
+
+Do not instruct participants to recreate the whole resource group for a Job configuration error.
+
+## 4. ACA Event Job 생성
 
 👁️ **설명**
 
@@ -189,31 +232,6 @@ unset JOB_CREATE_ARGS GITHUB_PAT
 - 명령은 `--output none` 때문에 정상 시 별도 JSON 없이 종료됩니다.
 - 실패 없이 반환되면 Event Job 정의가 저장된 것입니다. 실제 execution은 workflow가 queued 되기 전까지 생성되지 않을 수 있습니다.
 
-## 4. 기존 Job이 있으면 안전하게 복구
-
-👁️ **설명**
-
-`az containerapp job create`는 기존 Job을 원하는 상태로 덮어쓰는 idempotent update 명령이 아닙니다. 같은 이름의 Job이 이미 있다면 먼저 존재 여부를 확인하고, 실습 중 일부 설정을 잘못 넣어 다시 만들어야 할 때도 워크숍 Job 하나만 지운 뒤 이 모듈을 다시 실행합니다.
-
-🟢 **실행**
-
-```bash
-az containerapp job show --name "$JOB" --resource-group "$RG" --output none
-```
-
-이미 존재하는 Job을 다시 만들어야 한다면 아래처럼 **이 워크숍 Job만** 삭제합니다.
-
-```bash
-az containerapp job delete \
-  --name "$JOB" \
-  --resource-group "$RG" \
-  --yes
-```
-
-⚠️ **주의**
-
-Do not instruct participants to recreate the whole resource group for a Job configuration error.
-
 ## 5. secret을 노출하지 않고 Job 상태 검증
 
 👁️ **설명**
@@ -278,6 +296,7 @@ GitHub 저장소의 **Settings → Actions → Runners**를 열어보면, workfl
 | workflow가 계속 queued이고 execution이 안 생김 | 토큰이 만료되었거나 revoked 되었거나 approval 대기 중이거나, 잘못된 selected repository 기준으로 발급됨 | 모듈 01에서 승인받은 Fine-grained PAT를 다시 확인하고, 워크숍 repository 하나만 선택된 unexpired 토큰인지 점검한 뒤 필요하면 Job을 다시 만듭니다. |
 | `job show`의 rule은 보이는데 scale이 안 됨 | scaler metadata 오타 또는 잘못된 auth 매핑 | `githubApiURL=https://api.github.com`, `owner`, `runnerScope=repo`, `repos=$GITHUB_REPO`, `labels=aca-runner`, `targetWorkflowQueueLength=1`, `personalAccessToken`이 정확한지 `az containerapp job show ... --query "properties.configuration.eventTriggerConfig.scale.rules"`로 다시 확인합니다. |
 | execution은 생겼는데 GitHub job이 runner를 못 잡음 | workflow label과 runner label 불일치 | workflow의 `runs-on`에 `aca-runner`가 들어 있는지, Job env가 `RUNNER_LABELS=aca-runner`인지 동시에 확인합니다. |
+| workflow는 성공했지만 현재 execution이 900초 뒤 `Failed`가 됨 | 다른 Event Job이 동일한 repository와 `aca-runner` label을 감시하며 workflow Job을 먼저 가져감 | 3단계의 `az containerapp job list` query를 다시 실행합니다. 다른 Job이 보이면 해당 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 현재 Job을 다시 만듭니다. |
 | execution이 바로 실패하며 image pull 오류가 남 | UAMI의 `AcrPull` 전파 지연 또는 registry identity 설정 누락 | `az role assignment list --assignee "$UAMI_PID" --scope "$ACR_ID" --query "[].roleDefinitionName" --output tsv`로 `AcrPull`을 확인하고, Job 정의에 `--mi-user-assigned "$UAMI_RID"`와 `--registry-identity "$UAMI_RID"`가 모두 들어갔는지 다시 봅니다. |
 | execution이 곧바로 인증 오류로 끝남 | Job secret과 runner env가 오래된 토큰을 가리키거나 잘못된 토큰이 입력됨 | 모듈 01에서 확인한 PAT를 다시 로드하고 이 워크숍 Job만 삭제 후 다시 만들어 secret과 runner env를 함께 갱신합니다. |
 | GitHub API에서 403 또는 registration token 발급 실패 | 권한 부족 또는 organization approval 누락 | 토큰 권한이 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`인지 확인하고, organization 승인 절차가 있다면 승인 상태도 다시 확인합니다. |

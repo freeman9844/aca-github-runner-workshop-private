@@ -91,11 +91,21 @@ for text in \
   'Actions: Read-only' \
   'Administration: Read and write' \
   'Metadata: Read-only' \
+  'az containerapp job list' \
+  "metadata.owner=='\$GITHUB_OWNER'" \
+  "metadata.repos=='\$GITHUB_REPO'" \
+  "metadata.labels=='aca-runner'" \
+  '동일한 repository와 label' \
   'az containerapp job show --name "$JOB" --resource-group "$RG" --output none' \
   'az containerapp job delete \' \
   'Do not instruct participants to recreate the whole resource group for a Job configuration error.'; do
   grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
 done
+
+preflight_line="$(grep -nF -m1 'az containerapp job list' "$JOB_DOC" | cut -d: -f1)"
+create_line="$(grep -nF -m1 'az containerapp job create "${JOB_CREATE_ARGS[@]}"' "$JOB_DOC" | cut -d: -f1)"
+(( preflight_line < create_line )) ||
+  fail "duplicate watcher and existing Job checks must run before job create"
 
 if grep -E "$operational_github_app_pattern|PEM" \
   "$JOB_DOC" >/dev/null; then

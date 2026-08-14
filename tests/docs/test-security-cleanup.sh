@@ -23,6 +23,9 @@ for text in \
   '--yes --no-wait' \
   '리소스 그룹 삭제 요청됨: rg-acarunner-a1b2c3' \
   'az group show' \
+  'properties.provisioningState' \
+  'az resource list' \
+  'ACA managed environment 삭제는 오래 걸릴 수 있습니다.' \
   'ResourceGroupNotFound' \
   "Resource group 'rg-acarunner-a1b2c3' could not be found." \
   'aca-runner-lab' \

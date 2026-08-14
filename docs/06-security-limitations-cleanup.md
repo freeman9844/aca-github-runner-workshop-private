@@ -147,12 +147,24 @@ printf '리소스 그룹 삭제 요청됨: %s\n' "$RG"
 🟢 **실행**
 
 ```bash
-az group show --name "$RG" --output table
+az group show \
+  --name "$RG" \
+  --query "{name:name,state:properties.provisioningState}" \
+  --output table
+
+az resource list \
+  --resource-group "$RG" \
+  --query "[].{name:name,type:type}" \
+  --output table
 ```
 
 📋 **예상 출력**
 
-- 삭제 진행 중에는 리소스 그룹 정보가 잠시 보일 수 있습니다.
+- 삭제 진행 중에는 `properties.provisioningState`가 `Deleting`으로 보일 수
+  있습니다.
+- ACR, Job, identity, workspace가 먼저 사라지고 ACA managed environment가
+  마지막까지 남을 수 있습니다. **ACA managed environment 삭제는 오래 걸릴 수 있습니다.**
+  이 상태만으로 삭제 실패로 판단하거나 같은 이름의 리소스를 다시 만들지 마세요.
 - 삭제가 완료되면 최종적으로 아래와 비슷한 결과를 기대합니다.
 
 ```text
@@ -185,7 +197,7 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
 | `AuthorizationFailed` | 현재 Azure 계정에 RG 삭제 권한이 없음 | `az account show`로 구독을 다시 확인하고, 해당 RG에 Contributor 이상 권한이 있는 계정으로 다시 로그인합니다. |
-| `az group delete` 후에도 RG가 한동안 보임 | asynchronous deletion 진행 중 | 몇 분 기다린 뒤 같은 `az group show --name "$RG" --output table`를 다시 실행합니다. 최종 기준은 `(ResourceGroupNotFound)`입니다. |
+| `az group delete` 후에도 RG가 오래 보임 | ACA managed environment를 포함한 asynchronous deletion 진행 중 | `az group show`의 `Deleting` 상태와 `az resource list`의 잔여 리소스를 확인합니다. 오류나 lock이 없다면 기다리고, 최종 기준은 `(ResourceGroupNotFound)`입니다. |
 | 삭제가 계속 실패하거나 멈춤 | resource lock 존재 | 포털 또는 CLI로 delete lock/read-only lock을 확인한 뒤 해제하고 다시 시도합니다. |
 | GitHub에 stale offline runner가 남음 | UI 반영 지연 또는 이전 execution metadata 잔존 | 몇 분 후 새로고침하고, 계속 남으면 runner 목록에서 stale runner를 수동 제거합니다. |
 | 새 workflow가 갑자기 401/403을 반환 | PAT가 revoked/expired 되었거나 organization approval 미완료, 또는 permission 불일치 | Fine-grained PAT가 아직 유효한지 확인하고, approval 상태와 함께 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`가 유지되는지 확인합니다. |

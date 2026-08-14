@@ -40,6 +40,9 @@ for text in \
   '--container github-actions-runner' \
   'ContainerAppConsoleLogs' \
   'ContainerGroupName startswith' \
+  '5~10분' \
+  'job-ghrunner-$SUFFIX-' \
+  '다른 Event Job이 같은 repository와 `aca-runner` label' \
   'Runner configured' \
   'Runner process exited' \
   'active execution 수는 0'; do
