@@ -223,6 +223,29 @@ az role assignment list \
 
 RBAC 전파에는 몇 분이 걸릴 수 있습니다. 다음 모듈에서 image pull 관련 오류가 보이면 즉시 다시 만들지 말고 역할 할당 조회를 먼저 확인하세요.
 
+## 참고: Azure 관리 포털에서 생성된 리소스 확인
+
+👁️ **설명**
+
+이 단계는 **선택 참고**입니다. 워크숍의 필수 명령은 Cloud Shell에서
+완료되며, Azure 관리 포털에서는 생성 결과를 시각적으로 확인할 수 있습니다.
+
+Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로
+이동하면 Module 02에서 만든 다음 리소스를 한 화면에서 확인할 수 있습니다.
+
+- Azure Container Registry
+- Container Apps Environment
+- Managed Identity
+- Log Analytics workspace
+
+화면의 suffix와 리소스 이름은 예시이며 참가자의 `$RG`와 실제 생성 이름은
+다를 수 있습니다.
+
+> **참고 화면:** Azure Portal의 리소스 그룹 Overview에서 Module 02가 만든
+> 리소스를 확인하는 예시입니다.
+
+![Azure Portal 리소스 그룹 Overview에서 Module 02 생성 리소스를 확인하는 화면](images/02-azure-portal-resource-group-resources.png)
+
 ## 트러블슈팅
 
 | 증상 | 주요 원인 | 해결 방법 |

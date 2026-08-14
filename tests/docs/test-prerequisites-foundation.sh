@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PREREQ="$ROOT/docs/01-prerequisites-github.md"
 FOUNDATION="$ROOT/docs/02-azure-foundation.md"
+PORTAL_SCREENSHOT="$ROOT/docs/images/02-azure-portal-resource-group-resources.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -20,6 +21,8 @@ grep_forbidden_pat_stdout_prints() {
 
 [[ -f "$PREREQ" ]] || { echo "FAIL: module 01 missing" >&2; exit 1; }
 [[ -f "$FOUNDATION" ]] || { echo "FAIL: module 02 missing" >&2; exit 1; }
+[[ -f "$PORTAL_SCREENSHOT" ]] ||
+  fail "module 02 Azure portal screenshot missing"
 
 if grep -E "$operational_github_app_pattern" <(
   printf '%s\n' 'Enterprise Managed User may be unable to install a GitHub App.'
@@ -96,6 +99,17 @@ if grep -F '******' "$PREREQ" >/dev/null; then
 fi
 
 for text in \
+  '## 참고: Azure 관리 포털에서 생성된 리소스 확인' \
+  '선택 참고' \
+  'Resource groups' \
+  '`$RG`' \
+  'Overview' \
+  'Resources' \
+  'Azure Container Registry' \
+  'Container Apps Environment' \
+  'Managed Identity' \
+  'Log Analytics workspace' \
+  '![Azure Portal 리소스 그룹 Overview에서 Module 02 생성 리소스를 확인하는 화면](images/02-azure-portal-resource-group-resources.png)' \
   'LOC=koreacentral' \
   'SUFFIX="$(openssl rand -hex 3)"' \
   'ACR="acracarunner$SUFFIX"' \
@@ -121,6 +135,16 @@ for text in \
   'SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3'; do
   grep -F -- "$text" "$FOUNDATION" >/dev/null || { echo "FAIL: module 02 missing $text" >&2; exit 1; }
 done
+
+portal_reference_line="$(
+  grep -nF -m1 '## 참고: Azure 관리 포털에서 생성된 리소스 확인' \
+    "$FOUNDATION" | cut -d: -f1
+)"
+troubleshooting_line="$(
+  grep -nF -m1 '## 트러블슈팅' "$FOUNDATION" | cut -d: -f1
+)"
+(( portal_reference_line < troubleshooting_line )) ||
+  fail "module 02 portal reference must appear before troubleshooting"
 
 if grep -Fx '## 6. 검증' "$FOUNDATION" >/dev/null; then
   fail "module 02 still has a standalone validation section"
