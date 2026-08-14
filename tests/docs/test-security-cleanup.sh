@@ -103,5 +103,55 @@ grep -F '.superpowers/' "$IGNORE" >/dev/null
 grep -F 'docs/superpowers/' "$IGNORE" >/dev/null
 grep -F '.env' "$IGNORE" >/dev/null
 grep -F '*.local' "$IGNORE" >/dev/null
+for pattern in \
+  '.env.*' \
+  '!.env.example' \
+  '*.pem' \
+  '*.key' \
+  '*.pfx' \
+  '*.p12' \
+  '*.out' \
+  '*.bak' \
+  '*.swp' \
+  '*~'; do
+  grep -Fx -- "$pattern" "$IGNORE" >/dev/null ||
+    fail ".gitignore missing $pattern"
+done
+
+for path in \
+  '.env.production' \
+  'aca-runner.private-key.pem' \
+  'runner-signing.key' \
+  'runner-identity.pfx' \
+  'runner-identity.p12' \
+  'autoscale-load.out' \
+  'notes.bak' \
+  'module.swp' \
+  'draft~'; do
+  git -C "$ROOT" check-ignore -q "$path" ||
+    fail ".gitignore does not ignore $path"
+done
+
+if git -C "$ROOT" check-ignore -q '.env.example'; then
+  fail ".env.example must remain eligible for tracking"
+fi
+
+if [[ -n "$(git -C "$ROOT" ls-files docs/superpowers)" ]]; then
+  fail "internal docs/superpowers files are still tracked"
+fi
+
+for path in \
+  'README.md' \
+  'docs/01-prerequisites-github.md' \
+  'docs/06-security-limitations-cleanup.md' \
+  'docs/images/02-azure-portal-resource-group-resources.png' \
+  'runner/Dockerfile' \
+  'runner/entrypoint.sh' \
+  'samples/parallel-runner-workflow.yml' \
+  'tests/validate-workshop.sh' \
+  '.github/workflows/validate-workshop.yml'; do
+  git -C "$ROOT" ls-files --error-unmatch "$path" >/dev/null 2>&1 ||
+    fail "required workshop file is no longer tracked: $path"
+done
 
 printf 'PASS: security and cleanup doc\n'
