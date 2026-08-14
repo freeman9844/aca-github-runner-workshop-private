@@ -95,8 +95,8 @@ GitHub 웹 UI에서 새 저장소를 만들고 아래 값을 사용합니다.
 🟢 **실행**
 
 ```bash
-git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
-cd ~/aca-github-runner-workshop
+git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop-private
+cd ~/aca-github-runner-workshop-private
 ls
 ```
 
