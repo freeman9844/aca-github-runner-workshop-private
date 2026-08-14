@@ -15,6 +15,64 @@ operational_github_app_pattern='GITHUB_APP_|github_app_jwt|/app/installations/|o
 [[ -f "$IMAGE_DOC" ]] || { echo "FAIL: module 03 missing" >&2; exit 1; }
 [[ -f "$JOB_DOC" ]] || { echo "FAIL: module 04 missing" >&2; exit 1; }
 
+assert_collapsed_recovery() {
+  local doc="$1"
+  local module="$2"
+  local heading_line summary_line close_line first_step_line
+
+  grep -Fx '## 0. 세션 재연결 시 변수 복구 (선택)' "$doc" >/dev/null ||
+    fail "$module missing optional Step 0 recovery heading"
+  [[ "$(grep -Fc '<details>' "$doc")" -eq 1 ]] ||
+    fail "$module must contain exactly one details block"
+  [[ "$(grep -Fc '</details>' "$doc")" -eq 1 ]] ||
+    fail "$module must close exactly one details block"
+  grep -Fx '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$doc" >/dev/null ||
+    fail "$module missing recovery disclosure summary"
+
+  heading_line="$(grep -nF -m1 '## 0. 세션 재연결 시 변수 복구 (선택)' "$doc" | cut -d: -f1)"
+  summary_line="$(grep -nF -m1 '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$doc" | cut -d: -f1)"
+  close_line="$(grep -nF -m1 '</details>' "$doc" | cut -d: -f1)"
+  first_step_line="$(grep -nE -m1 '^## 1\. ' "$doc" | cut -d: -f1)"
+
+  (( heading_line < summary_line && summary_line < close_line && close_line < first_step_line )) ||
+    fail "$module recovery details must close before required Step 1"
+}
+
+assert_collapsed_recovery "$IMAGE_DOC" "module 03"
+assert_collapsed_recovery "$JOB_DOC" "module 04"
+
+for heading in \
+  '## 1. runner 이미지 파일 읽기' \
+  '## 2. 로컬 정적 검사 먼저 실행' \
+  '## 3. ACR Tasks로 runner image 빌드' \
+  '## 4. 왜 이 구성을 유지하나요?'; do
+  grep -Fx "$heading" "$IMAGE_DOC" >/dev/null ||
+    fail "module 03 missing renumbered heading: $heading"
+done
+
+for heading in \
+  '## 1. 기존 Job과 중복 queue watcher 확인' \
+  '## 2. ACA Event Job 생성' \
+  '## 3. GitHub 쪽에서 미리 확인할 것'; do
+  grep -Fx "$heading" "$JOB_DOC" >/dev/null ||
+    fail "module 04 missing renumbered heading: $heading"
+done
+
+for old_heading in \
+  '## 1. 저장해 둔 `SUFFIX`와 `ACR`로 Azure 변수 복구' \
+  '## 2. Fine-grained PAT 입력값 다시 로드' \
+  '## 2. runner 이미지 파일 읽기' \
+  '## 3. 기존 Job과 중복 queue watcher 확인'; do
+  if grep -Fx "$old_heading" "$IMAGE_DOC" "$JOB_DOC" >/dev/null; then
+    fail "old recovery or step heading remains: $old_heading"
+  fi
+done
+
+grep -Fx '### Azure 리소스 변수' "$JOB_DOC" >/dev/null ||
+  fail "module 04 missing Azure recovery subsection"
+grep -Fx '### GitHub 인증 변수' "$JOB_DOC" >/dev/null ||
+  fail "module 04 missing GitHub recovery subsection"
+
 for heading in \
   '## 5. 태그와 ACR 보안 설정 검증' \
   '## 5. secret을 노출하지 않고 Job 상태 검증'; do

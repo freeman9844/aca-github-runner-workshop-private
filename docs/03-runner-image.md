@@ -21,7 +21,10 @@
 | 📋 **예상 출력** | 실행 결과와 비교할 기준 출력 |
 | ⚠️ **주의** | 보안, 비용, 제약 사항 안내 |
 
-## 1. 저장해 둔 `SUFFIX`와 `ACR`로 Azure 변수 복구
+## 0. 세션 재연결 시 변수 복구 (선택)
+
+<details>
+<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>
 
 👁️ **설명**
 
@@ -82,7 +85,9 @@ SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 
 `ACR` 값은 위 형식이 기본값일 뿐이며, 모듈 02에서 이름 충돌 복구를 했다면 입력한 실제 `ACR` 값이 그대로 출력되어야 합니다.
 
-## 2. runner 이미지 파일 읽기
+</details>
+
+## 1. runner 이미지 파일 읽기
 
 👁️ **설명**
 
@@ -100,7 +105,7 @@ SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 
 base image tag와 문서의 `IMAGE="github-actions-runner:2.336.0"`는 같이 움직여야 합니다. 둘 중 하나만 바꾸면 태그 확인이나 다음 모듈 배포 단계가 어긋납니다.
 
-## 3. 로컬 정적 검사 먼저 실행
+## 2. 로컬 정적 검사 먼저 실행
 
 👁️ **설명**
 
@@ -121,7 +126,7 @@ bash tests/test-artifacts.sh
 - `bash tests/runner/test-entrypoint.sh`는 `PASS: entrypoint behavior`를 출력합니다.
 - `bash tests/test-artifacts.sh`는 `PASS: runner image and workflow artifacts`를 출력합니다.
 
-## 4. ACR Tasks로 runner image 빌드
+## 3. ACR Tasks로 runner image 빌드
 
 👁️ **설명**
 
@@ -164,7 +169,7 @@ az acr show \
 - `az acr show` 표에는 `loginServer`가 `<registry>.azurecr.io` 형식으로 보이고 `adminUserEnabled`는 반드시 `False`여야 합니다.
 - `adminUserEnabled`가 `False`라는 것은 다음 모듈에서 registry admin password 대신 UAMI + `AcrPull`을 사용한다는 뜻입니다.
 
-## 5. 왜 이 구성을 유지하나요?
+## 4. 왜 이 구성을 유지하나요?
 
 👁️ **설명**
 
