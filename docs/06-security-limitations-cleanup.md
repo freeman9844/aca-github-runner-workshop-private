@@ -204,27 +204,6 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 | 예상보다 비용이 계속 발생함 | RG 삭제 미완료, Log Analytics/ACR 등 잔존 리소스 존재 | `az group show` 결과와 Azure Portal 비용 분석을 함께 확인하고, RG가 남아 있으면 삭제 완료까지 추적합니다. |
 | workflow의 Docker 단계가 실패함 | Docker-in-Docker 또는 Docker daemon/service container 의존 | 이 플랫폼 제약은 우회하지 말고, Docker daemon이 필요한 작업은 다른 runner 환경으로 분리합니다. |
 
-## 7. 전체 워크숍 완료 확인
-
-👁️ **설명**
-
-아래 표로 각 모듈의 학습 산출물을 최종 점검합니다.
-
-| 모듈 | 완료 결과 |
-|------|-----------|
-| 00 개요 | 아키텍처, 시간표, 비용, 학습 목표를 설명할 수 있다. |
-| 01 GitHub 사전 준비 | `Private repository`, Fine-grained PAT, GitHub 변수 검증을 마쳤다. |
-| 02 Azure 기반 리소스 준비 | RG, Log Analytics, ACA environment, ACR, UAMI, `AcrPull` 구성을 완료했다. |
-| 03 Runner image 빌드 | runner image와 entrypoint 검증 및 ACR 빌드를 수행했다. |
-| 04 Event Job + KEDA 구성 | `github-runner` scaler와 Event Job 배포를 완료했다. |
-| 05 병렬 실행과 스케일 검증 | `0 → N → 0` execution 변화와 runner lifecycle marker를 확인했다. |
-| 06 보안·제약·정리 | PAT lifecycle cleanup, production 확장 포인트, 제한 사항, Azure/GitHub cleanup 절차를 점검했다. |
-
-📋 **예상 출력**
-
-- 참가자는 여섯 개 모듈을 처음부터 끝까지 연결해 설명할 수 있어야 합니다.
-- Azure에서는 최종적으로 `(ResourceGroupNotFound)` 확인까지 끝내고, GitHub에서는 lab workflow/PAT/stale runner 정리 여부를 판단할 수 있어야 합니다.
-
 ---
 
 [← 이전: 병렬 실행과 스케일 검증](05-parallel-scale-validation.md)

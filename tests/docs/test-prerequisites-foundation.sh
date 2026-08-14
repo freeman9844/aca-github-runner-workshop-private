@@ -76,6 +76,10 @@ for text in \
   grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
 
+if grep -Fx '## 8. 검증' "$PREREQ" >/dev/null; then
+  fail "module 01 still has a redundant final validation section"
+fi
+
 if grep -E "$operational_github_app_pattern" "$PREREQ" >/dev/null; then
   echo 'FAIL: module 01 still documents GitHub App authentication' >&2
   exit 1

@@ -28,10 +28,14 @@ for text in \
   'ACA managed environment 삭제는 오래 걸릴 수 있습니다.' \
   'ResourceGroupNotFound' \
   "Resource group 'rg-acarunner-a1b2c3' could not be found." \
-  'aca-runner-lab' \
-  '## 7. 전체 워크숍 완료 확인'; do
+  'aca-runner-lab'; do
   grep -F -- "$text" "$DOC" >/dev/null || { echo "FAIL: module 06 missing $text" >&2; exit 1; }
 done
+
+if grep -Fx '## 7. 전체 워크숍 완료 확인' "$DOC" >/dev/null; then
+  echo "FAIL: module 06 still has a redundant workshop completion summary" >&2
+  exit 1
+fi
 
 for text in \
   'Fine-grained PAT' \
