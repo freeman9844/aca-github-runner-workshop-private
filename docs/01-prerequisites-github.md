@@ -231,22 +231,6 @@ Runner administration: OK
   표시하지 않은 채 버립니다.
 - 검증 뒤 `PAT_AUTH_HEADER`는 `unset`하고 `GITHUB_PAT`만 현재 세션에 남깁니다.
 
-## 8. 검증
-
-🟢 **실행**
-
-```bash
-printf 'OWNER=%s REPO=%s PAT=%s\n' \
-  "$GITHUB_OWNER" \
-  "$GITHUB_REPO" \
-  "${GITHUB_PAT:+SET}"
-```
-
-📋 **예상 출력**
-
-- owner와 repository만 평문으로 표시되고 PAT는 `SET`만 보여야 합니다.
-- 바로 앞 단계에서 세 줄의 `OK` 메시지가 모두 보여야 합니다.
-
 ## 트러블슈팅
 
 | 증상 | 주요 원인 | 해결 방법 |
