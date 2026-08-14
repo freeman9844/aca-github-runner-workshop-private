@@ -12,7 +12,10 @@
 - Azure Container Apps Job과 GitHub runner 모델의 제약을 운영 관점에서 설명할 수 있다.
 - Azure 리소스 그룹과 GitHub 측 실습 흔적을 안전하게 정리할 수 있다.
 
-## 0. 정리 전에 변수 복구
+## 0. 세션 재연결 시 변수 복구 (선택)
+
+<details>
+<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>
 
 👁️ **설명**
 
@@ -37,6 +40,8 @@ az group list --query "[?starts_with(name, 'rg-acarunner-')].name" --output tabl
 
 - fallback 목록에서 비슷한 이름이 여러 개 보이면, 메모해 둔 원래 suffix와 대조한 뒤에만 삭제 명령을 실행하세요.
 - 잘못된 RG를 지우면 다른 실습/리소스까지 함께 삭제될 수 있습니다.
+
+</details>
 
 ## 태그 범례
 
