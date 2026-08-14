@@ -143,8 +143,14 @@ fi
 for path in \
   'README.md' \
   'docs/01-prerequisites-github.md' \
+  'docs/02-azure-foundation.md' \
+  'docs/03-runner-image.md' \
+  'docs/04-event-job-keda.md' \
+  'docs/05-parallel-scale-validation.md' \
   'docs/06-security-limitations-cleanup.md' \
   'docs/images/02-azure-portal-resource-group-resources.png' \
+  'docs/images/05-github-actions-queued-matrix.png' \
+  'docs/images/05-github-actions-successful-matrix.png' \
   'runner/Dockerfile' \
   'runner/entrypoint.sh' \
   'samples/parallel-runner-workflow.yml' \
