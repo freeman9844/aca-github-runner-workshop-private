@@ -148,10 +148,25 @@ ACR_SERVER=$(az acr show --name "$ACR" --query loginServer --output tsv)
 ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
 ```
 
+ACR의 관리자 계정과 ARM authentication 상태를 확인합니다.
+
+```bash
+az acr show \
+  --name "$ACR" \
+  --query "{loginServer:loginServer,adminUserEnabled:adminUserEnabled}" \
+  --output json
+
+az acr config authentication-as-arm show \
+  --registry "$ACR" \
+  --query status \
+  --output tsv
+```
+
 📋 **예상 출력**
 
 - `ACR_SERVER`는 `<registry>.azurecr.io` 형식입니다.
-- ACR 설정 검증 시 `adminUserEnabled`는 `false`여야 합니다.
+- ACR JSON에는 `"adminUserEnabled": false`가 보여야 합니다.
+- ARM authentication 조회 결과는 `enabled`여야 합니다.
 
 ## 5. UAMI 만들기와 `AcrPull` RBAC 연결
 
@@ -190,62 +205,7 @@ az role assignment create \
   --role AcrPull \
   --scope "$ACR_ID" \
   --output none
-```
 
-📋 **예상 출력**
-
-- `UAMI_RID`는 `/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/...` 형식입니다.
-- `UAMI_PID`는 GUID 형식입니다.
-- `AcrPull` 역할 할당은 성공 후 별도 출력 없이 종료될 수 있습니다.
-
-⚠️ **주의**
-
-RBAC 전파에는 몇 분이 걸릴 수 있습니다. 다음 모듈에서 image pull 관련 오류가 보이면 즉시 다시 만들지 말고 역할 할당 조회를 먼저 확인하세요.
-
-## 6. 검증
-
-🟢 **실행**
-
-리소스 목록을 먼저 확인합니다.
-
-```bash
-az resource list \
-  --resource-group "$RG" \
-  --query "[].{name:name,type:type,location:location}" \
-  --output table
-```
-
-ACA environment diagnostic setting을 확인합니다.
-
-```bash
-az monitor diagnostic-settings show \
-  --name aca-runner-logs \
-  --resource "$ENV_ID" \
-  --query "{name:name,workspaceId:workspaceId,logs:logs}" \
-  --output json
-```
-
-ACR의 관리자 계정과 로그인 서버를 확인합니다.
-
-```bash
-az acr show \
-  --name "$ACR" \
-  --query "{loginServer:loginServer,adminUserEnabled:adminUserEnabled}" \
-  --output json
-```
-
-ARM authentication 상태를 확인합니다.
-
-```bash
-az acr config authentication-as-arm show \
-  --registry "$ACR" \
-  --query status \
-  --output tsv
-```
-
-`AcrPull` 역할 할당을 확인합니다.
-
-```bash
 az role assignment list \
   --assignee "$UAMI_PID" \
   --scope "$ACR_ID" \
@@ -255,11 +215,13 @@ az role assignment list \
 
 📋 **예상 출력**
 
-- resource list에는 최소한 `Microsoft.OperationalInsights/workspaces`, `Microsoft.App/managedEnvironments`, `Microsoft.ContainerRegistry/registries`, `Microsoft.ManagedIdentity/userAssignedIdentities`가 보여야 합니다.
-- diagnostic setting JSON에는 `aca-runner-logs`와 `allLogs`가 보여야 합니다.
-- ACR JSON에는 `"adminUserEnabled": false`가 보여야 합니다.
-- ARM authentication 조회 결과는 `enabled`여야 합니다.
-- role assignment 표에는 `AcrPull`과 `ServicePrincipal`이 보여야 합니다.
+- `UAMI_RID`는 `/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/...` 형식입니다.
+- `UAMI_PID`는 GUID 형식입니다.
+- `AcrPull`과 `ServicePrincipal`이 보이는 표가 출력됩니다.
+
+⚠️ **주의**
+
+RBAC 전파에는 몇 분이 걸릴 수 있습니다. 다음 모듈에서 image pull 관련 오류가 보이면 즉시 다시 만들지 말고 역할 할당 조회를 먼저 확인하세요.
 
 ## 트러블슈팅
 

@@ -122,6 +122,20 @@ for text in \
   grep -F -- "$text" "$FOUNDATION" >/dev/null || { echo "FAIL: module 02 missing $text" >&2; exit 1; }
 done
 
+if grep -Fx '## 6. 검증' "$FOUNDATION" >/dev/null; then
+  fail "module 02 still has a standalone validation section"
+fi
+
+for text in \
+  'az acr show \' \
+  'adminUserEnabled:adminUserEnabled' \
+  'az acr config authentication-as-arm show \' \
+  'az role assignment list \' \
+  'roleDefinitionName'; do
+  grep -F -- "$text" "$FOUNDATION" >/dev/null ||
+    fail "module 02 lost safety check: $text"
+done
+
 if grep -F 'RANDOM % 100000' "$FOUNDATION" >/dev/null; then
   echo 'FAIL: module 02 still uses low-entropy RANDOM suffixes' >&2
   exit 1
