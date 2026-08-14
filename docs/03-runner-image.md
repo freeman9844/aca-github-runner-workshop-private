@@ -142,9 +142,9 @@ az acr build \
 - 스트리밍 로그가 보이다가 최종적으로 build run ID와 push 완료 메시지가 출력됩니다.
 - 빌드가 끝나면 `$ACR_SERVER/github-actions-runner:2.336.0` 이미지가 레지스트리에 존재해야 합니다.
 
-## 5. 태그와 ACR 보안 설정 검증
-
 🟢 **실행**
+
+빌드가 끝나면 태그와 보안 설정을 같은 흐름에서 바로 확인합니다.
 
 ```bash
 az acr repository show-tags \
@@ -164,7 +164,7 @@ az acr show \
 - `az acr show` 표에는 `loginServer`가 `<registry>.azurecr.io` 형식으로 보이고 `adminUserEnabled`는 반드시 `False`여야 합니다.
 - `adminUserEnabled`가 `False`라는 것은 다음 모듈에서 registry admin password 대신 UAMI + `AcrPull`을 사용한다는 뜻입니다.
 
-## 6. 왜 이 구성을 유지하나요?
+## 5. 왜 이 구성을 유지하나요?
 
 👁️ **설명**
 

@@ -15,6 +15,14 @@ operational_github_app_pattern='GITHUB_APP_|github_app_jwt|/app/installations/|o
 [[ -f "$IMAGE_DOC" ]] || { echo "FAIL: module 03 missing" >&2; exit 1; }
 [[ -f "$JOB_DOC" ]] || { echo "FAIL: module 04 missing" >&2; exit 1; }
 
+for heading in \
+  '## 5. 태그와 ACR 보안 설정 검증' \
+  '## 5. secret을 노출하지 않고 Job 상태 검증'; do
+  if grep -Fx "$heading" "$IMAGE_DOC" "$JOB_DOC" >/dev/null; then
+    fail "standalone validation heading remains: $heading"
+  fi
+done
+
 if grep -E "$operational_github_app_pattern" <(
   printf '%s\n' 'The old GitHub App installation token path is intentionally not used in this workshop.'
 ) >/dev/null; then
@@ -33,6 +41,8 @@ for text in \
   'bash -n runner/entrypoint.sh' \
   'bash tests/runner/test-entrypoint.sh' \
   'az acr build' \
+  'az acr repository show-tags' \
+  'adminUserEnabled:adminUserEnabled' \
   '--image "$IMAGE"' \
   './runner' \
   'ghcr.io/actions/actions-runner:2.336.0' \
@@ -62,6 +72,9 @@ for text in \
   'JOB_CREATE_ARGS=(' \
   '# queue가 비어 있으면 execution을 0개로 유지합니다.' \
   'az containerapp job create "${JOB_CREATE_ARGS[@]}"' \
+  'triggerType:properties.configuration.triggerType' \
+  'properties.configuration.eventTriggerConfig.scale.rules' \
+  'az containerapp job execution list' \
   '--trigger-type Event' \
   '--container-name github-actions-runner' \
   '--replica-timeout 900' \
