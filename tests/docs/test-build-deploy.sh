@@ -18,7 +18,9 @@ operational_github_app_pattern='GITHUB_APP_|github_app_jwt|/app/installations/|o
 assert_collapsed_recovery() {
   local doc="$1"
   local module="$2"
-  local heading_line summary_line close_line first_step_line
+  local details_open_line summary_line close_line first_step_line
+  local summary_next_line details_prev_line
+  local -a actual_headings expected_headings
 
   grep -Fx '## 0. 세션 재연결 시 변수 복구 (선택)' "$doc" >/dev/null ||
     fail "$module missing optional Step 0 recovery heading"
@@ -29,34 +31,57 @@ assert_collapsed_recovery() {
   grep -Fx '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$doc" >/dev/null ||
     fail "$module missing recovery disclosure summary"
 
-  heading_line="$(grep -nF -m1 '## 0. 세션 재연결 시 변수 복구 (선택)' "$doc" | cut -d: -f1)"
+  details_open_line="$(grep -nF -m1 '<details>' "$doc" | cut -d: -f1)"
   summary_line="$(grep -nF -m1 '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$doc" | cut -d: -f1)"
   close_line="$(grep -nF -m1 '</details>' "$doc" | cut -d: -f1)"
   first_step_line="$(grep -nE -m1 '^## 1\. ' "$doc" | cut -d: -f1)"
+  [[ -n "$details_open_line" && -n "$summary_line" && -n "$close_line" && -n "$first_step_line" ]] ||
+    fail "$module missing recovery disclosure structure"
 
-  (( heading_line < summary_line && summary_line < close_line && close_line < first_step_line )) ||
+  summary_next_line="$(sed -n "$((summary_line + 1))p" "$doc")"
+  details_prev_line="$(sed -n "$((close_line - 1))p" "$doc")"
+
+  [[ -z "${summary_next_line//[[:space:]]/}" ]] ||
+    fail "$module summary must be followed by a blank line"
+  [[ -z "${details_prev_line//[[:space:]]/}" ]] ||
+    fail "$module details close must be preceded by a blank line"
+  (( details_open_line < summary_line && summary_line < close_line && close_line < first_step_line )) ||
     fail "$module recovery details must close before required Step 1"
+
+  mapfile -t actual_headings < <(grep -E '^## [0-9]+\.' "$doc")
+  case "$module" in
+    "module 03")
+      expected_headings=(
+        '## 0. 세션 재연결 시 변수 복구 (선택)'
+        '## 1. runner 이미지 파일 읽기'
+        '## 2. 로컬 정적 검사 먼저 실행'
+        '## 3. ACR Tasks로 runner image 빌드'
+        '## 4. 왜 이 구성을 유지하나요?'
+      )
+      ;;
+    "module 04")
+      expected_headings=(
+        '## 0. 세션 재연결 시 변수 복구 (선택)'
+        '## 1. 기존 Job과 중복 queue watcher 확인'
+        '## 2. ACA Event Job 생성'
+        '## 3. GitHub 쪽에서 미리 확인할 것'
+      )
+      ;;
+    *)
+      fail "unexpected module: $module"
+      ;;
+  esac
+
+  [[ "${#actual_headings[@]}" -eq "${#expected_headings[@]}" ]] ||
+    fail "$module numbered heading count mismatch: expected ${#expected_headings[@]}, got ${#actual_headings[@]}"
+  for i in "${!expected_headings[@]}"; do
+    [[ "${actual_headings[$i]}" == "${expected_headings[$i]}" ]] ||
+      fail "$module numbered heading mismatch at position $((i + 1)): expected '${expected_headings[$i]}', got '${actual_headings[$i]}'"
+  done
 }
 
 assert_collapsed_recovery "$IMAGE_DOC" "module 03"
 assert_collapsed_recovery "$JOB_DOC" "module 04"
-
-for heading in \
-  '## 1. runner 이미지 파일 읽기' \
-  '## 2. 로컬 정적 검사 먼저 실행' \
-  '## 3. ACR Tasks로 runner image 빌드' \
-  '## 4. 왜 이 구성을 유지하나요?'; do
-  grep -Fx "$heading" "$IMAGE_DOC" >/dev/null ||
-    fail "module 03 missing renumbered heading: $heading"
-done
-
-for heading in \
-  '## 1. 기존 Job과 중복 queue watcher 확인' \
-  '## 2. ACA Event Job 생성' \
-  '## 3. GitHub 쪽에서 미리 확인할 것'; do
-  grep -Fx "$heading" "$JOB_DOC" >/dev/null ||
-    fail "module 04 missing renumbered heading: $heading"
-done
 
 for old_heading in \
   '## 1. 저장해 둔 `SUFFIX`와 `ACR`로 Azure 변수 복구' \
