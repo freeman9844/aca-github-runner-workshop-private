@@ -70,6 +70,7 @@ for text in \
   'Repository access: OK' \
   'Actions read: OK' \
   'Runner administration: OK' \
+  '해당 private repository에 대한 HTTPS Git 인증이 이미 설정되어 있어야 합니다.' \
   'git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' \
   'cd ~/aca-github-runner-workshop' \
   'az extension add --name containerapp --upgrade --only-show-errors' \

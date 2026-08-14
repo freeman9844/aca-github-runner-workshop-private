@@ -90,6 +90,7 @@ GitHub 웹 UI에서 새 저장소를 만들고 아래 값을 사용합니다.
 
 문서, 샘플 workflow, runner 이미지 파일이 들어 있는 워크숍 소스
 저장소를 지정된 경로에 clone합니다.
+해당 private repository에 대한 HTTPS Git 인증이 이미 설정되어 있어야 합니다.
 
 🟢 **실행**
 
