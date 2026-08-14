@@ -232,13 +232,9 @@ unset JOB_CREATE_ARGS GITHUB_PAT
 - 명령은 `--output none` 때문에 정상 시 별도 JSON 없이 종료됩니다.
 - 실패 없이 반환되면 Event Job 정의가 저장된 것입니다. 실제 execution은 workflow가 queued 되기 전까지 생성되지 않을 수 있습니다.
 
-## 5. secret을 노출하지 않고 Job 상태 검증
-
-👁️ **설명**
-
-검증은 Job configuration과 execution 상태만 읽습니다. `job show`는 secret 값을 조회하지 않으므로 PAT가 다시 출력되지 않습니다.
-
 🟢 **실행**
+
+배포 직후 Job configuration과 초기 execution 상태를 같은 흐름에서 확인합니다. `job show`는 secret 값을 조회하지 않으므로 PAT가 다시 출력되지 않습니다.
 
 ```bash
 az containerapp job show \
@@ -279,7 +275,7 @@ rules:
 
 `az containerapp job execution list`는 workflow를 아직 queue에 넣지 않았다면 표 헤더만 나오거나 행이 0개일 수 있습니다. **배포 직후 active execution이 없는 것이 정상**입니다.
 
-## 6. GitHub 쪽에서 미리 확인할 것
+## 5. GitHub 쪽에서 미리 확인할 것
 
 👁️ **설명**
 
