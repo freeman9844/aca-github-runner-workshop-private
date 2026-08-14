@@ -16,14 +16,24 @@ fail() {
 
 grep -Fx '## 0. 세션 재연결 시 변수 복구 (선택)' "$DOC" >/dev/null ||
   fail "module 05 missing optional Step 0 recovery heading"
+details_open_line="$(grep -nF -m1 '<details>' "$DOC" | cut -d: -f1)"
+summary_line="$(grep -nF -m1 '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$DOC" | cut -d: -f1)"
+details_close_line="$(grep -nF -m1 '</details>' "$DOC" | cut -d: -f1)"
 [[ "$(grep -Fc '<details>' "$DOC")" -eq 1 ]] ||
   fail "module 05 must contain exactly one details block"
 [[ "$(grep -Fc '</details>' "$DOC")" -eq 1 ]] ||
   fail "module 05 must close exactly one details block"
-grep -Fx '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$DOC" >/dev/null ||
-  fail "module 05 missing recovery disclosure summary"
+[[ -n "$details_open_line" && -n "$summary_line" && -n "$details_close_line" ]] ||
+  fail "module 05 missing recovery disclosure structure"
+(( details_open_line < summary_line && summary_line < details_close_line )) ||
+  fail "module 05 recovery summary must be inside the details block"
+summary_next_line="$(sed -n "$((summary_line + 1))p" "$DOC")"
+details_prev_line="$(sed -n "$((details_close_line - 1))p" "$DOC")"
+[[ -z "${summary_next_line//[[:space:]]/}" ]] ||
+  fail "module 05 summary must be followed by a blank line"
+[[ -z "${details_prev_line//[[:space:]]/}" ]] ||
+  fail "module 05 details close must be preceded by a blank line"
 
-details_close_line="$(grep -nF -m1 '</details>' "$DOC" | cut -d: -f1)"
 legend_line="$(grep -nF -m1 '## 태그 범례' "$DOC" | cut -d: -f1)"
 (( details_close_line < legend_line )) ||
   fail "module 05 recovery details must close before the tag legend"
