@@ -6,6 +6,7 @@
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
+- Cloud Shell을 Bash와 영구 스토리지로 처음 설정한다.
 - Cloud Shell에서 실습에 사용할 Azure 구독을 선택한다.
 - Azure Container Apps 관련 CLI extension과 provider 등록 상태를 맞춘다.
 - `aca-runner-lab` 이름의 `Private repository`를 준비한다.
@@ -20,6 +21,44 @@
 | 👁️ **설명** | 개념 설명 또는 읽기 전용 안내 |
 | 📋 **예상 출력** | 실행 결과와 비교할 기준 출력 |
 | ⚠️ **주의** | 보안, 비용, 제약 사항 안내 |
+
+## Cloud Shell 최초 준비
+
+Azure Portal에서 Cloud Shell을 처음 실행한다면 **Bash**와 영구 스토리지를
+먼저 준비합니다. 스토리지를 연결하면 Cloud Shell 세션이 다시 만들어져도
+홈 디렉터리에 clone한 워크숍 파일을 유지할 수 있습니다.
+
+⚠️ **주의**
+
+이 워크숍에서는 **Mount storage account**를 권장합니다.
+**No storage account required**는 ephemeral session을 사용하므로 Cloud Shell
+세션이 종료되면 clone한 파일이 유지되지 않을 수 있습니다.
+
+1. [Azure Portal](https://portal.azure.com) 상단의 Cloud Shell(`>_`) 아이콘을
+   선택하고 **Bash**를 선택합니다.
+
+   ![Cloud Shell Welcome 화면에서 Bash 선택](images/01-cloudshell-step1-welcome.png)
+
+2. **Getting started** 화면에서 **Mount storage account**를 선택합니다.
+   **Storage account subscription**에서 실습에 사용할 구독을 선택한 뒤
+   **Apply**를 선택합니다.
+
+   ![Getting started 화면에서 영구 스토리지와 구독 선택](images/01-cloudshell-step2-getting-started.png)
+
+3. **Mount storage account** 화면에서
+   **We will create a storage account for you**를 선택하고 **Next**를
+   선택합니다. 대상 구독에 리소스를 만들 수 있는 권한이 필요합니다.
+
+   ![Cloud Shell 스토리지 계정 자동 생성 선택](images/01-cloudshell-step3-mount-storage.png)
+
+4. `Requesting a Cloud Shell.Succeeded.` 메시지 뒤에 Bash 프롬프트가
+   나타나면 준비가 완료된 것입니다.
+
+   ![Cloud Shell Bash 프롬프트 준비 완료](images/01-cloudshell-step4-ready.png)
+
+이미 ephemeral session을 선택했다면 Cloud Shell의
+**Settings(⚙️) → Reset User Settings**를 선택한 후 Cloud Shell을 다시 열어
+위 절차를 진행합니다.
 
 ## 1. Cloud Shell에서 Azure 구독 선택
 
