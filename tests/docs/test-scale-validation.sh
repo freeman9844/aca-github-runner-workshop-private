@@ -57,7 +57,8 @@ for text in \
   '# 수동 실행으로만 scale test를 시작합니다.' \
   'name: ACA Runner Scale Test' \
   'workflow_dispatch:' \
-  'runs-on: [self-hosted, linux, x64, aca-runner]' \
+  'runs-on: [aca-runner]' \
+  'custom label만 요구합니다.' \
   'timeout-minutes: 10' \
   'fail-fast: false' \
   'worker: [1, 2, 3, 4]' \
@@ -77,6 +78,10 @@ for text in \
   'active execution 수는 0'; do
   grep -F -- "$text" "$DOC" >/dev/null || { echo "FAIL: module 05 missing $text" >&2; exit 1; }
 done
+
+if grep -F 'runs-on: [self-hosted, linux, x64, aca-runner]' "$DOC" >/dev/null; then
+  fail "module 05 still requires default self-hosted runner labels"
+fi
 
 for text in \
   'Fine-grained PAT' \

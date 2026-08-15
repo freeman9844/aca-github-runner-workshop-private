@@ -20,12 +20,22 @@ make_fixture() {
 set -euo pipefail
 url=""
 authorization=""
+connect_timeout=""
+max_time=""
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --header)
       if [[ "${2:-}" == Authorization:\ Bearer\ * ]]; then
         authorization="${2#Authorization: Bearer }"
       fi
+      shift 2
+      ;;
+    --connect-timeout)
+      connect_timeout="${2:-}"
+      shift 2
+      ;;
+    --max-time)
+      max_time="${2:-}"
       shift 2
       ;;
     http://*|https://*)
@@ -50,6 +60,14 @@ fi
 
 [[ "$authorization" == "pat-secret-value" ]] || {
   printf 'unexpected authorization\n' >&2
+  exit 2
+}
+[[ "$connect_timeout" == "10" ]] || {
+  printf 'missing connect timeout\n' >&2
+  exit 2
+}
+[[ "$max_time" == "30" ]] || {
+  printf 'missing max time\n' >&2
   exit 2
 }
 
@@ -122,7 +140,6 @@ run_entrypoint() {
     PATH="$FIXTURE/bin:$PATH" \
     GITHUB_PAT="${GITHUB_PAT-}" \
     GH_URL="${GH_URL-}" \
-    REGISTRATION_TOKEN_API_URL="${REGISTRATION_TOKEN_API_URL-}" \
     RUNNER_LABELS="${RUNNER_LABELS-}" \
     RUNNER_NAME_PREFIX="${RUNNER_NAME_PREFIX-}" \
     ./entrypoint.sh
@@ -141,7 +158,6 @@ rm -rf "$FIXTURE"
 make_fixture
 export GITHUB_PAT="pat-secret-value"
 export GH_URL="https://github.com/example/private-repo"
-export REGISTRATION_TOKEN_API_URL="https://api.github.com/repos/example/private-repo/actions/runners/registration-token"
 export RUNNER_LABELS="aca-runner"
 export RUNNER_NAME_PREFIX="aca"
 output="$(run_entrypoint 2>&1)"
@@ -149,6 +165,8 @@ grep -F -- "--ephemeral" "$MOCK_CALLS/config.log" >/dev/null || fail "ephemeral 
 grep -F -- "--unattended" "$MOCK_CALLS/config.log" >/dev/null || fail "unattended flag missing"
 grep -F -- "--disableupdate" "$MOCK_CALLS/config.log" >/dev/null || fail "disableupdate flag missing"
 grep -F -- "--labels aca-runner" "$MOCK_CALLS/config.log" >/dev/null || fail "runner label missing"
+grep -F -- "--no-default-labels" "$MOCK_CALLS/config.log" >/dev/null ||
+  fail "runner default labels were not disabled"
 [[ "$(<"$MOCK_CALLS/registration-token.auth")" == "pat-secret-value" ]] ||
   fail "registration token request did not use the PAT"
 [[ "$(<"$MOCK_CALLS/remove-token.auth")" == "pat-secret-value" ]] ||
@@ -169,6 +187,20 @@ fi
 rm -rf "$FIXTURE"
 
 make_fixture
+export GITHUB_PAT="pat-secret-value"
+export GH_URL="https://attacker.example/example/private-repo"
+if output="$(run_entrypoint 2>&1)"; then
+  fail "untrusted GH_URL should fail"
+fi
+[[ "$output" == *"GH_URL must match https://github.com/OWNER/REPO"* ]] ||
+  fail "untrusted GH_URL error is unclear"
+[[ ! -f "$MOCK_CALLS/events.log" ]] ||
+  fail "GitHub PAT was used after GH_URL validation failed"
+rm -rf "$FIXTURE"
+
+make_fixture
+export GITHUB_PAT="pat-secret-value"
+export GH_URL="https://github.com/example/private-repo"
 export MOCK_CURL_FAIL=1
 if output="$(run_entrypoint 2>&1)"; then
   fail "GitHub API failure should fail"
@@ -214,7 +246,6 @@ rm -rf "$FIXTURE"
 make_fixture
 export GITHUB_PAT="pat-secret-value"
 export GH_URL="https://github.com/example/private-repo"
-export REGISTRATION_TOKEN_API_URL="https://api.github.com/repos/example/private-repo/actions/runners/registration-token"
 export MOCK_RUN_WAIT=1
 set +e
 run_entrypoint >"$MOCK_CALLS/signal-output.log" 2>&1 &
