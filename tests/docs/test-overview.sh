@@ -58,7 +58,7 @@ grep -F 'Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해' "$README" >/dev/n
 grep -F 'gh auth login --hostname github.com --git-protocol https --web' "$README" >/dev/null
 grep -F 'gh auth setup-git' "$README" >/dev/null
 grep -F 'gh auth status --hostname github.com' "$README" >/dev/null
-grep -F 'git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' "$README" >/dev/null
+grep -F 'git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'cd ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다.' "$README" >/dev/null ||
   { echo 'FAIL: README Quick Start must skip the already-completed Module 01 clone step' >&2; exit 1; }

@@ -21,7 +21,7 @@ gh auth status --hostname github.com
 3. 다음 명령으로 워크숍 source를 고정 경로에 clone합니다.
 
 ```bash
-git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
+git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
 cd ~/aca-github-runner-workshop
 ```
 
