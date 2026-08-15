@@ -56,6 +56,10 @@ grep -F '| Fine-grained PAT 생성·승인 | lab repository만 선택한 Fine-gr
 grep -F 'Enterprise Managed User 또는 organization 정책에 따라 Fine-grained PAT 승인이 필요할 수 있습니다.' "$README" >/dev/null
 grep -F 'git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'cd ~/aca-github-runner-workshop' "$README" >/dev/null
+grep -F 'Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다.' "$README" >/dev/null ||
+  { echo 'FAIL: README Quick Start must skip the already-completed Module 01 clone step' >&2; exit 1; }
+grep -F '그 외 Module 01 단계와 이후 Module 06까지는 순서대로 진행합니다.' "$README" >/dev/null ||
+  { echo 'FAIL: README Quick Start must keep the remaining modules sequential' >&2; exit 1; }
 grep -F '| `aca-github-runner-workshop-private` | 워크숍 문서, runner source, samples, tests | 워크숍 운영자 | source clone, 문서 확인, runner image 빌드 |' "$README" >/dev/null
 grep -F '| `aca-runner-lab` | 참가자 소유 Private lab repository | 참가자(Module 01) | workflow queue, KEDA 감시, ephemeral runner 등록 |' "$README" >/dev/null
 grep -F 'Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.' "$README" >/dev/null
