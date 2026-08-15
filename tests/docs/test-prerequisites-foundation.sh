@@ -5,6 +5,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PREREQ="$ROOT/docs/01-prerequisites-github.md"
 FOUNDATION="$ROOT/docs/02-azure-foundation.md"
 PORTAL_SCREENSHOT="$ROOT/docs/images/02-azure-portal-resource-group-resources.png"
+CLOUD_SHELL_SCREENSHOTS=(
+  "$ROOT/docs/images/01-cloudshell-step1-welcome.png"
+  "$ROOT/docs/images/01-cloudshell-step2-getting-started.png"
+  "$ROOT/docs/images/01-cloudshell-step3-mount-storage.png"
+  "$ROOT/docs/images/01-cloudshell-step4-ready.png"
+)
 
 fail() {
   echo "FAIL: $*" >&2
@@ -23,6 +29,10 @@ grep_forbidden_pat_stdout_prints() {
 [[ -f "$FOUNDATION" ]] || { echo "FAIL: module 02 missing" >&2; exit 1; }
 [[ -f "$PORTAL_SCREENSHOT" ]] ||
   fail "module 02 Azure portal screenshot missing"
+for screenshot in "${CLOUD_SHELL_SCREENSHOTS[@]}"; do
+  [[ -f "$screenshot" ]] ||
+    fail "module 01 Cloud Shell screenshot missing: $(basename "$screenshot")"
+done
 
 if grep -E "$operational_github_app_pattern" <(
   printf '%s\n' 'Enterprise Managed User may be unable to install a GitHub App.'
@@ -73,6 +83,16 @@ for text in \
   'gh auth login --hostname github.com --git-protocol https --web' \
   'gh auth setup-git' \
   'gh auth status --hostname github.com' \
+  '## Cloud Shell 최초 준비' \
+  'Mount storage account' \
+  'No storage account required' \
+  'We will create a storage account for you' \
+  'Requesting a Cloud Shell.Succeeded.' \
+  'Settings(⚙️) → Reset User Settings' \
+  '![Cloud Shell Welcome 화면에서 Bash 선택](images/01-cloudshell-step1-welcome.png)' \
+  '![Getting started 화면에서 영구 스토리지와 구독 선택](images/01-cloudshell-step2-getting-started.png)' \
+  '![Cloud Shell 스토리지 계정 자동 생성 선택](images/01-cloudshell-step3-mount-storage.png)' \
+  '![Cloud Shell Bash 프롬프트 준비 완료](images/01-cloudshell-step4-ready.png)' \
   '워크숍 source 인증과 lab Fine-grained PAT는 서로 다른 용도입니다.' \
   'git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' \
   'cd ~/aca-github-runner-workshop' \
