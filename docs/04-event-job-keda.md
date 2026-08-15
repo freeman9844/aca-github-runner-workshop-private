@@ -286,6 +286,10 @@ rules:
 
 `az containerapp job execution list`는 workflow를 아직 queue에 넣지 않았다면 표 헤더만 나오거나 행이 0개일 수 있습니다. **배포 직후 active execution이 없는 것이 정상**입니다.
 
+참고로 Azure Portal 관리 콘솔에서 해당 Resource Group의 **Overview**를 열면 `job-ghrunner-<suffix>` 리소스가 **Container App Job** 유형으로 생성된 것을 확인할 수 있습니다.
+
+![Azure Portal에서 생성된 Container Apps Job 확인](images/04-azure-portal-container-app-job.png)
+
 ## 3. GitHub 쪽에서 미리 확인할 것
 
 👁️ **설명**
