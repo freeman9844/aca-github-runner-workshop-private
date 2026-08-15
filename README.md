@@ -117,6 +117,19 @@ Modules 03~06에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 
 ---
 
+## 완료 기준
+
+- [ ] ACR에 runner image tag가 존재합니다.
+- [ ] ACA Event Job이 예상한 image와 repository-scoped KEDA rule을 사용합니다.
+- [ ] matrix 4개 Job이 모두 성공합니다.
+- [ ] active execution이 `0 → N → 0`으로 돌아옵니다.
+- [ ] runner lifecycle marker가 CLI 또는 Log Analytics에 나타납니다.
+- [ ] GitHub에 permanent online ephemeral runner가 남지 않습니다.
+- [ ] Azure cleanup 후 조회 결과가 `ResourceGroupNotFound`에 도달합니다.
+- [ ] 안내에 따라 lab Fine-grained PAT와 GitHub lab artifact를 정리합니다.
+
+---
+
 ## 시간표
 
 | 구간 | 내용 | 예상 시간 |
@@ -131,11 +144,10 @@ Modules 03~06에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 > 리소스 그룹 삭제 요청은 90분 일정에 포함되지만, ACA managed environment의
 > 비동기 삭제 완료는 워크숍 종료 후까지 이어질 수 있습니다.
 
-> ✅ **검증 범위 안내** — 체크인된 자동 검증은 README/문서 계약과 스크립트 인터페이스를 확인합니다.
+> ✅ **검증된 범위와 남은 전제** — 체크인된 자동 검증은 README/문서 계약과 스크립트 인터페이스를 확인합니다.
 > 라이브 Azure/GitHub 실행에서 `koreacentral`, runner `2.336.0`, matrix 4개 Job,
 > 이미지 pull, KEDA `0 → 4 → 0` 확장, ephemeral runner 종료, Log Analytics 수집,
-> 리소스 그룹 삭제를 확인했습니다. 이 실행은 기존 GitHub OAuth credential을
-> 사용했으므로 Fine-grained PAT의 최소권한·승인 경로는 아직 별도로 검증하지 않았습니다.
+> 리소스 그룹 삭제를 확인했습니다. Fine-grained PAT의 organization 승인과 최소 권한 동작은 참가자의 GitHub enterprise/organization 정책에 따라 달라집니다.
 
 ---
 
@@ -168,11 +180,16 @@ Modules 03~06에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 
 | 증상 | 바로 갈 모듈 |
 |------|----------------|
+| workshop source clone 인증 실패 또는 잘못된 clone 경로 | [docs/01-prerequisites-github.md#트러블슈팅](docs/01-prerequisites-github.md#트러블슈팅) |
+| Fine-grained PAT가 비어 있거나 만료·미승인 상태이거나 GitHub API가 401/403을 반환함 | [docs/01-prerequisites-github.md#트러블슈팅](docs/01-prerequisites-github.md#트러블슈팅) |
+| ACR 이름이 이미 사용 중임 | [docs/02-azure-foundation.md#트러블슈팅](docs/02-azure-foundation.md#트러블슈팅) |
 | workflow가 계속 queued 상태로 남음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
-| GitHub API가 401/403을 반환함 | [docs/01-prerequisites-github.md#트러블슈팅](docs/01-prerequisites-github.md#트러블슈팅) |
 | image pull 실패 | [docs/02-azure-foundation.md#트러블슈팅](docs/02-azure-foundation.md#트러블슈팅) |
+| 동일 repository와 label을 감시하는 Event Job이 이미 있음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
+| Event Job secret 또는 PAT 오류 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
 | Job execution이 생성되지 않음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
 | execution timeout 발생 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |
+| CLI 또는 Log Analytics에서 runner 로그를 찾을 수 없음 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |
 | workflow의 Docker 단계가 실패함 | [docs/06-security-limitations-cleanup.md#트러블슈팅](docs/06-security-limitations-cleanup.md#트러블슈팅) |
 | runner가 GitHub에 남아 있음 | [docs/06-security-limitations-cleanup.md#트러블슈팅](docs/06-security-limitations-cleanup.md#트러블슈팅) |
 | 리소스 삭제가 끝나지 않거나 실패함 | [docs/06-security-limitations-cleanup.md#트러블슈팅](docs/06-security-limitations-cleanup.md#트러블슈팅) |
