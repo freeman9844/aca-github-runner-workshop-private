@@ -14,6 +14,7 @@ for heading in \
   '## 사전 요구사항' \
   '## 모듈 목차' \
   '## 세션이 끊겼을 때' \
+  '## 완료 기준' \
   '## 시간표' \
   '## 비용 개요' \
   '## 태깅 범례' \
@@ -33,6 +34,10 @@ for module in \
 done
 
 for troubleshooting_doc in \
+  "$ROOT/docs/01-prerequisites-github.md" \
+  "$ROOT/docs/02-azure-foundation.md" \
+  "$ROOT/docs/03-runner-image.md" \
+  "$ROOT/docs/04-event-job-keda.md" \
   "$ROOT/docs/05-parallel-scale-validation.md" \
   "$ROOT/docs/06-security-limitations-cleanup.md"; do
   grep -Fx '## 트러블슈팅' "$troubleshooting_doc" >/dev/null ||
@@ -69,13 +74,26 @@ grep -F 'Cloud Shell의 shell 변수는 새 세션에 유지되지 않습니다.
 grep -F '원래 `SUFFIX`와 실제 `ACR` 이름' "$README" >/dev/null
 grep -F '`0. 세션 재연결 시 변수 복구 (선택)`' "$README" >/dev/null
 grep -F '새 suffix를 만들지 마세요.' "$README" >/dev/null
+for text in \
+  'ACR에 runner image tag가 존재합니다.' \
+  '예상한 image와 repository-scoped KEDA rule' \
+  'matrix 4개 Job이 모두 성공합니다.' \
+  'active execution이 `0 → N → 0`으로 돌아옵니다.' \
+  'runner lifecycle marker가 CLI 또는 Log Analytics에 나타납니다.' \
+  'permanent online ephemeral runner가 남지 않습니다.' \
+  '`ResourceGroupNotFound`' \
+  'lab Fine-grained PAT와 GitHub lab artifact' \
+  '검증된 범위와 남은 전제' \
+  '체크인된 자동 검증은 README/문서 계약과 스크립트 인터페이스를 확인합니다.' \
+  'Fine-grained PAT의 organization 승인과 최소 권한 동작은 참가자의 GitHub enterprise/organization 정책에 따라 달라집니다.'; do
+  grep -F -- "$text" "$README" >/dev/null ||
+    { echo "FAIL: README missing completion or validation guidance: $text" >&2; exit 1; }
+done
 grep -F '|  | **합계** |  | **90분** |' "$README" >/dev/null
 grep -F '| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 30분 |' "$README" >/dev/null
 grep -F '| 합계 | 코어 워크숍 | 90분 |' "$README" >/dev/null
 grep -F '자동 검증' "$README" >/dev/null
 grep -F '라이브 Azure/GitHub 실행' "$README" >/dev/null
-grep -F '기존 GitHub OAuth credential' "$README" >/dev/null
-grep -F 'Fine-grained PAT의 최소권한·승인 경로는 아직 별도로 검증하지 않았습니다.' "$README" >/dev/null
 grep -F '`koreacentral`' "$README" >/dev/null
 grep -F '`2.336.0`' "$README" >/dev/null
 grep -F 'matrix 4개 Job' "$README" >/dev/null
@@ -86,6 +104,27 @@ grep -F 'Log Analytics 수집' "$README" >/dev/null
 grep -F '리소스 그룹 삭제' "$README" >/dev/null
 grep -F '🟢 **실행**' "$README" >/dev/null
 grep -F '📋 **예상 출력**' "$README" >/dev/null
+for text in \
+  '| workshop source clone 인증 실패 또는 잘못된 clone 경로 | [docs/01-prerequisites-github.md#트러블슈팅](docs/01-prerequisites-github.md#트러블슈팅) |' \
+  '| Fine-grained PAT가 비어 있거나 만료·미승인 상태이거나 GitHub API가 401/403을 반환함 | [docs/01-prerequisites-github.md#트러블슈팅](docs/01-prerequisites-github.md#트러블슈팅) |' \
+  '| ACR 이름이 이미 사용 중임 | [docs/02-azure-foundation.md#트러블슈팅](docs/02-azure-foundation.md#트러블슈팅) |' \
+  '| 동일 repository와 label을 감시하는 Event Job이 이미 있음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |' \
+  '| Event Job secret 또는 PAT 오류 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |' \
+  '| CLI 또는 Log Analytics에서 runner 로그를 찾을 수 없음 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |'; do
+  grep -F -- "$text" "$README" >/dev/null ||
+    { echo "FAIL: README missing troubleshooting route: $text" >&2; exit 1; }
+done
+
+for obsolete in \
+  '기존 GitHub OAuth credential' \
+  'GitHub App 생성 권한' \
+  'GitHub App 설치' \
+  'GitHub App private key'; do
+  if grep -F -- "$obsolete" "$README" >/dev/null; then
+    echo "FAIL: README contains obsolete authentication guidance: $obsolete" >&2
+    exit 1
+  fi
+done
 
 if grep -E '약 105분|GitHub App 생성 권한|라이브 Azure/GitHub App 리허설' \
   "$README" >/dev/null; then
