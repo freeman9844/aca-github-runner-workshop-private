@@ -52,6 +52,7 @@ for text in \
   '--output tsv' \
   'samples/parallel-runner-workflow.yml' \
   '.github/workflows/aca-runner-scale-test.yml' \
+  '기존 workflow가 이미 있으면' \
   '![GitHub Actions에서 네 개 matrix Job이 queued 상태인 화면](images/05-github-actions-queued-matrix.png)' \
   'Worker 1은 성공했고 Worker 4는 아직 진행 중인 중간 상태' \
   '# 수동 실행으로만 scale test를 시작합니다.' \
@@ -67,6 +68,8 @@ for text in \
   'az containerapp job execution list' \
   'properties.status' \
   'az containerapp job logs show' \
+  'if [[ -z "$EXECUTION" ]]' \
+  'ERROR: Container Apps Job execution이 없습니다.' \
   '--container github-actions-runner' \
   'ContainerAppConsoleLogs' \
   'ContainerGroupName startswith' \
