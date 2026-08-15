@@ -15,7 +15,7 @@ git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-pr
 cd ~/aca-github-runner-workshop
 ```
 
-4. [Module 01: GitHub 사전 준비](docs/01-prerequisites-github.md)를 열고 Module 06까지 순서대로 진행합니다.
+4. [Module 01: GitHub 사전 준비](docs/01-prerequisites-github.md)를 엽니다. 위 Quick Start에서 clone했으므로 Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다. 그 외 Module 01 단계와 이후 Module 06까지는 순서대로 진행합니다.
 
 상세 변수 설정, 예상 출력, 오류 해결 명령은 각 모듈에서 안내합니다.
 

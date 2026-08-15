@@ -84,6 +84,23 @@ if grep -E 'gh auth|gh repo clone|WORKSHOP_REPO(_URL)?' "$PREREQ" >/dev/null; th
   fail "module 01 clone flow is not the requested simple git clone"
 fi
 
+for text in \
+  'Private workshop source HTTPS 인증·권한 또는 SSO authorization 실패' \
+  'https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private/tree/master' \
+  '브라우저의 `/tree/master` URL은 접근 확인용이며 clone URL이 아닙니다.' \
+  'clone에는 `https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git`을 사용합니다.' \
+  '목적지 `~/aca-github-runner-workshop`이 이미 존재하거나 예상과 다른 clone destination' \
+  '기존 디렉터리는 삭제하지 마세요.' \
+  '정확한 목적지 `~/aca-github-runner-workshop`'; do
+  grep -F -- "$text" "$PREREQ" >/dev/null ||
+    fail "module 01 missing clone troubleshooting contract: $text"
+done
+
+if grep -E 'rm[[:space:]]+-rf[[:space:]]+("?\$HOME/aca-github-runner-workshop"?|"?~/aca-github-runner-workshop"?)' \
+  "$PREREQ" >/dev/null; then
+  fail "module 01 must not destructively delete the workshop clone destination"
+fi
+
 if grep -Fx '## 8. 검증' "$PREREQ" >/dev/null; then
   fail "module 01 still has a redundant final validation section"
 fi
