@@ -54,6 +54,10 @@ grep -F '| 워크숍 source HTTPS 인증 | Private workshop source repository를
 grep -F '| Lab repository | 참가자 소유 Private `aca-runner-lab` repository를 만들거나 사용할 수 있어야 합니다. |' "$README" >/dev/null
 grep -F '| Fine-grained PAT 생성·승인 | lab repository만 선택한 Fine-grained PAT를 만들 수 있어야 하며, organization 정책이 요구하면 승인을 받아야 합니다. |' "$README" >/dev/null
 grep -F 'Enterprise Managed User 또는 organization 정책에 따라 Fine-grained PAT 승인이 필요할 수 있습니다.' "$README" >/dev/null
+grep -F 'Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해' "$README" >/dev/null
+grep -F 'gh auth login --hostname github.com --git-protocol https --web' "$README" >/dev/null
+grep -F 'gh auth setup-git' "$README" >/dev/null
+grep -F 'gh auth status --hostname github.com' "$README" >/dev/null
 grep -F 'git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'cd ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다.' "$README" >/dev/null ||
@@ -150,6 +154,11 @@ fi
 if grep -F 'Fine-grained PAT는 `aca-github-runner-workshop-private`' \
   "$README" >/dev/null; then
   echo 'FAIL: README scopes the lab PAT to the workshop source repository' >&2
+  exit 1
+fi
+
+if grep -F 'Azure Cloud Shell만 사용해' "$README" >/dev/null; then
+  echo 'FAIL: README incorrectly claims the workshop uses only Cloud Shell' >&2
   exit 1
 fi
 

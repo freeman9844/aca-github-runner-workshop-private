@@ -4,7 +4,6 @@ set -Eeuo pipefail
 required_variables=(
   GITHUB_PAT
   GH_URL
-  REGISTRATION_TOKEN_API_URL
 )
 
 for variable_name in "${required_variables[@]}"; do
@@ -14,11 +13,15 @@ for variable_name in "${required_variables[@]}"; do
   fi
 done
 
-if [[ "$REGISTRATION_TOKEN_API_URL" != */registration-token ]]; then
-  printf 'ERROR: REGISTRATION_TOKEN_API_URL must end with /registration-token\n' >&2
+if [[ "$GH_URL" =~ ^https://github\.com/([^/?#]+)/([^/?#]+)$ ]]; then
+  github_owner="${BASH_REMATCH[1]}"
+  github_repo="${BASH_REMATCH[2]}"
+else
+  printf 'ERROR: GH_URL must match https://github.com/OWNER/REPO\n' >&2
   exit 64
 fi
 
+REGISTRATION_TOKEN_API_URL="https://api.github.com/repos/$github_owner/$github_repo/actions/runners/registration-token"
 RUNNER_LABELS="${RUNNER_LABELS:-aca-runner}"
 RUNNER_NAME_PREFIX="${RUNNER_NAME_PREFIX:-aca-runner}"
 RUNNER_NAME="${RUNNER_NAME_PREFIX}-$(hostname)-${RANDOM}"
@@ -36,6 +39,8 @@ github_api_token() {
     'Authorization' 'Bearer' "$github_pat"
   response="$(
     curl --fail --silent --show-error --request POST \
+      --connect-timeout 10 \
+      --max-time 30 \
       --header 'Accept: application/vnd.github+json' \
       --header "$authorization_header" \
       --header 'X-GitHub-Api-Version: 2026-03-10' \
@@ -95,6 +100,7 @@ registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
   --token "$registration_token" \
   --name "$RUNNER_NAME" \
   --labels "$RUNNER_LABELS" \
+  --no-default-labels \
   --unattended \
   --ephemeral \
   --disableupdate

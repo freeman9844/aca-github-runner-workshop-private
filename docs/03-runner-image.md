@@ -97,7 +97,9 @@ SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 - 필수 유틸리티 `ca-certificates`, `curl`, `jq`만 추가 설치하고 마지막에 `USER runner`로 내려가 non-root로 실행합니다.
 - `runner/entrypoint.sh`는 Fine-grained PAT를 non-exported wrapper-shell variable로 복사한 뒤 exported `GITHUB_PAT`를 unset합니다.
 - wrapper는 PAT로 registration token과 cleanup 시 remove token을 요청하지만, workflow process cannot inherit the PAT.
-- `./config.sh --ephemeral --disableupdate`를 사용하므로 Job 1회당 1회성 runner가 뜨고 컨테이너 안에서 자체 업데이트를 시도하지 않습니다.
+- `./config.sh --ephemeral --disableupdate --no-default-labels`를 사용하므로 Job 1회당 1회성 runner가 뜨고, `aca-runner` custom label만 광고하며, 컨테이너 안에서 자체 업데이트를 시도하지 않습니다.
+- GitHub REST API endpoint는 검증된 `GH_URL`의 owner/repository에서 내부적으로 유도하므로 PAT를 임의 host로 보내지 않습니다.
+- GitHub API 요청에는 connect timeout과 전체 request timeout을 적용합니다.
 - The exported GITHUB_PAT is unset before the workflow runner starts.
 - Docker daemon은 넣지 않습니다. Azure Container Apps Jobs는 Docker-in-Docker를 지원하지 않으므로 이 워크숍의 workflow도 Docker 명령을 전제로 하지 않습니다.
 

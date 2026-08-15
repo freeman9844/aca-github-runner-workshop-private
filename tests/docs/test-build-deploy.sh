@@ -171,6 +171,7 @@ for text in \
   'githubApiURL=https://api.github.com' \
   'runnerScope=repo' \
   'labels=aca-runner' \
+  'noDefaultLabels=true' \
   'targetWorkflowQueueLength=1' \
   'JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io' \
   'read -rp "Saved SUFFIX: " SUFFIX' \
@@ -180,6 +181,8 @@ for text in \
   '--mi-user-assigned "$UAMI_RID"' \
   '--registry-identity "$UAMI_RID"' \
   'read -rsp "Fine-grained PAT: " GITHUB_PAT' \
+  'until [[ -n "$GITHUB_PAT" ]]' \
+  'ERROR: Fine-grained PAT cannot be empty. Try again.' \
   'personalAccessToken=personal-access-token' \
   'personal-access-token=$GITHUB_PAT' \
   'GITHUB_PAT=secretref:personal-access-token' \
@@ -197,6 +200,14 @@ for text in \
   'Do not instruct participants to recreate the whole resource group for a Job configuration error.'; do
   grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
 done
+
+if grep -F 'REGISTRATION_TOKEN_API_URL=' "$JOB_DOC" >/dev/null; then
+  fail "module 04 must derive the registration-token endpoint from GH_URL"
+fi
+
+if grep -E '^[[:space:]]*export[[:space:]].*GITHUB_PAT' "$JOB_DOC" >/dev/null; then
+  fail "module 04 must keep GITHUB_PAT shell-local"
+fi
 
 preflight_line="$(grep -nF -m1 'az containerapp job list' "$JOB_DOC" | cut -d: -f1)"
 create_line="$(grep -nF -m1 'az containerapp job create "${JOB_CREATE_ARGS[@]}"' "$JOB_DOC" | cut -d: -f1)"

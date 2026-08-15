@@ -20,6 +20,12 @@ grep -F 'GITHUB_PAT' "$ROOT/runner/entrypoint.sh" >/dev/null
 grep -F 'github_pat="$GITHUB_PAT"' "$ROOT/runner/entrypoint.sh" >/dev/null
 grep -F 'unset GITHUB_PAT' "$ROOT/runner/entrypoint.sh" >/dev/null
 grep -F 'Authorization' "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F 'GH_URL must match https://github.com/OWNER/REPO' \
+  "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F 'https://api.github.com/repos/' "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F -- '--connect-timeout 10' "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F -- '--max-time 30' "$ROOT/runner/entrypoint.sh" >/dev/null
+grep -F -- '--no-default-labels' "$ROOT/runner/entrypoint.sh" >/dev/null
 grep -F "trap 'forward_signal INT 130' INT" "$ROOT/runner/entrypoint.sh" >/dev/null
 grep -F "trap 'forward_signal TERM 143' TERM" "$ROOT/runner/entrypoint.sh" >/dev/null
 if grep -E 'GITHUB_APP_|github_app_jwt|INSTALLATION_TOKEN_API_URL|openssl dgst' \
@@ -35,13 +41,18 @@ fi
 
 grep -F 'workflow_dispatch:' "$WORKFLOW" >/dev/null
 grep -F 'worker: [1, 2, 3, 4]' "$WORKFLOW" >/dev/null
-grep -F 'runs-on: [self-hosted, linux, x64, aca-runner]' "$WORKFLOW" >/dev/null
+grep -F 'runs-on: [aca-runner]' "$WORKFLOW" >/dev/null
 grep -F 'fail-fast: false' "$WORKFLOW" >/dev/null
 grep -F 'sleep 45' "$WORKFLOW" >/dev/null
 grep -F 'bash tests/validate-workshop.sh' "$CI_WORKFLOW" >/dev/null
 
 if grep -E '(^|[[:space:]])docker([[:space:]]|$)|services:' "$WORKFLOW" >/dev/null; then
   echo "FAIL: workflow must not depend on Docker" >&2
+  exit 1
+fi
+
+if grep -F 'runs-on: [self-hosted, linux, x64, aca-runner]' "$WORKFLOW" >/dev/null; then
+  echo "FAIL: workflow still depends on default self-hosted runner labels" >&2
   exit 1
 fi
 

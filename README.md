@@ -1,13 +1,23 @@
 # Azure Container Apps GitHub Actions Runner 워크숍
 
-> Azure Cloud Shell만 사용해 **약 90분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 참가자는 runner image 빌드, Event Job 배포, 병렬 workflow 검증, Log Analytics 확인, 리소스 정리까지 한 흐름으로 완료합니다.
+> Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해 **약 90분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 참가자는 runner image 빌드, Event Job 배포, 병렬 workflow 검증, Log Analytics 확인, 리소스 정리까지 한 흐름으로 완료합니다.
 
 ---
 
 ## 빠른 시작
 
 1. Azure Portal에서 **Cloud Shell Bash**를 엽니다.
-2. Private workshop source repository를 HTTPS로 clone할 수 있는 Git 인증 상태인지 확인합니다.
+2. 브라우저 인증으로 GitHub CLI에 로그인하고 HTTPS Git credential helper를 연결합니다.
+
+```bash
+gh auth login --hostname github.com --git-protocol https --web
+gh auth setup-git
+gh auth status --hostname github.com
+```
+
+이 인증은 private workshop source를 읽기 위한 것이며, 이후 만드는
+`aca-runner-lab` 전용 Fine-grained PAT와는 별개입니다.
+
 3. 다음 명령으로 워크숍 source를 고정 경로에 clone합니다.
 
 ```bash
@@ -53,6 +63,7 @@ flowchart LR
 - `max-executions=5`
 - `polling-interval=30`
 - `targetWorkflowQueueLength=1`
+- `noDefaultLabels=true`
 
 ---
 

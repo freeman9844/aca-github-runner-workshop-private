@@ -70,9 +70,14 @@ for text in \
   'Repository access: OK' \
   'Actions read: OK' \
   'Runner administration: OK' \
-  '해당 private repository에 대한 HTTPS Git 인증이 이미 설정되어 있어야 합니다.' \
+  'gh auth login --hostname github.com --git-protocol https --web' \
+  'gh auth setup-git' \
+  'gh auth status --hostname github.com' \
+  '워크숍 source 인증과 lab Fine-grained PAT는 서로 다른 용도입니다.' \
   'git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' \
   'cd ~/aca-github-runner-workshop' \
+  'until [[ -n "$GITHUB_PAT" ]]' \
+  'ERROR: Fine-grained PAT cannot be empty. Try again.' \
   'az extension add --name containerapp --upgrade --only-show-errors' \
   'az provider register -n Microsoft.App --wait' \
   'az provider register -n Microsoft.OperationalInsights --wait' \
@@ -80,8 +85,12 @@ for text in \
   grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
 
-if grep -E 'gh auth|gh repo clone|WORKSHOP_REPO(_URL)?' "$PREREQ" >/dev/null; then
+if grep -E 'gh repo clone|WORKSHOP_REPO(_URL)?' "$PREREQ" >/dev/null; then
   fail "module 01 clone flow is not the requested simple git clone"
+fi
+
+if grep -E '^[[:space:]]*export[[:space:]].*GITHUB_PAT' "$PREREQ" >/dev/null; then
+  fail "module 01 must keep GITHUB_PAT shell-local"
 fi
 
 for text in \

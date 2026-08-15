@@ -117,8 +117,8 @@ jobs:
     # Actions 화면에는 Worker 1부터 Worker 4까지 표시됩니다.
     name: Worker ${{ matrix.worker }}
 
-    # GitHub 기본 label과 모듈 04에서 등록한 aca-runner label을 모두 요구합니다.
-    runs-on: [self-hosted, linux, x64, aca-runner]
+    # 모듈 04에서 등록한 aca-runner custom label만 요구합니다.
+    runs-on: [aca-runner]
 
     # runner 기동이나 workflow가 비정상적으로 지연될 때 무한 대기하지 않습니다.
     timeout-minutes: 10
@@ -153,7 +153,7 @@ jobs:
 
 - `workflow_dispatch`가 있으면 GitHub Actions 화면에서 **Run workflow** 버튼으로 수동 실행할 수 있습니다.
 - `worker: [1, 2, 3, 4]`가 보이면 matrix가 네 개의 GitHub job을 생성합니다.
-- `runs-on: [self-hosted, linux, x64, aca-runner]`가 보이면 모듈 04의 `labels=aca-runner`와 연결됩니다.
+- `runs-on: [aca-runner]`가 보이면 default self-hosted label이 아니라 모듈 04의 custom label만 요구합니다.
 - `sleep 45`는 네 execution이 겹치는 구간을 관찰할 시간을 확보합니다.
 
 ## 3. 실행 전 baseline 이력과 active execution 0 상태 확인
@@ -371,7 +371,7 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| GitHub job이 계속 queued 상태로 남음 | Fine-grained PAT가 revoked 또는 expired 되었거나, `token approval`이 아직 끝나지 않았거나, 다른 repository 기준으로 발급되었거나, workflow label이 다름 | Fine-grained PAT가 `aca-runner-lab` repository에 대해 아직 유효한지, approval 상태인지, selected repository가 맞는지 확인하고, workflow가 `runs-on: [self-hosted, linux, x64, aca-runner]`를 그대로 쓰는지 검토합니다. |
+| GitHub job이 계속 queued 상태로 남음 | Fine-grained PAT가 revoked 또는 expired 되었거나, `token approval`이 아직 끝나지 않았거나, 다른 repository 기준으로 발급되었거나, workflow label이 다름 | Fine-grained PAT가 `aca-runner-lab` repository에 대해 아직 유효한지, approval 상태인지, selected repository가 맞는지 확인하고, workflow가 `runs-on: [aca-runner]`를 그대로 쓰는지 검토합니다. |
 | workflow hostname의 suffix가 현재 `$SUFFIX`와 다르거나 현재 execution이 timeout됨 | 다른 Event Job이 같은 repository와 `aca-runner` label을 감시함 | 모듈 04의 중복 watcher query로 이전 Job을 찾습니다. 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 다시 실행합니다. |
 | Running execution이 항상 1개만 보임 | polling 타이밍상 동시에 관찰하지 못했거나 Azure quota/시작 지연이 있음 | 먼저 GitHub에서 네 job이 모두 생성되었는지 확인하고, 30~90초 동안 같은 `Running` query를 반복합니다. 네 개가 항상 한 번에 보여야 한다고 가정하지 마세요. |
 | `az containerapp job logs show`에 아직 로그가 거의 없음 | execution 시작 직후라 runner bootstrap 로그가 아직 수집되지 않음 | 10~20초 정도 기다렸다가 같은 `EXECUTION`으로 다시 조회하고, 필요하면 가장 최근 execution 이름을 다시 잡아 확인합니다. |

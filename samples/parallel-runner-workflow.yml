@@ -6,7 +6,7 @@ on:
 jobs:
   parallel-runner:
     name: Worker ${{ matrix.worker }}
-    runs-on: [self-hosted, linux, x64, aca-runner]
+    runs-on: [aca-runner]
     timeout-minutes: 10
     strategy:
       fail-fast: false

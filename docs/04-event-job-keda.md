@@ -89,17 +89,21 @@ JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 ACR_SERVER=acracarunnera1b2c3.a
 
 👁️ **설명**
 
-Cloud Shell 세션이 재시작되면 GitHub 변수도 사라집니다. 모듈 01에서 승인받고 아직 만료되지 않은 Fine-grained PAT를 다시 읽어 와야 하며, 이 토큰은 워크숍용 private repository 하나에만 접근 권한이 있어야 합니다.
+Cloud Shell 세션이 재시작되면 GitHub 변수도 사라집니다. 모듈 01에서 승인받고 아직 만료되지 않은 Fine-grained PAT를 다시 읽어 와야 하며, 이 토큰은 `aca-runner-lab` private repository 하나에만 접근 권한이 있어야 합니다.
 
 🟢 **실행**
 
 ```bash
 read -rp "GitHub owner: " GITHUB_OWNER
 read -rp "Private repository name: " GITHUB_REPO
-read -rsp "Fine-grained PAT: " GITHUB_PAT
-printf '\n'
 
-export GITHUB_OWNER GITHUB_REPO GITHUB_PAT
+GITHUB_PAT=
+until [[ -n "$GITHUB_PAT" ]]; do
+  read -rsp "Fine-grained PAT: " GITHUB_PAT
+  printf '\n'
+  [[ -n "$GITHUB_PAT" ]] ||
+    printf 'ERROR: Fine-grained PAT cannot be empty. Try again.\n' >&2
+done
 ```
 
 📋 **예상 출력**
@@ -193,13 +197,14 @@ JOB_CREATE_ARGS=(
   --scale-rule-name github-runner
   --scale-rule-type github-runner
 
-  # GitHub.com API에서 지정한 private repository와 aca-runner label만 감시합니다.
+  # GitHub.com API에서 지정한 private repository와 aca-runner custom label만 감시합니다.
   --scale-rule-metadata \
   "githubApiURL=https://api.github.com"
   "owner=$GITHUB_OWNER"
   "runnerScope=repo"
   "repos=$GITHUB_REPO"
   "labels=aca-runner"
+  "noDefaultLabels=true"
 
   # queued workflow job 1개당 execution 1개가 필요하다고 계산합니다.
   "targetWorkflowQueueLength=1"
@@ -213,7 +218,6 @@ JOB_CREATE_ARGS=(
   --env-vars
   "GITHUB_PAT=secretref:personal-access-token"
   "GH_URL=https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
-  "REGISTRATION_TOKEN_API_URL=https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners/registration-token"
   "RUNNER_LABELS=aca-runner"
   "RUNNER_NAME_PREFIX=aca"
 
@@ -296,8 +300,8 @@ GitHub 저장소의 **Settings → Actions → Runners**를 열어보면, workfl
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| workflow가 계속 queued이고 execution이 안 생김 | 토큰이 만료되었거나 revoked 되었거나 approval 대기 중이거나, 잘못된 selected repository 기준으로 발급됨 | 모듈 01에서 승인받은 Fine-grained PAT를 다시 확인하고, 워크숍 repository 하나만 선택된 unexpired 토큰인지 점검한 뒤 필요하면 Job을 다시 만듭니다. |
-| `job show`의 rule은 보이는데 scale이 안 됨 | scaler metadata 오타 또는 잘못된 auth 매핑 | `githubApiURL=https://api.github.com`, `owner`, `runnerScope=repo`, `repos=$GITHUB_REPO`, `labels=aca-runner`, `targetWorkflowQueueLength=1`, `personalAccessToken`이 정확한지 `az containerapp job show ... --query "properties.configuration.eventTriggerConfig.scale.rules"`로 다시 확인합니다. |
+| workflow가 계속 queued이고 execution이 안 생김 | 토큰이 만료되었거나 revoked 되었거나 approval 대기 중이거나, 잘못된 selected repository 기준으로 발급됨 | 모듈 01에서 승인받은 Fine-grained PAT를 다시 확인하고, `aca-runner-lab` repository 하나만 선택된 unexpired 토큰인지 점검한 뒤 필요하면 Job을 다시 만듭니다. |
+| `job show`의 rule은 보이는데 scale이 안 됨 | scaler metadata 오타 또는 잘못된 auth 매핑 | `githubApiURL=https://api.github.com`, `owner`, `runnerScope=repo`, `repos=$GITHUB_REPO`, `labels=aca-runner`, `noDefaultLabels=true`, `targetWorkflowQueueLength=1`, `personalAccessToken`이 정확한지 `az containerapp job show ... --query "properties.configuration.eventTriggerConfig.scale.rules"`로 다시 확인합니다. |
 | execution은 생겼는데 GitHub job이 runner를 못 잡음 | workflow label과 runner label 불일치 | workflow의 `runs-on`에 `aca-runner`가 들어 있는지, Job env가 `RUNNER_LABELS=aca-runner`인지 동시에 확인합니다. |
 | workflow는 성공했지만 현재 execution이 900초 뒤 `Failed`가 됨 | 다른 Event Job이 동일한 repository와 `aca-runner` label을 감시하며 workflow Job을 먼저 가져감 | 1단계의 `az containerapp job list` query를 다시 실행합니다. 다른 Job이 보이면 해당 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 현재 Job을 다시 만듭니다. |
 | execution이 바로 실패하며 image pull 오류가 남 | UAMI의 `AcrPull` 전파 지연 또는 registry identity 설정 누락 | `az role assignment list --assignee "$UAMI_PID" --scope "$ACR_ID" --query "[].roleDefinitionName" --output tsv`로 `AcrPull`을 확인하고, Job 정의에 `--mi-user-assigned "$UAMI_RID"`와 `--registry-identity "$UAMI_RID"`가 모두 들어갔는지 다시 봅니다. |
