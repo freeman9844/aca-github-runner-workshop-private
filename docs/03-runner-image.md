@@ -171,6 +171,10 @@ az acr show \
 - `az acr show` 표에는 `loginServer`가 `<registry>.azurecr.io` 형식으로 보이고 `adminUserEnabled`는 반드시 `False`여야 합니다.
 - `adminUserEnabled`가 `False`라는 것은 다음 모듈에서 registry admin password 대신 UAMI + `AcrPull`을 사용한다는 뜻입니다.
 
+참고로 Azure Portal 관리 콘솔에서 **Container Registry → Repositories → github-actions-runner**로 이동하면 실제로 push된 image tag와 digest를 확인할 수 있습니다.
+
+![Azure Portal에서 ACR에 배포된 github-actions-runner 이미지 확인](images/03-azure-portal-acr-repository.png)
+
 ## 4. 왜 이 구성을 유지하나요?
 
 👁️ **설명**
