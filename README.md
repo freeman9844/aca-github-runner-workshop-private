@@ -4,6 +4,34 @@
 
 ---
 
+## 빠른 시작
+
+1. Azure Portal에서 **Cloud Shell Bash**를 엽니다.
+2. Private workshop source repository를 HTTPS로 clone할 수 있는 Git 인증 상태인지 확인합니다.
+3. 다음 명령으로 워크숍 source를 고정 경로에 clone합니다.
+
+```bash
+git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
+cd ~/aca-github-runner-workshop
+```
+
+4. [Module 01: GitHub 사전 준비](docs/01-prerequisites-github.md)를 열고 Module 06까지 순서대로 진행합니다.
+
+상세 변수 설정, 예상 출력, 오류 해결 명령은 각 모듈에서 안내합니다.
+
+---
+
+## 두 GitHub 저장소 구분
+
+| Repository | 역할 | 생성 주체 | 사용 위치 |
+|---|---|---|---|
+| `aca-github-runner-workshop-private` | 워크숍 문서, runner source, samples, tests | 워크숍 운영자 | source clone, 문서 확인, runner image 빌드 |
+| `aca-runner-lab` | 참가자 소유 Private lab repository | 참가자(Module 01) | workflow queue, KEDA 감시, ephemeral runner 등록 |
+
+Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.
+
+---
+
 ## 아키텍처
 
 ```mermaid
@@ -52,7 +80,11 @@ flowchart LR
 | GitHub account | GitHub Actions와 self-hosted runner 등록에 사용할 계정이 필요합니다. |
 | Private repository 권한 | 새 `Private repository`를 만들거나 실습용 저장소에 접근할 수 있어야 합니다. |
 | Fine-grained PAT 생성·승인 | lab repository만 선택한 Fine-grained PAT를 만들 수 있어야 하며, organization 정책이 요구하면 승인을 받아야 합니다. |
+| 워크숍 source HTTPS 인증 | Private workshop source repository를 HTTPS로 clone할 수 있어야 합니다. |
+| Lab repository | 참가자 소유 Private `aca-runner-lab` repository를 만들거나 사용할 수 있어야 합니다. |
 | 기본 지식 | Azure 리소스 그룹, 컨테이너 image, GitHub Actions 기본 흐름을 알고 있으면 수월합니다. |
+
+> Enterprise Managed User 또는 organization 정책에 따라 Fine-grained PAT 승인이 필요할 수 있습니다. Azure 리소스 생성 권한과 `Microsoft.Authorization/roleAssignments/write` 권한은 별도 요구사항입니다.
 
 > ⚠️ **주의**
 > - 이 실습은 **Private repository에서만** 진행합니다. Public repository에 self-hosted runner를 연결하면 신뢰하지 않는 코드가 실행될 수 있습니다.
@@ -67,13 +99,21 @@ flowchart LR
 | # | 모듈 | 한 줄 설명 | 시간 |
 |---|------|------------|---:|
 | 00 | (현재 문서) | 전체 개요, 아키텍처, 목표, 비용, 이동 경로 | 5분 |
-| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | Cloud Shell 변수, `Private repository`, Fine-grained PAT 준비 | 15분 |
-| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | RG, Log Analytics, ACA environment, ACR, UAMI, `AcrPull` 구성 | 15분 |
-| 03 | [Runner image 빌드](docs/03-runner-image.md) | runner/entrypoint 이해와 ACR Tasks 빌드 | 10분 |
-| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | ACA Event Job, secret, KEDA `github-runner` rule 설정 | 15분 |
-| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4 Job, 0 → N → 0, GitHub·CLI·로그 확인 | 20분 |
-| 06 | [보안·제약·정리](docs/06-security-limitations-cleanup.md) | 보안 주의사항, 한계, 리소스 삭제와 최종 확인 | 10분 |
+| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, 검증된 GitHub 변수와 Fine-grained PAT | 15분 |
+| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | 저장한 `SUFFIX`, 실제 `ACR` 이름, Azure resource ID | 15분 |
+| 03 | [Runner image 빌드](docs/03-runner-image.md) | ACR에 빌드된 runner image | 10분 |
+| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |
+| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |
+| 06 | [보안·제약·정리](docs/06-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |
 |  | **합계** |  | **90분** |
+
+---
+
+## 세션이 끊겼을 때
+
+Cloud Shell의 shell 변수는 새 세션에 유지되지 않습니다. 기존 리소스로 계속 진행하려면 원래 `SUFFIX`와 실제 `ACR` 이름을 보관해야 합니다.
+
+Modules 03~06에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 있습니다. 복구가 필요할 때만 접힌 상세 내용을 펼쳐 명령을 실행하세요. 기존 실습을 이어갈 때는 새 suffix를 만들지 마세요. 새 이름은 이미 만든 리소스와 연결되지 않습니다.
 
 ---
 
