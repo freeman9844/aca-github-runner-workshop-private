@@ -79,14 +79,20 @@ sed -n '1,200p' samples/parallel-runner-workflow.yml
 
 이제 private lab repository의 GitHub 웹 UI에서 다음 순서로 진행합니다.
 
-1. **Add file → Create new file**를 선택합니다.
-2. 파일 이름으로 `.github/workflows/aca-runner-scale-test.yml`를 입력합니다.
-3. 방금 Cloud Shell에 출력한 `samples/parallel-runner-workflow.yml` 내용을 **수정 없이 그대로** 붙여 넣습니다.
-4. 기본 브랜치에 commit합니다.
+1. `.github/workflows/aca-runner-scale-test.yml`이 없으면 **Add file → Create new file**을 선택하고 해당 파일 이름을 입력합니다.
+2. 기존 workflow가 이미 있으면 파일을 연 뒤 **Edit this file**을 선택합니다.
+3. 두 경우 모두 기존 내용을 일부만 수정하지 말고, 방금 Cloud Shell에 출력한 `samples/parallel-runner-workflow.yml` 전체 내용으로 교체합니다.
+4. `runs-on: [aca-runner]`인지 다시 확인하고 기본 브랜치에 commit합니다.
 
 ⚠️ **주의**
 
 CLI에서 workflow를 commit/push하려고 Cloud Shell에 별도의 repository write credential을 추가하지 마세요. 이 모듈은 **웹 UI로만 workflow를 생성**해 browser session의 repository-write 활동과 Fine-grained PAT 기반 queue monitoring/runner bootstrap 경로를 분리합니다.
+
+이전 실습처럼 `self-hosted`, `linux`, `x64` default label을 `aca-runner`와
+함께 요구하는 `runs-on` 배열을 그대로 두면 `noDefaultLabels=true`인 현재
+KEDA scaler가 해당 queued Job을 세지 않습니다. 이 경우 workflow는 queued
+상태로 남고 ACA execution도 생성되지 않으므로 반드시 최신 sample 전체로
+교체하세요.
 
 📋 **예상 출력**
 
@@ -236,18 +242,24 @@ EXECUTION=$(az containerapp job execution list \
   --query "sort_by([], &properties.startTime)[-1].name" \
   --output tsv)
 
-az containerapp job logs show \
-  --name "$JOB" \
-  --resource-group "$RG" \
-  --execution "$EXECUTION" \
-  --container github-actions-runner \
-  --tail 100 \
-  --format text
+if [[ -z "$EXECUTION" ]]; then
+  printf 'ERROR: Container Apps Job execution이 없습니다.\n' >&2
+  printf 'GitHub workflow가 queued라면 runs-on이 [aca-runner]인지 확인하고 최신 sample로 교체한 뒤 다시 실행하세요.\n' >&2
+else
+  az containerapp job logs show \
+    --name "$JOB" \
+    --resource-group "$RG" \
+    --execution "$EXECUTION" \
+    --container github-actions-runner \
+    --tail 100 \
+    --format text
+fi
 ```
 
 📋 **예상 출력**
 
 - 최신 execution 이름이 `job-ghrunner-<suffix>-...` 같은 형식으로 `EXECUTION` 변수에 들어갑니다.
+- `ERROR: Container Apps Job execution이 없습니다.`가 보이면 7단계로 진행하지 말고 GitHub workflow가 `runs-on: [aca-runner]`인지 수정한 뒤 workflow를 다시 실행합니다.
 - 로그에는 runner bootstrap과 종료 흐름이 텍스트로 출력됩니다.
 - 최소한 아래 lifecycle marker를 찾을 준비를 합니다.
   - `Requesting registration token`
@@ -372,6 +384,7 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
 | GitHub job이 계속 queued 상태로 남음 | Fine-grained PAT가 revoked 또는 expired 되었거나, `token approval`이 아직 끝나지 않았거나, 다른 repository 기준으로 발급되었거나, workflow label이 다름 | Fine-grained PAT가 `aca-runner-lab` repository에 대해 아직 유효한지, approval 상태인지, selected repository가 맞는지 확인하고, workflow가 `runs-on: [aca-runner]`를 그대로 쓰는지 검토합니다. |
+| `ContainerAppJobsExecutionNotFound`와 `execution - replicas`가 표시됨 | `EXECUTION`이 비어 있으며, 흔히 기존 workflow가 default label을 계속 요구해 KEDA가 queued Job을 세지 못한 상태 | GitHub workflow를 최신 sample 전체로 교체해 `runs-on: [aca-runner]`로 만들고, 기존 queued run을 취소한 뒤 다시 실행합니다. ACA execution이 생성된 후 6단계의 `EXECUTION=$(...)` 블록부터 다시 실행합니다. |
 | workflow hostname의 suffix가 현재 `$SUFFIX`와 다르거나 현재 execution이 timeout됨 | 다른 Event Job이 같은 repository와 `aca-runner` label을 감시함 | 모듈 04의 중복 watcher query로 이전 Job을 찾습니다. 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 다시 실행합니다. |
 | Running execution이 항상 1개만 보임 | polling 타이밍상 동시에 관찰하지 못했거나 Azure quota/시작 지연이 있음 | 먼저 GitHub에서 네 job이 모두 생성되었는지 확인하고, 30~90초 동안 같은 `Running` query를 반복합니다. 네 개가 항상 한 번에 보여야 한다고 가정하지 마세요. |
 | `az containerapp job logs show`에 아직 로그가 거의 없음 | execution 시작 직후라 runner bootstrap 로그가 아직 수집되지 않음 | 10~20초 정도 기다렸다가 같은 `EXECUTION`으로 다시 조회하고, 필요하면 가장 최근 execution 이름을 다시 잡아 확인합니다. |
