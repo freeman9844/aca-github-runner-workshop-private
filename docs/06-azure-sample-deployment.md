@@ -18,7 +18,7 @@
 
 👁️ **설명**
 
-같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼다면 **원래 저장해 둔 SUFFIX**를 다시 넣어 Module 04에서 만든 Event Job 환경과 이 모듈의 샘플 앱 이름을 복구하세요. 새 suffix를 만들면 기존 trusted runner와 다른 리소스를 보게 됩니다.
+같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼다면 **원래 저장해 둔 SUFFIX와 subscription ID**를 다시 넣어 Module 04에서 만든 Event Job 환경과 이 모듈의 샘플 앱 이름을 복구하세요. Cloud Shell이 다른 subscription을 기본값으로 잡고 돌아올 수 있으므로, Azure resource query 전에 workshop subscription context를 먼저 되돌려야 합니다. 새 suffix를 만들면 기존 trusted runner와 다른 리소스를 보게 됩니다.
 
 🟢 **실행**
 
@@ -28,12 +28,13 @@ RG="rg-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
 UAMI="id-acarunner-$SUFFIX"
 AZURE_SAMPLE_APP="hello-aca-$SUFFIX"
+AZURE_SUBSCRIPTION_ID="<your-saved-subscription-id>"
+az account set --subscription "$AZURE_SUBSCRIPTION_ID"
 AZURE_CLIENT_ID=$(az identity show \
   --resource-group "$RG" \
   --name "$UAMI" \
   --query clientId \
   --output tsv)
-AZURE_SUBSCRIPTION_ID=$(az account show --query id --output tsv)
 
 printf 'RG=%s\nENV=%s\nUAMI=%s\nAZURE_SAMPLE_APP=%s\nAZURE_CLIENT_ID=%s\nAZURE_SUBSCRIPTION_ID=%s\n' \
   "$RG" "$ENV" "$UAMI" "$AZURE_SAMPLE_APP" "$AZURE_CLIENT_ID" "$AZURE_SUBSCRIPTION_ID"
@@ -42,12 +43,14 @@ printf 'RG=%s\nENV=%s\nUAMI=%s\nAZURE_SAMPLE_APP=%s\nAZURE_CLIENT_ID=%s\nAZURE_S
 📋 **예상 출력**
 
 - `RG`, `ENV`, `UAMI`, `AZURE_SAMPLE_APP`는 원래 실습에서 만든 이름으로 다시 채워집니다.
+- `AZURE_SUBSCRIPTION_ID`는 현재 Cloud Shell 기본값이 아니라, **원래 저장해 둔 workshop subscription ID** 그대로 유지됩니다.
 - `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`는 이후 workflow가 참조할 식별자입니다.
-- `az identity show`가 실패하면 SUFFIX 오타 또는 Module 02/04 리소스 이름 기록 오류를 먼저 확인합니다.
+- `az identity show`가 실패하면 SUFFIX 오타, 저장한 subscription ID 오타, 또는 Module 02/04 리소스 이름 기록 오류를 먼저 확인합니다.
 
 ⚠️ **주의**
 
 - 여기서 복구하는 값은 식별자이며 secret이 아닙니다. 그래도 화면 공유 중이라면 불필요한 노출을 줄이기 위해 현재 탭만 사용하세요.
+- 이후 `az containerapp show` 같은 Azure resource query도 모두 방금 복구한 `AZURE_SUBSCRIPTION_ID` context를 기준으로 실행해야 합니다.
 - Cloud Shell에 새로운 repository write credential이나 Azure client secret을 추가하지 마세요.
 
 </details>

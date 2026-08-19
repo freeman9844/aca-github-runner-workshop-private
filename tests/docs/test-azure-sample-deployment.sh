@@ -48,6 +48,14 @@ details_prev_line="$(sed -n "$((details_close_line - 1))p" "$DOC")"
 [[ -z "${details_prev_line//[[:space:]]/}" ]] ||
   fail "Module 06 details close must be preceded by a blank line"
 
+subscription_placeholder_line="$(grep -nF -m1 'AZURE_SUBSCRIPTION_ID="<your-saved-subscription-id>"' "$DOC" | cut -d: -f1 || true)"
+account_set_line="$(grep -nF -m1 'az account set --subscription "$AZURE_SUBSCRIPTION_ID"' "$DOC" | cut -d: -f1 || true)"
+identity_show_line="$(grep -nF -m1 'AZURE_CLIENT_ID=$(az identity show' "$DOC" | cut -d: -f1 || true)"
+[[ -n "$subscription_placeholder_line" && -n "$account_set_line" && -n "$identity_show_line" ]] ||
+  fail "Module 06 missing saved subscription recovery commands"
+(( subscription_placeholder_line < account_set_line && account_set_line < identity_show_line )) ||
+  fail "Module 06 must restore the saved subscription before az identity show"
+
 for text in \
   'samples/azure-sample-deploy-workflow.yml' \
   '.github/workflows/aca-runner-azure-deploy.yml' \
@@ -58,6 +66,8 @@ for text in \
   '식별자' \
   'credentials' \
   'SUFFIX="<your-saved-suffix>"' \
+  'AZURE_SUBSCRIPTION_ID="<your-saved-subscription-id>"' \
+  'az account set --subscription "$AZURE_SUBSCRIPTION_ID"' \
   'RG="rg-acarunner-$SUFFIX"' \
   'ENV="env-acarunner-$SUFFIX"' \
   'UAMI="id-acarunner-$SUFFIX"' \
@@ -65,7 +75,6 @@ for text in \
   'AZURE_CLIENT_ID=$(az identity show' \
   '--name "$UAMI"' \
   '--query clientId' \
-  'AZURE_SUBSCRIPTION_ID=$(az account show --query id --output tsv)' \
   'az login --identity --client-id' \
   'mcr.microsoft.com/k8se/quickstart:latest' \
   'Actions → ACA Runner Azure Sample Deploy → Run workflow' \
@@ -83,9 +92,13 @@ for text in \
     fail "Module 06 missing $text"
 done
 
+if grep -F 'AZURE_SUBSCRIPTION_ID=$(az account show --query id --output tsv)' "$DOC" >/dev/null; then
+  fail "Module 06 must not derive the workshop subscription from the current Cloud Shell context"
+fi
+
 grep -Fx '[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing Module 06 navigation link"
-grep -Fx 'Module 06은 선택이며, 90분 핵심 경로가 필요하면 cleanup용 Module 07을 바로 사용해도 됩니다.' "$MODULE05_DOC" >/dev/null ||
+grep -Fx 'Module 06은 선택이며, 90분 핵심 경로가 필요하면 [현재 정리 문서](06-security-limitations-cleanup.md)로 바로 이동해도 됩니다.' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing optional Module 06 note"
 
 for text in \
