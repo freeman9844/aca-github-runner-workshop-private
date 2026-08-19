@@ -107,13 +107,16 @@ done
 [[ "$(grep -Fc 'SAMPLE_APP="hello-aca-$SUFFIX"' "$DOC")" -eq 2 ]] ||
   fail "Module 06 must initialize SAMPLE_APP in recovery and normal-session paths"
 
-final_expected_line="$(grep -nF -m1 'GitHub Actions, 브라우저, Cloud Shell, Portal 네 곳에서 같은 앱 이름과 URL을 가리키면 검증 완료입니다.' "$DOC" | cut -d: -f1)"
+step3_expected_line="$(grep -nF -m1 '`Show deployed Azure resource` step에는 새 `Container App` 이름, image, FQDN이 출력됩니다.' "$DOC" | cut -d: -f1)"
 screenshot_line="$(grep -nF -m1 '![GitHub workflows 폴더에 배포 및 스케일 테스트 workflow가 준비된 화면](images/06-github-workflows-console.png)' "$DOC" | cut -d: -f1)"
-troubleshooting_line="$(grep -nF -m1 '## 트러블슈팅' "$DOC" | cut -d: -f1)"
-[[ -n "$final_expected_line" && -n "$screenshot_line" && -n "$troubleshooting_line" ]] ||
-  fail "Module 06 missing final GitHub console screenshot placement markers"
-(( final_expected_line < screenshot_line && screenshot_line < troubleshooting_line )) ||
-  fail "Module 06 GitHub console screenshot must follow the final expected output"
+step3_heading_line="$(grep -nF -m1 '## 3. GitHub Actions에서 배포 실행' "$DOC" | cut -d: -f1)"
+step4_heading_line="$(grep -nF -m1 '## 4. 배포 URL과 HTTP 결과 확인' "$DOC" | cut -d: -f1)"
+step3_warning_line="$(awk -v start="$step3_heading_line" -v end="$step4_heading_line" \
+  'NR > start && NR < end && $0 == "⚠️ **주의**" { print NR; exit }' "$DOC")"
+[[ -n "$step3_expected_line" && -n "$screenshot_line" && -n "$step3_warning_line" ]] ||
+  fail "Module 06 missing Step 3 GitHub console screenshot placement markers"
+(( step3_expected_line < screenshot_line && screenshot_line < step3_warning_line )) ||
+  fail "Module 06 GitHub console screenshot must follow Step 3 expected output"
 
 grep -Fx '[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing Module 06 navigation link"
