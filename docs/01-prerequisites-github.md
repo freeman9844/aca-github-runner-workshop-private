@@ -184,6 +184,13 @@ Fine-grained tokens → Generate new token**으로 이동합니다.
 | Administration | Read and write |
 | Metadata | Read-only |
 
+아래 GitHub 설정 화면처럼 **Only select repositories**에서 실습용
+`aca-runner-lab` 저장소만 선택하고, 표에 명시된 최소 권한을 설정합니다.
+화면의 Resource owner와 계정 이름은 예시이므로 자신의 GitHub 사용자 또는
+organization을 선택하세요.
+
+![GitHub Fine-grained PAT 저장소와 권한 설정 예시](images/01-github-fine-grained-pat-settings.png)
+
 - Enterprise Managed User는 개인 계정 GitHub App 설치가 금지될 수 있으므로
   이 워크숍은 App 설치를 요구하지 않습니다.
 - organization 정책이 Fine-grained PAT 승인을 요구하면 승인 완료 후 다음
@@ -223,7 +230,10 @@ printf 'GITHUB_OWNER=%s\nGITHUB_REPO=%s\nGITHUB_PAT=%s\n' \
 📋 **예상 출력**
 
 ```text
-GITHUB_OWNER=octocat
+GitHub owner: freeman9844
+Private repository name: aca-runner-lab
+Fine-grained PAT:
+GITHUB_OWNER=freeman9844
 GITHUB_REPO=aca-runner-lab
 GITHUB_PAT=SET
 ```
