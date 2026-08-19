@@ -114,8 +114,10 @@ for text in \
   'ERROR: Fine-grained PAT cannot be empty. Try again.' \
   'az extension add --name containerapp --upgrade --only-show-errors' \
   'az provider register -n Microsoft.App --wait' \
+  'az provider register -n Microsoft.ContainerRegistry --wait' \
   'az provider register -n Microsoft.OperationalInsights --wait' \
-  'az provider register -n Microsoft.Insights --wait'; do
+  'az provider register -n Microsoft.Insights --wait' \
+  '다섯 명령 모두 오류 없이 종료됩니다.'; do
   grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
 
@@ -190,6 +192,10 @@ for text in \
   'az acr create' \
   '--admin-enabled false' \
   'az acr config authentication-as-arm update' \
+  '`MissingSubscriptionRegistration`' \
+  '`Microsoft.ContainerRegistry` provider가 등록되지 않음' \
+  '뒤의 ACR `resource not found` 오류는 첫 실패에 따른 연쇄 오류' \
+  'provider 등록이 완료되면 4단계 전체를 처음부터 다시 실행합니다.' \
   'az identity create' \
   'SUBSCRIPTION_ID=$(az account show' \
   'RG_ID=$(az group show' \

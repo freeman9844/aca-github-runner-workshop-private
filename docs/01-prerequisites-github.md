@@ -84,20 +84,23 @@ az account show --query "{Name:name,SubscriptionId:id,State:state}" -o table
 
 👁️ **설명**
 
-이 워크숍은 Azure Container Apps Job, Azure Monitor, Log Analytics를 사용합니다. Cloud Shell에서 필요한 extension과 resource provider를 먼저 준비합니다.
+이 워크숍은 Azure Container Apps Job, Azure Container Registry, Azure Monitor,
+Log Analytics를 사용합니다. Cloud Shell에서 필요한 extension과 resource
+provider를 먼저 준비합니다.
 
 🟢 **실행**
 
 ```bash
 az extension add --name containerapp --upgrade --only-show-errors
 az provider register -n Microsoft.App --wait
+az provider register -n Microsoft.ContainerRegistry --wait
 az provider register -n Microsoft.OperationalInsights --wait
 az provider register -n Microsoft.Insights --wait
 ```
 
 📋 **예상 출력**
 
-- 네 명령 모두 오류 없이 종료됩니다.
+- 다섯 명령 모두 오류 없이 종료됩니다.
 - `--wait`를 사용했으므로 provider 상태가 `Registered`가 될 때까지 반환하지 않습니다.
 
 ## 3. GitHub에서 실습용 `Private repository` 만들기
