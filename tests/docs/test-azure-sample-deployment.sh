@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORKFLOW="$ROOT/samples/azure-sample-deploy-workflow.yml"
 DOC="$ROOT/docs/06-azure-sample-deployment.md"
 MODULE05_DOC="$ROOT/docs/05-parallel-scale-validation.md"
+GITHUB_WORKFLOWS_SCREENSHOT="$ROOT/docs/images/06-github-workflows-console.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -14,6 +15,8 @@ fail() {
 [[ -f "$DOC" ]] || fail "Module 06 missing"
 [[ -f "$WORKFLOW" ]] || fail "Azure sample deployment workflow missing"
 [[ -f "$MODULE05_DOC" ]] || fail "Module 05 missing"
+[[ -f "$GITHUB_WORKFLOWS_SCREENSHOT" ]] || fail "Module 06 GitHub workflows screenshot missing"
+[[ ! -x "$GITHUB_WORKFLOWS_SCREENSHOT" ]] || fail "Module 06 GitHub workflows screenshot must not be executable"
 
 for heading in \
   '# 06. Azure 샘플 배포와 결과 확인' \
@@ -103,6 +106,14 @@ done
 
 [[ "$(grep -Fc 'SAMPLE_APP="hello-aca-$SUFFIX"' "$DOC")" -eq 2 ]] ||
   fail "Module 06 must initialize SAMPLE_APP in recovery and normal-session paths"
+
+final_expected_line="$(grep -nF -m1 'GitHub Actions, 브라우저, Cloud Shell, Portal 네 곳에서 같은 앱 이름과 URL을 가리키면 검증 완료입니다.' "$DOC" | cut -d: -f1)"
+screenshot_line="$(grep -nF -m1 '![GitHub workflows 폴더에 배포 및 스케일 테스트 workflow가 준비된 화면](images/06-github-workflows-console.png)' "$DOC" | cut -d: -f1)"
+troubleshooting_line="$(grep -nF -m1 '## 트러블슈팅' "$DOC" | cut -d: -f1)"
+[[ -n "$final_expected_line" && -n "$screenshot_line" && -n "$troubleshooting_line" ]] ||
+  fail "Module 06 missing final GitHub console screenshot placement markers"
+(( final_expected_line < screenshot_line && screenshot_line < troubleshooting_line )) ||
+  fail "Module 06 GitHub console screenshot must follow the final expected output"
 
 grep -Fx '[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing Module 06 navigation link"
