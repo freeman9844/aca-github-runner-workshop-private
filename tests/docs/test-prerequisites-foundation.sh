@@ -183,6 +183,9 @@ for text in \
   'az identity create' \
   'SUBSCRIPTION_ID=$(az account show' \
   'RG_ID=$(az group show' \
+  'printf '\''다음 값을 저장하세요: SUFFIX=%s ACR=%s SUBSCRIPTION_ID=%s\n'\''' \
+  '선택 Module 06을 Cloud Shell 재접속 후 이어가려면 위에서 출력한 `SUBSCRIPTION_ID`를 `SUFFIX`, 실제 `ACR` 이름과 함께 저장해 둡니다.' \
+  '다음 값을 저장하세요: SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000' \
   'UAMI_CLIENT_ID=$(az identity show' \
   '--query clientId' \
   'Contributor만으로는 Azure RBAC 역할을 할당할 수 없습니다.' \
@@ -192,7 +195,7 @@ for text in \
   'ACR="acracarunner$(openssl rand -hex 4)"' \
   '이 시점부터 `ACR`은 더 이상 `SUFFIX`에서 유도되지 않습니다.' \
   '이전에 적어 둔 `ACR` 값은 이 새 값으로 교체하세요.' \
-  '다음 모듈 재접속에 대비해 `SUFFIX`와 실제 `ACR` 이름을 각각 별도 값으로 저장해 둔다.' \
+  '다음 모듈 재접속과 선택 Module 06 복구에 대비해 `SUFFIX`, 실제 `ACR` 이름, 원래 `SUBSCRIPTION_ID`를 각각 별도 값으로 저장해 둔다.' \
   '이미 앞 단계의 RG, workspace, environment를 만들었다면 전체 `SUFFIX`를 바꾸지 마세요.' \
   '리소스 이름을 모두 새 suffix로 통일하려면 기존 실습 리소스를 정리하고 모듈 02의 1단계부터 다시 시작합니다.' \
   'SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3'; do

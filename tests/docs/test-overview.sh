@@ -71,20 +71,22 @@ grep -F '| `aca-github-runner-workshop-private` | 워크숍 문서, runner sourc
 grep -F '| `aca-runner-lab` | 참가자 소유 Private lab repository | 참가자(Module 01) | workflow queue, KEDA 감시, ephemeral runner 등록 |' "$README" >/dev/null
 grep -F 'Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.' "$README" >/dev/null
 grep -F '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, 검증된 GitHub 변수와 Fine-grained PAT | 15분 |' "$README" >/dev/null
-grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | 저장한 `SUFFIX`, 실제 `ACR` 이름, Azure resource ID | 15분 |' "$README" >/dev/null
+grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID, Azure resource ID | 15분 |' "$README" >/dev/null
 grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | ACR에 빌드된 runner image | 10분 |' "$README" >/dev/null
 grep -F '| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |' "$README" >/dev/null
 grep -F '| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |' "$README" >/dev/null
 grep -F '| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 샘플 Container App과 HTTPS 검증 | 선택 15분 |' "$README" >/dev/null
 grep -F '| 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |' "$README" >/dev/null
-grep -F '저장한 `SUFFIX`, 실제 `ACR` 이름, Azure resource ID' "$README" >/dev/null
+grep -F '저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID, Azure resource ID' "$README" >/dev/null
 grep -F 'ACR에 빌드된 runner image' "$README" >/dev/null
 grep -F 'repository-scoped ACA Event Job과 KEDA rule' "$README" >/dev/null
 grep -F 'matrix 4개 Job과 `0 → N → 0` 증거' "$README" >/dev/null
 grep -F 'Managed Identity 기반 샘플 Container App과 HTTPS 검증' "$README" >/dev/null
 grep -F '보안 검토와 확인된 cleanup' "$README" >/dev/null
 grep -F 'Cloud Shell의 shell 변수는 새 세션에 유지되지 않습니다.' "$README" >/dev/null
-grep -F '원래 `SUFFIX`와 실제 `ACR` 이름' "$README" >/dev/null
+grep -F '원래 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID' "$README" >/dev/null
+grep -F '선택 Module 06을 이어가려면 저장해 둔 원래 subscription ID가 필요합니다.' "$README" >/dev/null
+grep -F 'Module 06을 건너뛰더라도 Module 07 cleanup은 반드시 수행합니다.' "$README" >/dev/null
 grep -F '`0. 세션 재연결 시 변수 복구 (선택)`' "$README" >/dev/null
 grep -F '새 suffix를 만들지 마세요.' "$README" >/dev/null
 for text in \
