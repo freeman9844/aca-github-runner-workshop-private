@@ -44,10 +44,10 @@ details_open_line="$(grep -nF -m1 '<details>' "$DOC" | cut -d: -f1)"
 summary_line="$(grep -nF -m1 '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$DOC" | cut -d: -f1)"
 details_close_line="$(grep -nF -m1 '</details>' "$DOC" | cut -d: -f1)"
 legend_line="$(grep -nF -m1 '## 태그 범례' "$DOC" | cut -d: -f1)"
-[[ "$(grep -Fc '<details>' "$DOC")" -eq 1 ]] ||
-  fail "Module 06 must contain exactly one details block"
-[[ "$(grep -Fc '</details>' "$DOC")" -eq 1 ]] ||
-  fail "Module 06 must close exactly one details block"
+[[ "$(grep -Fc '<details>' "$DOC")" -eq 2 ]] ||
+  fail "Module 06 must contain recovery and workflow details blocks"
+[[ "$(grep -Fc '</details>' "$DOC")" -eq 2 ]] ||
+  fail "Module 06 must close recovery and workflow details blocks"
 [[ -n "$details_open_line" && -n "$summary_line" && -n "$details_close_line" && -n "$legend_line" ]] ||
   fail "Module 06 missing recovery disclosure structure"
 (( details_open_line < summary_line && summary_line < details_close_line && details_close_line < legend_line )) ||
@@ -156,6 +156,38 @@ workflows_screenshot_line="$(grep -nF -m1 '![GitHub workflows 폴더에 배포 �
 (( step2_expected_line < workflows_screenshot_line && workflows_screenshot_line < step3_heading_line )) ||
   fail "Module 06 workflows screenshot must follow Step 2 expected output"
 
+workflow_summary_line="$(grep -nF -m1 '<summary>aca-runner-azure-deploy.yml 전체 내용 보기</summary>' "$DOC" | cut -d: -f1 || true)"
+workflow_details_open_line="$(awk -v summary="$workflow_summary_line" 'NR < summary && $0 == "<details>" { line=NR } END { print line }' "$DOC")"
+workflow_details_close_line="$(awk -v summary="$workflow_summary_line" 'NR > summary && $0 == "</details>" { print NR; exit }' "$DOC")"
+[[ -n "$workflow_details_open_line" && -n "$workflow_summary_line" && -n "$workflow_details_close_line" ]] ||
+  fail "Module 06 Step 2 missing collapsible aca-runner-azure-deploy.yml"
+(( step2_heading_line < workflow_details_open_line &&
+   workflow_details_open_line < workflow_summary_line &&
+   workflow_summary_line < workflow_details_close_line &&
+   workflow_details_close_line < step3_heading_line )) ||
+  fail "Module 06 workflow details must stay inside Step 2"
+
+if ! cmp -s "$WORKFLOW" <(
+  awk '
+    $0 == "<summary>aca-runner-azure-deploy.yml 전체 내용 보기</summary>" {
+      in_workflow_details=1
+      next
+    }
+    in_workflow_details && $0 == "```yaml" {
+      in_workflow_yaml=1
+      next
+    }
+    in_workflow_yaml && $0 == "```" {
+      exit
+    }
+    in_workflow_yaml {
+      print
+    }
+  ' "$DOC"
+); then
+  fail "Module 06 collapsible workflow must match the reviewed sample exactly"
+fi
+
 step3_expected_line="$(grep -nF -m1 '`Show deployed Azure resource` step에는 새 `Container App` 이름, image, FQDN이 출력됩니다.' "$DOC" | cut -d: -f1)"
 deployment_screenshot_line="$(grep -nF -m1 '![GitHub Actions에서 Azure 샘플 Container App 배포가 성공한 화면](images/06-github-actions-deployment-success.png)' "$DOC" | cut -d: -f1)"
 step4_heading_line="$(grep -nF -m1 '## 4. 배포 URL과 HTTP 결과 확인' "$DOC" | cut -d: -f1)"
@@ -188,6 +220,14 @@ for text in \
   'workflow_dispatch:' \
   'runs-on: [aca-runner]' \
   'timeout-minutes: 15' \
+  '# Run only when a trusted workshop participant starts it manually.' \
+  '# Use the custom label configured on the ephemeral ACA runner.' \
+  '# Fail before Azure operations if the runner environment contract is incomplete.' \
+  '# Authenticate without a client secret by using the runner managed identity.' \
+  '# Recreate the sample app so repeated workshop runs start from a known state.' \
+  '# Share the generated endpoint with the remaining workflow steps.' \
+  '# ACA ingress can take time to become ready after provisioning.' \
+  '# Print the final resource details for comparison with Azure Portal.' \
   'set -euo pipefail' \
   'az login --identity --client-id "$AZURE_CLIENT_ID"' \
   'az account set --subscription "$AZURE_SUBSCRIPTION_ID"' \

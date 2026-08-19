@@ -1,14 +1,17 @@
 name: ACA Runner Azure Sample Deploy
 
+# Run only when a trusted workshop participant starts it manually.
 on:
   workflow_dispatch:
 
 jobs:
   deploy-sample:
     name: Deploy sample Container App
+    # Use the custom label configured on the ephemeral ACA runner.
     runs-on: [aca-runner]
     timeout-minutes: 15
     steps:
+      # Fail before Azure operations if the runner environment contract is incomplete.
       - name: Validate Azure deployment context
         shell: bash
         run: |
@@ -25,6 +28,7 @@ jobs:
             fi
           done
 
+      # Authenticate without a client secret by using the runner managed identity.
       - name: Sign in with the runner managed identity
         shell: bash
         run: |
@@ -35,6 +39,7 @@ jobs:
             --query "{subscription:name,subscriptionId:id,tenantId:tenantId}" \
             --output table
 
+      # Recreate the sample app so repeated workshop runs start from a known state.
       - name: Deploy the sample Container App
         shell: bash
         run: |
@@ -94,9 +99,11 @@ jobs:
             exit 1
           fi
 
+          # Share the generated endpoint with the remaining workflow steps.
           APP_URL="https://$FQDN"
           printf 'APP_URL=%s\n' "$APP_URL" >> "$GITHUB_ENV"
 
+      # ACA ingress can take time to become ready after provisioning.
       - name: Verify the deployed HTTPS endpoint
         shell: bash
         run: |
@@ -115,6 +122,7 @@ jobs:
             "$APP_URL" >&2
           exit 1
 
+      # Print the final resource details for comparison with Azure Portal.
       - name: Show deployed Azure resource
         shell: bash
         run: |

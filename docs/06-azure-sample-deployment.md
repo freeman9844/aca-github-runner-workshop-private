@@ -192,17 +192,149 @@ sed -n '1,220p' samples/azure-sample-deploy-workflow.yml
 1. `.github/workflows/aca-runner-azure-deploy.yml`이 없으면 **Add file → Create new file**을 선택합니다.
 2. 이미 있으면 파일을 연 뒤 **Edit this file**을 선택합니다.
 3. 두 경우 모두 기존 내용을 일부만 수정하지 말고, 방금 Cloud Shell에 출력한 `samples/azure-sample-deploy-workflow.yml` 전체 내용으로 교체합니다.
-4. 아래 항목을 다시 확인한 뒤 기본 브랜치에 commit합니다.
+4. 아래 `aca-runner-azure-deploy.yml` 전체 내용을 펼쳐 다시 확인한 뒤 기본 브랜치에 commit합니다.
+
+<details>
+<summary>aca-runner-azure-deploy.yml 전체 내용 보기</summary>
 
 ```yaml
 name: ACA Runner Azure Sample Deploy
+
+# Run only when a trusted workshop participant starts it manually.
 on:
   workflow_dispatch:
 
 jobs:
   deploy-sample:
+    name: Deploy sample Container App
+    # Use the custom label configured on the ephemeral ACA runner.
     runs-on: [aca-runner]
+    timeout-minutes: 15
+    steps:
+      # Fail before Azure operations if the runner environment contract is incomplete.
+      - name: Validate Azure deployment context
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variable in \
+            AZURE_CLIENT_ID \
+            AZURE_SUBSCRIPTION_ID \
+            AZURE_RESOURCE_GROUP \
+            AZURE_CONTAINERAPPS_ENVIRONMENT \
+            AZURE_SAMPLE_APP; do
+            if [[ -z "${!variable:-}" ]]; then
+              printf 'ERROR: %s is required.\n' "$variable" >&2
+              exit 1
+            fi
+          done
+
+      # Authenticate without a client secret by using the runner managed identity.
+      - name: Sign in with the runner managed identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          az login --identity --client-id "$AZURE_CLIENT_ID" --output none
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          az account show \
+            --query "{subscription:name,subscriptionId:id,tenantId:tenantId}" \
+            --output table
+
+      # Recreate the sample app so repeated workshop runs start from a known state.
+      - name: Deploy the sample Container App
+        shell: bash
+        run: |
+          set -euo pipefail
+          if az containerapp show \
+            --name "$AZURE_SAMPLE_APP" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --output none 2>/dev/null; then
+            printf 'Existing Container App found; deleting %s.\n' "$AZURE_SAMPLE_APP"
+            az containerapp delete \
+              --name "$AZURE_SAMPLE_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --yes \
+              --output none
+
+            for delete_attempt in $(seq 1 24); do
+              if ! az containerapp show \
+                --name "$AZURE_SAMPLE_APP" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --output none 2>/dev/null; then
+                printf 'Confirmed existing Container App deletion after %s checks.\n' \
+                  "$delete_attempt"
+                break
+              fi
+
+              printf 'Waiting for Container App deletion (attempt %s/24).\n' \
+                "$delete_attempt" >&2
+              sleep 5
+            done
+
+            if az containerapp show \
+              --name "$AZURE_SAMPLE_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --output none 2>/dev/null; then
+              printf 'ERROR: Timed out waiting for Container App deletion after 24 checks.\n' \
+                >&2
+              exit 1
+            fi
+          else
+            printf 'No existing Container App named %s found.\n' "$AZURE_SAMPLE_APP"
+          fi
+
+          FQDN="$(az containerapp create \
+            --name "$AZURE_SAMPLE_APP" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --environment "$AZURE_CONTAINERAPPS_ENVIRONMENT" \
+            --image mcr.microsoft.com/k8se/quickstart:latest \
+            --ingress external \
+            --target-port 80 \
+            --min-replicas 0 \
+            --max-replicas 1 \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)"
+
+          if [[ -z "$FQDN" ]]; then
+            printf 'ERROR: Azure did not return a Container App FQDN.\n' >&2
+            exit 1
+          fi
+
+          # Share the generated endpoint with the remaining workflow steps.
+          APP_URL="https://$FQDN"
+          printf 'APP_URL=%s\n' "$APP_URL" >> "$GITHUB_ENV"
+
+      # ACA ingress can take time to become ready after provisioning.
+      - name: Verify the deployed HTTPS endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 18); do
+            if response="$(curl --fail --silent --show-error "$APP_URL")"; then
+              printf 'Verified %s\n' "$APP_URL"
+              printf '%s\n' "$response" | sed -n '1,12p'
+              exit 0
+            fi
+            printf 'Endpoint not ready (attempt %s/18); retrying in 5 seconds.\n' \
+              "$attempt" >&2
+            sleep 5
+          done
+          printf 'ERROR: HTTP verification failed after 18 attempts: %s\n' \
+            "$APP_URL" >&2
+          exit 1
+
+      # Print the final resource details for comparison with Azure Portal.
+      - name: Show deployed Azure resource
+        shell: bash
+        run: |
+          set -euo pipefail
+          az containerapp show \
+            --name "$AZURE_SAMPLE_APP" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "{name:name,provisioningState:properties.provisioningState,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
+            --output table
 ```
+
+</details>
 
 ⚠️ **주의**
 
