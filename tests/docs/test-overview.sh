@@ -46,8 +46,7 @@ for troubleshooting_doc in \
     { echo "FAIL: $(basename "$troubleshooting_doc") must expose #트러블슈팅" >&2; exit 1; }
 done
 
-grep -F '약 90분' "$README" >/dev/null
-grep -F '선택 Module 06을 포함하면 약 105분' "$README" >/dev/null
+grep -F '약 105분' "$README" >/dev/null
 grep -F 'Private repository' "$README" >/dev/null
 grep -F 'Docker-in-Docker' "$README" >/dev/null
 grep -F '0 → N → 0' "$README" >/dev/null
@@ -65,8 +64,8 @@ grep -F 'git clone https://github.com/freeman9844/aca-github-runner-workshop-pri
 grep -F 'cd ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다.' "$README" >/dev/null ||
   { echo 'FAIL: README Quick Start must skip the already-completed Module 01 clone step' >&2; exit 1; }
-grep -F '그 외 Module 01 단계와 Module 02~05는 순서대로 진행하고, Module 06은 선택, Module 07은 필수 cleanup입니다.' "$README" >/dev/null ||
-  { echo 'FAIL: README Quick Start must describe the core path, optional Module 06, and required Module 07 cleanup' >&2; exit 1; }
+grep -F '그 외 Module 01 단계와 Module 02~07은 순서대로 모두 진행합니다. Module 07은 필수 cleanup입니다.' "$README" >/dev/null ||
+  { echo 'FAIL: README Quick Start must require Modules 01 through 07' >&2; exit 1; }
 grep -F '| `aca-github-runner-workshop-private` | 워크숍 문서, runner source, samples, tests | 워크숍 운영자 | source clone, 문서 확인, runner image 빌드 |' "$README" >/dev/null
 grep -F '| `aca-runner-lab` | 참가자 소유 Private lab repository | 참가자(Module 01) | workflow queue, KEDA 감시, ephemeral runner 등록 |' "$README" >/dev/null
 grep -F 'Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.' "$README" >/dev/null
@@ -75,7 +74,7 @@ grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | �
 grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | ACR에 빌드된 runner image | 10분 |' "$README" >/dev/null
 grep -F '| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |' "$README" >/dev/null
 grep -F '| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |' "$README" >/dev/null
-grep -F '| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 샘플 Container App과 HTTPS 검증 | 선택 15분 |' "$README" >/dev/null
+grep -F '| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 샘플 Container App과 HTTPS 검증 | 15분 |' "$README" >/dev/null
 grep -F '| 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |' "$README" >/dev/null
 grep -F '저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID, Azure resource ID' "$README" >/dev/null
 grep -F 'ACR에 빌드된 runner image' "$README" >/dev/null
@@ -85,8 +84,8 @@ grep -F 'Managed Identity 기반 샘플 Container App과 HTTPS 검증' "$README"
 grep -F '보안 검토와 확인된 cleanup' "$README" >/dev/null
 grep -F 'Cloud Shell의 shell 변수는 새 세션에 유지되지 않습니다.' "$README" >/dev/null
 grep -F '원래 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID' "$README" >/dev/null
-grep -F '선택 Module 06을 이어가려면 저장해 둔 원래 subscription ID가 필요합니다.' "$README" >/dev/null
-grep -F 'Module 06을 건너뛰더라도 Module 07 cleanup은 반드시 수행합니다.' "$README" >/dev/null
+grep -F 'Module 06을 이어가려면 저장해 둔 원래 subscription ID가 필요합니다.' "$README" >/dev/null
+grep -F 'Module 06 완료 후 Module 07 cleanup도 반드시 수행합니다.' "$README" >/dev/null
 grep -F '`0. 세션 재연결 시 변수 복구 (선택)`' "$README" >/dev/null
 grep -F '새 suffix를 만들지 마세요.' "$README" >/dev/null
 for text in \
@@ -105,12 +104,10 @@ for text in \
   grep -F -- "$text" "$README" >/dev/null ||
     { echo "FAIL: README missing completion or validation guidance: $text" >&2; exit 1; }
 done
-grep -F '|  | **코어 합계** |  | **90분** |' "$README" >/dev/null
-grep -F '|  | **선택 Module 06 포함** |  | **105분** |' "$README" >/dev/null
+grep -F '|  | **워크숍 합계** |  | **105분** |' "$README" >/dev/null
 grep -F '| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 30분 |' "$README" >/dev/null
-grep -F '| 합계 | 코어 워크숍 | 90분 |' "$README" >/dev/null
-grep -F '| 선택 | Azure 샘플 배포 + HTTPS 확인 | 15분 |' "$README" >/dev/null
-grep -F '| 합계 | 선택 Module 06 포함 | 105분 |' "$README" >/dev/null
+grep -F '| 4부 | Azure 샘플 배포 + HTTPS 확인 | 15분 |' "$README" >/dev/null
+grep -F '| 합계 | 전체 워크숍 | 105분 |' "$README" >/dev/null
 grep -F '자동 검증' "$README" >/dev/null
 grep -F '라이브 Azure/GitHub 실행' "$README" >/dev/null
 grep -F '`koreacentral`' "$README" >/dev/null
@@ -154,6 +151,12 @@ fi
 
 if grep -F '리허설 검증' "$README" >/dev/null; then
   echo 'FAIL: README still claims a dated rehearsal validation' >&2
+  exit 1
+fi
+
+if grep -E '선택 Module 06|Module 06은 선택|Module 06을 건너뛰|선택적으로 추가|선택 15분|선택 Module 06 포함' \
+  "$README" >/dev/null; then
+  echo 'FAIL: README still describes Module 06 as optional' >&2
   exit 1
 fi
 

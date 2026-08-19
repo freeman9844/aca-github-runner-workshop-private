@@ -69,6 +69,7 @@ identity_show_line="$(grep -nF -m1 'UAMI_CLIENT_ID=$(az identity show' "$DOC" | 
   fail "Module 06 must restore the saved subscription before az identity show"
 
 for text in \
+  '필수 모듈입니다.' \
   'samples/azure-sample-deploy-workflow.yml' \
   '.github/workflows/aca-runner-azure-deploy.yml' \
   'Container Apps Contributor' \
@@ -209,8 +210,8 @@ troubleshooting_line="$(grep -nF -m1 '## 트러블슈팅' "$DOC" | cut -d: -f1)"
 
 grep -Fx '[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing Module 06 navigation link"
-grep -Fx 'Module 06은 선택이며, 90분 핵심 경로가 필요하면 [Module 07 정리 문서](07-security-limitations-cleanup.md)로 바로 이동해도 됩니다.' "$MODULE05_DOC" >/dev/null ||
-  fail "Module 05 missing Module 07 cleanup note"
+grep -Fx 'Module 06은 필수 단계입니다. 위 링크로 이동해 Azure 샘플 배포와 결과 확인을 계속합니다.' "$MODULE05_DOC" >/dev/null ||
+  fail "Module 05 must direct participants to required Module 06"
 grep -Fx '[← 이전: 병렬 실행과 스케일 검증](05-parallel-scale-validation.md) | [다음: 보안·제약·정리 →](07-security-limitations-cleanup.md)' "$DOC" >/dev/null ||
   fail "Module 06 missing Module 07 navigation link"
 
@@ -278,6 +279,10 @@ fi
 if grep -E 'azure/login|AZURE_CREDENTIALS|client-secret|(^|[[:space:]])docker([[:space:]]|$)|services:|actions/checkout(@|[[:space:]]|$)' \
   "$WORKFLOW" >/dev/null; then
   fail "workflow contains a forbidden credential, checkout action, or Docker dependency"
+fi
+
+if grep -F '선택 모듈입니다.' "$DOC" >/dev/null; then
+  fail "Module 06 must not describe itself as optional"
 fi
 
 printf 'PASS: Azure sample deployment workflow and doc\n'

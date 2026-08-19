@@ -1,6 +1,6 @@
 # 06. Azure 샘플 배포와 결과 확인
 
-> 선택 모듈입니다. Azure Cloud Shell Bash, GitHub 웹 UI, 브라우저, Azure Portal을 함께 사용해 trusted single-job workflow로 샘플 Container App을 배포하고 결과를 교차 확인합니다. `private repository`와 `trusted workflow authors` 경계를 유지한 채, 기존 ACA runner trusted-workflow boundary 안에서만 Azure 배포 검증을 추가합니다.
+> 필수 모듈입니다. Azure Cloud Shell Bash, GitHub 웹 UI, 브라우저, Azure Portal을 함께 사용해 trusted single-job workflow로 샘플 Container App을 배포하고 결과를 교차 확인합니다. `private repository`와 `trusted workflow authors` 경계를 유지한 채, 기존 ACA runner trusted-workflow boundary 안에서만 Azure 배포 검증을 추가합니다.
 
 ## 목표
 
