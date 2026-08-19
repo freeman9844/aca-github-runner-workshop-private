@@ -180,7 +180,10 @@ az containerapp job execution list \
 
 📋 **예상 출력**
 
-- 표가 비어 있거나, 이전에 끝난 execution이 `Succeeded`/`Failed` 상태로 남아 있을 수 있습니다.
+- 최초 실행처럼 execution 이력이 없다면 명령 출력 없이 다음 프롬프트로
+  돌아올 수 있습니다.
+- 이전 실행 이력이 있다면 끝난 execution이 `Succeeded`/`Failed` 상태로
+  남아 있을 수 있습니다.
 - 이 단계에서는 **active execution이 0인 상태가 정상**입니다.
 - 즉, history는 남을 수 있지만 현재 처리 중인 execution이 없다는 점을 먼저 구분해야 합니다.
 
@@ -223,6 +226,18 @@ az containerapp job execution list \
 
 📋 **예상 출력**
 
+실제 실행에서 네 execution이 같은 시각에 시작되면 다음과 같이 보일 수 있습니다.
+
+```text
+Name                       Status    Start
+-------------------------  --------  -------------------------
+job-ghrunner-145945-4vql7  Running   2026-08-19T05:10:51+00:00
+job-ghrunner-145945-bbqc9  Running   2026-08-19T05:10:51+00:00
+job-ghrunner-145945-tvdcr  Running   2026-08-19T05:10:51+00:00
+job-ghrunner-145945-xh6w5  Running   2026-08-19T05:10:51+00:00
+```
+
+- execution 이름의 suffix와 시작 시각은 실행할 때마다 달라집니다.
 - 조회 시점에 따라 `Running` execution이 **1개에서 4개 사이**로 보일 수 있습니다.
 - polling 타이밍과 startup timing 때문에 네 execution이 동시에 보이지 않아도 정상입니다.
 - 중요한 검증 포인트는 queued GitHub job에 맞춰 active execution이 늘어났다가 나중에 다시 0으로 돌아오는지입니다.
@@ -260,11 +275,28 @@ fi
 
 - 최신 execution 이름이 `job-ghrunner-<suffix>-...` 같은 형식으로 `EXECUTION` 변수에 들어갑니다.
 - `ERROR: Container Apps Job execution이 없습니다.`가 보이면 7단계로 진행하지 말고 GitHub workflow가 `runs-on: [aca-runner]`인지 수정한 뒤 workflow를 다시 실행합니다.
-- 로그에는 runner bootstrap과 종료 흐름이 텍스트로 출력됩니다.
-- 최소한 아래 lifecycle marker를 찾을 준비를 합니다.
-  - `Requesting registration token`
-  - `Runner configured`
-  - `Runner process exited`
+- 조회 시점에 따라 GitHub Actions worker가 bash step을 준비하고 실행하는 내부
+  로그가 다음과 같이 보일 수 있습니다.
+
+```text
+2026-08-19T05:11:29.3957554Z stdout F [WORKER 2026-08-19 05:11:29Z INFO HostContext] Well known directory 'Root': '/home/runner'
+2026-08-19T05:11:29.3969009Z stdout F [WORKER 2026-08-19 05:11:29Z INFO HostContext] Well known directory 'Work': '/home/runner/_work'
+2026-08-19T05:11:29.3970193Z stdout F [WORKER 2026-08-19 05:11:29Z INFO HostContext] Well known directory 'Temp': '/home/runner/_work/_temp'
+2026-08-19T05:11:29.3971397Z stdout F [WORKER 2026-08-19 05:11:29Z INFO ScriptHandler] Which2: 'bash'
+2026-08-19T05:11:29.3973315Z stdout F [WORKER 2026-08-19 05:11:29Z INFO ScriptHandler] Location: '/usr/bin/bash'
+2026-08-19T05:11:29.3973409Z stdout F [WORKER 2026-08-19 05:11:29Z INFO ProcessInvokerWrapper] Starting process:
+2026-08-19T05:11:29.3973465Z stdout F [WORKER 2026-08-19 05:11:29Z INFO ProcessInvokerWrapper]   File name: '/usr/bin/bash'
+2026-08-19T05:11:29.3973489Z stdout F [WORKER 2026-08-19 05:11:29Z INFO ProcessInvokerWrapper]   Arguments: '--noprofile --norc -e -o pipefail /home/runner/_work/_temp/7ae4b711-8656-450a-ad26-701e69261ce5.sh'
+2026-08-19T05:11:29.3973511Z stdout F [WORKER 2026-08-19 05:11:29Z INFO ProcessInvokerWrapper]   Working directory: '/home/runner/_work/aca-runner-lab/aca-runner-lab'
+2026-08-19T05:11:29.4002129Z stdout F [WORKER 2026-08-19 05:11:29Z INFO ProcessInvokerWrapper] Process started with process id 108, waiting for process exit.
+2026-08-19T05:11:30.6453925Z stdout F [WORKER 2026-08-19 05:11:30Z INFO JobServerQueue] Got a step log file to send to results service.
+2026-08-19T05:11:30.6712836Z stdout F [WORKER 2026-08-19 05:11:30Z INFO JobServerQueue] Try to upload 2 log files or attachments, success rate: 2/2.
+```
+
+- timestamp, 임시 script UUID, PID와 repository 작업 경로는 실행마다 달라집니다.
+- `--tail 100` 구간에 따라 `Requesting registration token`, `Runner configured`,
+  `Runner process exited`가 보이지 않을 수 있습니다. lifecycle marker는 7~8단계의
+  Log Analytics 조회로 다시 확인합니다.
 
 ## 7. Log Analytics에서 resource-specific `ContainerAppConsoleLogs`를 KQL로 확인
 
