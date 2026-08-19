@@ -2,6 +2,7 @@ FROM ghcr.io/actions/actions-runner:2.336.0
 
 USER root
 
+# Install the tools required by the runner and Azure deployment workflow.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       ca-certificates \
@@ -31,13 +32,18 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy the registration wrapper without granting write access at runtime.
 COPY --chown=runner:runner entrypoint.sh /home/runner/entrypoint.sh
 RUN chmod 0555 /home/runner/entrypoint.sh
 
+# Run the container as the non-root runner user.
 USER runner
+
+# Install and verify the Container Apps extension while building the image.
 RUN az extension add --name containerapp --upgrade --only-show-errors
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null
 WORKDIR /home/runner
 
+# Register the ephemeral runner before starting the workflow process.
 ENTRYPOINT ["/home/runner/entrypoint.sh"]
