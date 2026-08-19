@@ -200,18 +200,18 @@ sed -n '1,220p' samples/azure-sample-deploy-workflow.yml
 ```yaml
 name: ACA Runner Azure Sample Deploy
 
-# Run only when a trusted workshop participant starts it manually.
+# 신뢰할 수 있는 워크숍 참가자가 수동으로 실행할 때만 시작합니다.
 on:
   workflow_dispatch:
 
 jobs:
   deploy-sample:
     name: Deploy sample Container App
-    # Use the custom label configured on the ephemeral ACA runner.
+    # 임시 ACA runner에 설정한 사용자 지정 label을 사용합니다.
     runs-on: [aca-runner]
     timeout-minutes: 15
     steps:
-      # Fail before Azure operations if the runner environment contract is incomplete.
+      # Azure 작업 전에 runner 환경 변수 계약이 완전한지 확인합니다.
       - name: Validate Azure deployment context
         shell: bash
         run: |
@@ -228,7 +228,7 @@ jobs:
             fi
           done
 
-      # Authenticate without a client secret by using the runner managed identity.
+      # client secret 없이 runner managed identity로 Azure에 로그인합니다.
       - name: Sign in with the runner managed identity
         shell: bash
         run: |
@@ -239,7 +239,7 @@ jobs:
             --query "{subscription:name,subscriptionId:id,tenantId:tenantId}" \
             --output table
 
-      # Recreate the sample app so repeated workshop runs start from a known state.
+      # 반복 실습도 동일한 상태에서 시작하도록 샘플 앱을 다시 생성합니다.
       - name: Deploy the sample Container App
         shell: bash
         run: |
@@ -299,11 +299,11 @@ jobs:
             exit 1
           fi
 
-          # Share the generated endpoint with the remaining workflow steps.
+          # 생성된 endpoint를 이후 workflow step과 공유합니다.
           APP_URL="https://$FQDN"
           printf 'APP_URL=%s\n' "$APP_URL" >> "$GITHUB_ENV"
 
-      # ACA ingress can take time to become ready after provisioning.
+      # 프로비저닝 후 ACA ingress가 준비될 때까지 시간이 걸릴 수 있습니다.
       - name: Verify the deployed HTTPS endpoint
         shell: bash
         run: |
@@ -322,7 +322,7 @@ jobs:
             "$APP_URL" >&2
           exit 1
 
-      # Print the final resource details for comparison with Azure Portal.
+      # Azure Portal과 비교할 수 있도록 최종 resource 정보를 출력합니다.
       - name: Show deployed Azure resource
         shell: bash
         run: |
