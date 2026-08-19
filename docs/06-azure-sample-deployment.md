@@ -82,16 +82,55 @@ printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_I
 
 ```bash
 SAMPLE_APP="hello-aca-$SUFFIX"
+UAMI_PID=$(az identity show \
+  --resource-group "$RG" \
+  --name "$UAMI" \
+  --query principalId \
+  --output tsv)
+RG_ID=$(az group show \
+  --name "$RG" \
+  --query id \
+  --output tsv)
+ENV_STATE=$(az containerapp env show \
+  --resource-group "$RG" \
+  --name "$ENV" \
+  --query properties.provisioningState \
+  --output tsv)
+CONTAINER_APPS_ROLE=$(az role assignment list \
+  --assignee "$UAMI_PID" \
+  --scope "$RG_ID" \
+  --query "[?roleDefinitionName=='Container Apps Contributor' && scope=='$RG_ID'].roleDefinitionName | [0]" \
+  --output tsv)
 
 printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_ID=%s\n' \
   "$RG" "$ENV" "$UAMI" "$SAMPLE_APP" "$UAMI_CLIENT_ID" "$SUBSCRIPTION_ID"
+printf 'ENV_STATE=%s\nCONTAINER_APPS_ROLE=%s\n' \
+  "$ENV_STATE" "${CONTAINER_APPS_ROLE:-MISSING}"
+
+if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]; then
+  printf 'Container Apps Contributor 역할이 없어 %s 범위에 할당합니다.\n' "$RG_ID"
+  az role assignment create \
+    --assignee-object-id "$UAMI_PID" \
+    --assignee-principal-type ServicePrincipal \
+    --role "Container Apps Contributor" \
+    --scope "$RG_ID" \
+    --output none
+  printf '역할 할당 완료. RBAC 전파를 위해 1~5분 기다린 뒤 workflow를 실행하세요.\n'
+fi
 ```
 
 📋 **예상 출력**
 
 - 모든 값이 비어 있지 않아야 합니다.
 - `UAMI_CLIENT_ID`와 `SUBSCRIPTION_ID`는 표시되어도 되는 식별자지만, PAT나 client secret 같은 credentials는 출력하지 않습니다.
+- `ENV_STATE=Succeeded`가 보여야 실제 ACA Environment가 현재 subscription/RG에 존재하는 것입니다.
+- `CONTAINER_APPS_ROLE=Container Apps Contributor`가 보이면 runner UAMI가 샘플 Container App을 배포할 준비가 된 상태입니다.
+- `CONTAINER_APPS_ROLE=MISSING`이면 명령이 Module 02와 같은 RG 범위 역할을 할당합니다. `역할 할당 완료`가 출력되면 1~5분 기다린 뒤 3단계를 실행하세요.
 - 이후 GitHub Actions에서 사용하는 Azure 로그인 명령은 `az login --identity --client-id` 한 줄뿐이어야 합니다.
+
+⚠️ **주의**
+
+`az role assignment create`에는 `Microsoft.Authorization/roleAssignments/write` 권한이 필요합니다. `AuthorizationFailed`가 발생하면 `Role Based Access Control Administrator`, `User Access Administrator`, `Owner` 중 하나를 가진 계정으로 역할을 할당해야 합니다. 권한 범위를 넓히지 말고 workshop resource group의 `Container Apps Contributor`만 복구하세요.
 
 ## 2. 샘플 workflow를 GitHub에 생성
 
@@ -170,6 +209,8 @@ GitHub repository에서 **Actions → ACA Runner Azure Sample Deploy → Run wor
 
 - workflow가 queued 상태로 오래 머물면 먼저 오래된 queued run이나 `stale runner workflow`가 같은 `aca-runner` label을 붙잡고 있지 않은지 확인하세요.
 - GitHub Actions 로그에 PAT, client secret, access token을 출력하도록 workflow를 수정하지 마세요.
+- 첫 배포의 `No existing Container App named ... found.`는 기존 샘플 앱이 없다는 정상 안내입니다.
+- `WARNING: The behavior of this command has been altered by the following extension: containerapp`도 extension 사용 안내이며 배포 실패 원인이 아닙니다. 그 다음에 출력되는 `ERROR:` 행을 기준으로 문제를 판단하세요.
 
 ## 4. 배포 URL과 HTTP 결과 확인
 
@@ -245,6 +286,7 @@ az containerapp show \
 | `az: command not found` | Azure Cloud Shell 세션이 Bash가 아니거나 CLI 초기화가 끝나지 않음 | Cloud Shell Bash를 다시 열고 `az version`이 동작할 때까지 기다립니다. 로컬 터미널에서 따라 하고 있다면 이 워크숍과 동일한 Cloud Shell Bash로 돌아옵니다. |
 | `az containerapp` 명령이 없거나 일부 subcommand가 보이지 않음 | `containerapp` extension이 아직 없거나 오래됨 | Cloud Shell에서 `az extension add --name containerapp --upgrade --only-show-errors`를 실행한 뒤 `az containerapp show --help`로 다시 확인합니다. |
 | `az login --identity --client-id` step이 실패함 | runner managed identity 연결이 끊겼거나 `AZURE_CLIENT_ID`가 현재 Job 환경과 맞지 않음 | GitHub Actions의 **Sign in with the runner managed identity** step 로그를 확인하고, Module 04의 Event Job 정의에서 user-assigned identity와 `AZURE_CLIENT_ID` env 값을 다시 검토합니다. client secret을 추가하지 말고 managed identity 경로만 복구하세요. |
+| `The environment '.../managedEnvironments/...' does not exist. Specify a valid environment` | ACA Environment가 실제로 존재해도 runner UAMI에 ACR 범위 `AcrPull`만 있고 RG 범위 `Container Apps Contributor`가 없으면 Environment를 읽거나 샘플 앱을 만들 수 없어 not-found 형태로 보일 수 있음 | 1단계의 `ENV_STATE`와 `CONTAINER_APPS_ROLE`을 다시 확인합니다. 역할이 `MISSING`이면 안내된 `az role assignment create`를 실행하고 1~5분 기다린 뒤 workflow를 다시 실행합니다. Environment나 Event Job을 다시 만들 필요는 없습니다. |
 | `AuthorizationFailed`가 발생함 | `Container Apps Contributor` role assignment 직후라 RBAC propagation이 아직 끝나지 않음 | 1~5분 정도 기다린 뒤 같은 workflow를 다시 실행합니다. role을 더 넓히지 말고 기존 resource-group scope assignment가 전파될 시간을 먼저 줍니다. |
 | `ERROR: AZURE_CLIENT_ID is required.` 같은 missing Job environment variables 오류가 남 | Event Job에 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_CONTAINERAPPS_ENVIRONMENT`, `AZURE_SAMPLE_APP`가 빠졌음 | GitHub secret을 새로 만들지 말고 Module 04의 Job 환경 변수 정의를 다시 확인합니다. 필요한 경우 Event Job을 같은 값으로 다시 생성한 뒤 workflow를 재실행합니다. |
 | GitHub run은 배포를 끝냈지만 첫 HTTP 확인이 실패하거나 `HTTP verification failed after`로 끝남 | sample app revision은 만들어졌지만 temporary HTTP cold start로 첫 HTTPS 응답이 늦음 | 20~60초 정도 기다린 뒤 브라우저에서 URL을 새로고침하고, Cloud Shell `curl --fail --silent --show-error "https://$FQDN"`를 다시 실행합니다. FQDN이 정상이라면 코드 수정 없이 회복될 수 있습니다. |
