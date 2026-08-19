@@ -105,5 +105,10 @@ if grep -E 'GitHub App|GITHUB_APP_|KEDA GitHub App credential|private key' \
 fi
 
 ! grep -F -- '네 개 matrix Job이 성공한 화면' "$DOC" >/dev/null || { echo "FAIL: module 05 still describes screenshot as four-job success" >&2; exit 1; }
+grep -Fx 'Module 06은 선택이며, 90분 핵심 경로가 필요하면 [Module 07 정리 문서](07-security-limitations-cleanup.md)로 바로 이동해도 됩니다.' "$DOC" >/dev/null ||
+  fail "module 05 missing Module 07 cleanup shortcut link"
+if grep -F '현재 정리 문서' "$DOC" >/dev/null; then
+  fail "module 05 still contains obsolete cleanup shortcut wording"
+fi
 
 printf 'PASS: parallel scale validation doc\n'

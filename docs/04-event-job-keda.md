@@ -62,6 +62,11 @@ ENV_ID=$(az containerapp env show \
   --output tsv)
 ACR_SERVER=$(az acr show --name "$ACR" --query loginServer --output tsv)
 ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
+SUBSCRIPTION_ID=$(az account show --query id --output tsv)
+RG_ID=$(az group show \
+  --name "$RG" \
+  --query id \
+  --output tsv)
 UAMI_RID=$(az identity show \
   --resource-group "$RG" \
   --name "$UAMI" \
@@ -72,8 +77,13 @@ UAMI_PID=$(az identity show \
   --name "$UAMI" \
   --query principalId \
   --output tsv)
+UAMI_CLIENT_ID=$(az identity show \
+  --resource-group "$RG" \
+  --name "$UAMI" \
+  --query clientId \
+  --output tsv)
 
-export SUFFIX LOC RG LOG ENV ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID ACR_SERVER ACR_ID UAMI_RID UAMI_PID
+export SUFFIX LOC RG LOG ENV ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
 printf 'JOB=%s ENV=%s ACR_SERVER=%s\n' "$JOB" "$ENV" "$ACR_SERVER"
 ```
 
@@ -160,7 +170,7 @@ Do not instruct participants to recreate the whole resource group for a Job conf
 
 👁️ **설명**
 
-이 워크숍은 queued workflow가 생겼을 때만 runner를 띄우는 Event Job을 사용합니다. runner container 이름은 문서, 검증, 로그 해석을 통일하기 위해 반드시 `github-actions-runner`로 고정합니다.
+이 워크숍은 queued workflow가 생겼을 때만 runner를 띄우는 Event Job을 사용합니다. runner container 이름은 문서, 검증, 로그 해석을 통일하기 위해 반드시 `github-actions-runner`로 고정합니다. 아래 `AZURE_*` 값은 Azure 리소스를 식별하는 환경 변수이며 credential이 아닙니다. 실제 인증은 workflow가 실행 중 managed-identity endpoint에서 short-lived Azure token을 받아 처리합니다.
 
 🟢 **실행**
 
@@ -217,6 +227,11 @@ JOB_CREATE_ARGS=(
   # workflow process를 시작하기 전에 exported GITHUB_PAT를 제거합니다.
   --env-vars
   "GITHUB_PAT=secretref:personal-access-token"
+  "AZURE_CLIENT_ID=$UAMI_CLIENT_ID"
+  "AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID"
+  "AZURE_RESOURCE_GROUP=$RG"
+  "AZURE_CONTAINERAPPS_ENVIRONMENT=$ENV"
+  "AZURE_SAMPLE_APP=hello-aca-$SUFFIX"
   "GH_URL=https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
   "RUNNER_LABELS=aca-runner"
   "RUNNER_NAME_PREFIX=aca"
