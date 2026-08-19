@@ -98,8 +98,10 @@ fi
 
 grep -Fx '[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing Module 06 navigation link"
-grep -Fx 'Module 06은 선택이며, 90분 핵심 경로가 필요하면 [현재 정리 문서](06-security-limitations-cleanup.md)로 바로 이동해도 됩니다.' "$MODULE05_DOC" >/dev/null ||
-  fail "Module 05 missing optional Module 06 note"
+grep -Fx 'Module 06은 선택이며, 90분 핵심 경로가 필요하면 [Module 07 정리 문서](07-security-limitations-cleanup.md)로 바로 이동해도 됩니다.' "$MODULE05_DOC" >/dev/null ||
+  fail "Module 05 missing Module 07 cleanup note"
+grep -Fx '[← 이전: 병렬 실행과 스케일 검증](05-parallel-scale-validation.md) | [다음: 보안·제약·정리 →](07-security-limitations-cleanup.md)' "$DOC" >/dev/null ||
+  fail "Module 06 missing Module 07 navigation link"
 
 for text in \
   'name: ACA Runner Azure Sample Deploy' \

@@ -1,6 +1,6 @@
 # Azure Container Apps GitHub Actions Runner 워크숍
 
-> Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해 **약 90분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 참가자는 runner image 빌드, Event Job 배포, 병렬 workflow 검증, Log Analytics 확인, 리소스 정리까지 한 흐름으로 완료합니다.
+> Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해 **약 90분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 선택 Module 06을 포함하면 약 105분이 걸리며, 참가자는 runner image 빌드, Event Job 배포, 병렬 workflow 검증, 선택 배포 확장, Log Analytics 확인, 리소스 정리까지 한 흐름으로 완료합니다.
 
 ---
 
@@ -25,7 +25,7 @@ git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git 
 cd ~/aca-github-runner-workshop
 ```
 
-4. [Module 01: GitHub 사전 준비](docs/01-prerequisites-github.md)를 엽니다. 위 Quick Start에서 clone했으므로 Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다. 그 외 Module 01 단계와 이후 Module 06까지는 순서대로 진행합니다.
+4. [Module 01: GitHub 사전 준비](docs/01-prerequisites-github.md)를 엽니다. 위 Quick Start에서 clone했으므로 Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다. 그 외 Module 01 단계와 Module 02~05는 순서대로 진행하고, Module 06은 선택, Module 07은 필수 cleanup입니다.
 
 상세 변수 설정, 예상 출력, 오류 해결 명령은 각 모듈에서 안내합니다.
 
@@ -50,6 +50,9 @@ flowchart LR
   repo -->|queued jobs| keda[KEDA github-runner scaler]
   keda -->|0..5 executions| job[ACA Event Job]
   job -->|ephemeral runner| repo
+  job -->|Managed Identity login| arm[Azure Resource Manager]
+  arm -->|Container Apps Contributor| sample[Sample Container App]
+  sample -->|HTTPS result| user
   acr[(Azure Container Registry)] --> job
   uami[User-Assigned Managed Identity] -->|AcrPull| acr
   job -. logs .-> law[(Log Analytics)]
@@ -77,7 +80,8 @@ flowchart LR
 4. KEDA `github-runner` scaler를 repository 범위로 구성할 수 있다.
 5. 네 개의 병렬 workflow Job으로 scale-out 동작을 검증할 수 있다.
 6. Log Analytics와 CLI로 로그를 확인하고 트러블슈팅할 수 있다.
-7. 실습 리소스를 정리하고 보안·제약 사항을 점검할 수 있다.
+7. 선택 Module 06에서 Managed Identity 로그인으로 샘플 Container App을 배포하고 HTTPS 결과를 검증할 수 있다.
+8. 실습 리소스를 정리하고 보안·제약 사항을 점검할 수 있다.
 
 ---
 
@@ -105,7 +109,7 @@ flowchart LR
 
 ## 모듈 목차
 
-순서대로 진행하세요. 각 모듈의 산출물이 다음 모듈의 입력이 됩니다.
+코어 경로는 Module 01 → 05 → 07 순서로 진행하고, Module 06은 Module 05 뒤에 선택적으로 추가합니다.
 
 | # | 모듈 | 한 줄 설명 | 시간 |
 |---|------|------------|---:|
@@ -115,8 +119,10 @@ flowchart LR
 | 03 | [Runner image 빌드](docs/03-runner-image.md) | ACR에 빌드된 runner image | 10분 |
 | 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |
 | 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |
-| 06 | [보안·제약·정리](docs/06-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |
-|  | **합계** |  | **90분** |
+| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 샘플 Container App과 HTTPS 검증 | 선택 15분 |
+| 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |
+|  | **코어 합계** |  | **90분** |
+|  | **선택 Module 06 포함** |  | **105분** |
 
 ---
 
@@ -124,7 +130,7 @@ flowchart LR
 
 Cloud Shell의 shell 변수는 새 세션에 유지되지 않습니다. 기존 리소스로 계속 진행하려면 원래 `SUFFIX`와 실제 `ACR` 이름을 보관해야 합니다.
 
-Modules 03~06에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 있습니다. 복구가 필요할 때만 접힌 상세 내용을 펼쳐 명령을 실행하세요. 기존 실습을 이어갈 때는 새 suffix를 만들지 마세요. 새 이름은 이미 만든 리소스와 연결되지 않습니다.
+Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 있습니다. 복구가 필요할 때만 접힌 상세 내용을 펼쳐 명령을 실행하세요. 기존 실습을 이어갈 때는 새 suffix를 만들지 마세요. 새 이름은 이미 만든 리소스와 연결되지 않습니다.
 
 ---
 
@@ -135,6 +141,8 @@ Modules 03~06에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 - [ ] matrix 4개 Job이 모두 성공합니다.
 - [ ] active execution이 `0 → N → 0`으로 돌아옵니다.
 - [ ] runner lifecycle marker가 CLI 또는 Log Analytics에 나타납니다.
+- [ ] (선택 Module 06) self-hosted runner가 Managed Identity로 Azure Container App을 배포합니다.
+- [ ] (선택 Module 06) sample Container App의 HTTPS endpoint를 GitHub Actions, Cloud Shell, 브라우저, Azure Portal에서 교차 확인합니다.
 - [ ] GitHub에 permanent online ephemeral runner가 남지 않습니다.
 - [ ] Azure cleanup 후 조회 결과가 `ResourceGroupNotFound`에 도달합니다.
 - [ ] 안내에 따라 lab Fine-grained PAT와 GitHub lab artifact를 정리합니다.
@@ -149,8 +157,10 @@ Modules 03~06에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 | 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 30분 |
 | 2부 | runner image 빌드 + Event Job/KEDA 구성 | 25분 |
 | 3부 | 병렬 workflow 검증 + 로그 확인 | 20분 |
+| 선택 | Azure 샘플 배포 + HTTPS 확인 | 15분 |
 | 마무리 | 보안·제약 정리 + 리소스 삭제 | 10분 |
 | 합계 | 코어 워크숍 | 90분 |
+| 합계 | 선택 Module 06 포함 | 105분 |
 
 > 리소스 그룹 삭제 요청은 90분 일정에 포함되지만, ACA managed environment의
 > 비동기 삭제 완료는 워크숍 종료 후까지 이어질 수 있습니다.
@@ -158,13 +168,14 @@ Modules 03~06에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 > ✅ **검증된 범위와 남은 전제** — 체크인된 자동 검증은 README/문서 계약과 스크립트 인터페이스를 확인합니다.
 > 라이브 Azure/GitHub 실행에서 `koreacentral`, runner `2.336.0`, matrix 4개 Job,
 > 이미지 pull, KEDA `0 → 4 → 0` 확장, ephemeral runner 종료, Log Analytics 수집,
-> 리소스 그룹 삭제를 확인했습니다. Fine-grained PAT의 organization 승인과 최소 권한 동작은 참가자의 GitHub enterprise/organization 정책에 따라 달라집니다.
+> 리소스 그룹 삭제를 확인했고, 선택 Module 06에서는 managed identity 로그인, 샘플
+> Container App 배포, HTTPS 결과 확인을 검증했습니다. Fine-grained PAT의 organization 승인과 최소 권한 동작은 참가자의 GitHub enterprise/organization 정책에 따라 달라집니다.
 
 ---
 
 ## 비용 개요
 
-> 실습이 끝나면 반드시 [docs/06-security-limitations-cleanup.md](docs/06-security-limitations-cleanup.md) 모듈의 정리 절차를 수행하세요. 정확한 통화 금액은 구독, 리전, 실행 시간, 로그 수집량에 따라 달라지므로 이 문서에서는 고정 비용을 약속하지 않습니다.
+> 실습이 끝나면 반드시 [docs/07-security-limitations-cleanup.md](docs/07-security-limitations-cleanup.md) 모듈의 정리 절차를 수행하세요. 정확한 통화 금액은 구독, 리전, 실행 시간, 로그 수집량에 따라 달라지므로 이 문서에서는 고정 비용을 약속하지 않습니다.
 
 | 리소스 | 과금 기준 | 실습 관점 메모 |
 |--------|-----------|----------------|
@@ -200,10 +211,11 @@ Modules 03~06에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 | Event Job secret 또는 PAT 오류 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
 | Job execution이 생성되지 않음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
 | execution timeout 발생 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |
+| `AuthorizationFailed` 또는 `HTTP verification failed after`가 배포 workflow에서 발생함 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |
 | CLI 또는 Log Analytics에서 runner 로그를 찾을 수 없음 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |
-| workflow의 Docker 단계가 실패함 | [docs/06-security-limitations-cleanup.md#트러블슈팅](docs/06-security-limitations-cleanup.md#트러블슈팅) |
-| runner가 GitHub에 남아 있음 | [docs/06-security-limitations-cleanup.md#트러블슈팅](docs/06-security-limitations-cleanup.md#트러블슈팅) |
-| 리소스 삭제가 끝나지 않거나 실패함 | [docs/06-security-limitations-cleanup.md#트러블슈팅](docs/06-security-limitations-cleanup.md#트러블슈팅) |
+| workflow의 Docker 단계가 실패함 | [docs/07-security-limitations-cleanup.md#트러블슈팅](docs/07-security-limitations-cleanup.md#트러블슈팅) |
+| runner가 GitHub에 남아 있음 | [docs/07-security-limitations-cleanup.md#트러블슈팅](docs/07-security-limitations-cleanup.md#트러블슈팅) |
+| 리소스 삭제가 끝나지 않거나 실패함 | [docs/07-security-limitations-cleanup.md#트러블슈팅](docs/07-security-limitations-cleanup.md#트러블슈팅) |
 
 ---
 

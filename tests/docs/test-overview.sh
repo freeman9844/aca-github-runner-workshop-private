@@ -29,7 +29,8 @@ for module in \
   'docs/03-runner-image.md' \
   'docs/04-event-job-keda.md' \
   'docs/05-parallel-scale-validation.md' \
-  'docs/06-security-limitations-cleanup.md'; do
+  'docs/06-azure-sample-deployment.md' \
+  'docs/07-security-limitations-cleanup.md'; do
   grep -F "$module" "$README" >/dev/null || { echo "FAIL: missing link $module" >&2; exit 1; }
 done
 
@@ -39,12 +40,14 @@ for troubleshooting_doc in \
   "$ROOT/docs/03-runner-image.md" \
   "$ROOT/docs/04-event-job-keda.md" \
   "$ROOT/docs/05-parallel-scale-validation.md" \
-  "$ROOT/docs/06-security-limitations-cleanup.md"; do
+  "$ROOT/docs/06-azure-sample-deployment.md" \
+  "$ROOT/docs/07-security-limitations-cleanup.md"; do
   grep -Fx '## 트러블슈팅' "$troubleshooting_doc" >/dev/null ||
     { echo "FAIL: $(basename "$troubleshooting_doc") must expose #트러블슈팅" >&2; exit 1; }
 done
 
 grep -F '약 90분' "$README" >/dev/null
+grep -F '선택 Module 06을 포함하면 약 105분' "$README" >/dev/null
 grep -F 'Private repository' "$README" >/dev/null
 grep -F 'Docker-in-Docker' "$README" >/dev/null
 grep -F '0 → N → 0' "$README" >/dev/null
@@ -62,8 +65,8 @@ grep -F 'git clone https://github.com/freeman9844/aca-github-runner-workshop-pri
 grep -F 'cd ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다.' "$README" >/dev/null ||
   { echo 'FAIL: README Quick Start must skip the already-completed Module 01 clone step' >&2; exit 1; }
-grep -F '그 외 Module 01 단계와 이후 Module 06까지는 순서대로 진행합니다.' "$README" >/dev/null ||
-  { echo 'FAIL: README Quick Start must keep the remaining modules sequential' >&2; exit 1; }
+grep -F '그 외 Module 01 단계와 Module 02~05는 순서대로 진행하고, Module 06은 선택, Module 07은 필수 cleanup입니다.' "$README" >/dev/null ||
+  { echo 'FAIL: README Quick Start must describe the core path, optional Module 06, and required Module 07 cleanup' >&2; exit 1; }
 grep -F '| `aca-github-runner-workshop-private` | 워크숍 문서, runner source, samples, tests | 워크숍 운영자 | source clone, 문서 확인, runner image 빌드 |' "$README" >/dev/null
 grep -F '| `aca-runner-lab` | 참가자 소유 Private lab repository | 참가자(Module 01) | workflow queue, KEDA 감시, ephemeral runner 등록 |' "$README" >/dev/null
 grep -F 'Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.' "$README" >/dev/null
@@ -72,11 +75,13 @@ grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | �
 grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | ACR에 빌드된 runner image | 10분 |' "$README" >/dev/null
 grep -F '| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |' "$README" >/dev/null
 grep -F '| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |' "$README" >/dev/null
-grep -F '| 06 | [보안·제약·정리](docs/06-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |' "$README" >/dev/null
+grep -F '| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 샘플 Container App과 HTTPS 검증 | 선택 15분 |' "$README" >/dev/null
+grep -F '| 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |' "$README" >/dev/null
 grep -F '저장한 `SUFFIX`, 실제 `ACR` 이름, Azure resource ID' "$README" >/dev/null
 grep -F 'ACR에 빌드된 runner image' "$README" >/dev/null
 grep -F 'repository-scoped ACA Event Job과 KEDA rule' "$README" >/dev/null
 grep -F 'matrix 4개 Job과 `0 → N → 0` 증거' "$README" >/dev/null
+grep -F 'Managed Identity 기반 샘플 Container App과 HTTPS 검증' "$README" >/dev/null
 grep -F '보안 검토와 확인된 cleanup' "$README" >/dev/null
 grep -F 'Cloud Shell의 shell 변수는 새 세션에 유지되지 않습니다.' "$README" >/dev/null
 grep -F '원래 `SUFFIX`와 실제 `ACR` 이름' "$README" >/dev/null
@@ -89,6 +94,7 @@ for text in \
   'active execution이 `0 → N → 0`으로 돌아옵니다.' \
   'runner lifecycle marker가 CLI 또는 Log Analytics에 나타납니다.' \
   'permanent online ephemeral runner가 남지 않습니다.' \
+  'self-hosted runner가 Managed Identity로 Azure Container App을 배포합니다.' \
   '`ResourceGroupNotFound`' \
   'lab Fine-grained PAT와 GitHub lab artifact' \
   '검증된 범위와 남은 전제' \
@@ -97,9 +103,12 @@ for text in \
   grep -F -- "$text" "$README" >/dev/null ||
     { echo "FAIL: README missing completion or validation guidance: $text" >&2; exit 1; }
 done
-grep -F '|  | **합계** |  | **90분** |' "$README" >/dev/null
+grep -F '|  | **코어 합계** |  | **90분** |' "$README" >/dev/null
+grep -F '|  | **선택 Module 06 포함** |  | **105분** |' "$README" >/dev/null
 grep -F '| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 30분 |' "$README" >/dev/null
 grep -F '| 합계 | 코어 워크숍 | 90분 |' "$README" >/dev/null
+grep -F '| 선택 | Azure 샘플 배포 + HTTPS 확인 | 15분 |' "$README" >/dev/null
+grep -F '| 합계 | 선택 Module 06 포함 | 105분 |' "$README" >/dev/null
 grep -F '자동 검증' "$README" >/dev/null
 grep -F '라이브 Azure/GitHub 실행' "$README" >/dev/null
 grep -F '`koreacentral`' "$README" >/dev/null
@@ -118,6 +127,7 @@ for text in \
   '| ACR 이름이 이미 사용 중임 | [docs/02-azure-foundation.md#트러블슈팅](docs/02-azure-foundation.md#트러블슈팅) |' \
   '| 동일 repository와 label을 감시하는 Event Job이 이미 있음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |' \
   '| Event Job secret 또는 PAT 오류 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |' \
+  '| `AuthorizationFailed` 또는 `HTTP verification failed after`가 배포 workflow에서 발생함 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |' \
   '| CLI 또는 Log Analytics에서 runner 로그를 찾을 수 없음 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |'; do
   grep -F -- "$text" "$README" >/dev/null ||
     { echo "FAIL: README missing troubleshooting route: $text" >&2; exit 1; }
@@ -134,7 +144,7 @@ for obsolete in \
   fi
 done
 
-if grep -E '약 105분|GitHub App 생성 권한|라이브 Azure/GitHub App 리허설' \
+if grep -E 'GitHub App 생성 권한|라이브 Azure/GitHub App 리허설' \
   "$README" >/dev/null; then
   echo 'FAIL: README still advertises the GitHub App workshop' >&2
   exit 1

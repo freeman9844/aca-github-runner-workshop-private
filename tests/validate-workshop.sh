@@ -21,8 +21,10 @@ core_workshop_paths=(
   docs/03-runner-image.md
   docs/04-event-job-keda.md
   docs/05-parallel-scale-validation.md
-  docs/06-security-limitations-cleanup.md
+  docs/06-azure-sample-deployment.md
+  docs/07-security-limitations-cleanup.md
   runner
+  samples/azure-sample-deploy-workflow.yml
   samples
 )
 
@@ -37,7 +39,8 @@ required_files=(
   docs/03-runner-image.md
   docs/04-event-job-keda.md
   docs/05-parallel-scale-validation.md
-  docs/06-security-limitations-cleanup.md
+  docs/06-azure-sample-deployment.md
+  docs/07-security-limitations-cleanup.md
 )
 
 for file in "${required_files[@]}"; do
@@ -88,8 +91,10 @@ navigation_checks=(
   'docs/04-event-job-keda.md:docs/03-runner-image.md'
   'docs/04-event-job-keda.md:docs/05-parallel-scale-validation.md'
   'docs/05-parallel-scale-validation.md:docs/04-event-job-keda.md'
-  'docs/05-parallel-scale-validation.md:docs/06-security-limitations-cleanup.md'
-  'docs/06-security-limitations-cleanup.md:docs/05-parallel-scale-validation.md'
+  'docs/05-parallel-scale-validation.md:docs/06-azure-sample-deployment.md'
+  'docs/06-azure-sample-deployment.md:docs/05-parallel-scale-validation.md'
+  'docs/06-azure-sample-deployment.md:docs/07-security-limitations-cleanup.md'
+  'docs/07-security-limitations-cleanup.md:docs/06-azure-sample-deployment.md'
 )
 
 for check in "${navigation_checks[@]}"; do
