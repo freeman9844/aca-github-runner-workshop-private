@@ -132,6 +132,10 @@ for text in \
   'read -rp "Saved SUFFIX: " SUFFIX' \
   'read -rp "Saved ACR name: " ACR' \
   'SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0' \
+  'Azure CLI' \
+  'az extension add --name containerapp --upgrade --only-show-errors' \
+  'az version' \
+  'az containerapp --help' \
   'ca-certificates`, `curl`, `jq`' \
   'Fine-grained PAT' \
   'GITHUB_PAT' \

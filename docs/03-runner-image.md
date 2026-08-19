@@ -94,7 +94,11 @@ SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 이 모듈의 빌드 입력은 `runner/Dockerfile`과 `runner/entrypoint.sh` 두 파일입니다.
 
 - `runner/Dockerfile`은 `ghcr.io/actions/actions-runner:2.336.0`를 기반으로 시작합니다.
-- 필수 유틸리티 `ca-certificates`, `curl`, `jq`만 추가 설치하고 마지막에 `USER runner`로 내려가 non-root로 실행합니다.
+- GitHub API와 HTTP 확인에 필요한 `ca-certificates`, `curl`, `jq`를 추가 설치합니다.
+- Managed Identity 로그인과 Azure 배포에 필요한 Azure CLI를 추가 설치합니다.
+- `az containerapp` 명령을 위한 최신 Container Apps extension을 `az extension add --name containerapp --upgrade --only-show-errors`로 설치합니다.
+- Docker build는 확장 설치 뒤 이미지 안에서 `az version`과 `az containerapp --help`를 실행해 Azure CLI와 extension이 실제로 동작하는지 확인합니다.
+- 마지막에 `USER runner`로 내려가 non-root로 실행합니다.
 - `runner/entrypoint.sh`는 Fine-grained PAT를 non-exported wrapper-shell variable로 복사한 뒤 exported `GITHUB_PAT`를 unset합니다.
 - wrapper는 PAT로 registration token과 cleanup 시 remove token을 요청하지만, workflow process cannot inherit the PAT.
 - `./config.sh --ephemeral --disableupdate --no-default-labels`를 사용하므로 Job 1회당 1회성 runner가 뜨고, `aca-runner` custom label만 광고하며, 컨테이너 안에서 자체 업데이트를 시도하지 않습니다.

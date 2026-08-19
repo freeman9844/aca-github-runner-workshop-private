@@ -11,8 +11,19 @@ CI_WORKFLOW="$ROOT/.github/workflows/validate-workshop.yml"
 [[ -f "$CI_WORKFLOW" ]] || { echo "FAIL: validation workflow missing" >&2; exit 1; }
 
 grep -F 'FROM ghcr.io/actions/actions-runner:2.336.0' "$DOCKERFILE" >/dev/null
-grep -F 'apt-get install -y --no-install-recommends ca-certificates curl jq' \
-  "$DOCKERFILE" >/dev/null
+for package in ca-certificates curl jq; do
+  grep -F -- "$package" "$DOCKERFILE" >/dev/null ||
+    { echo "FAIL: runner image missing package $package" >&2; exit 1; }
+done
+
+for text in \
+  'packages.microsoft.com/keys/microsoft.asc' \
+  'packages.microsoft.com/repos/azure-cli/' \
+  'apt-get install -y --no-install-recommends azure-cli' \
+  'az extension add --name containerapp --upgrade --only-show-errors'; do
+  grep -F -- "$text" "$DOCKERFILE" >/dev/null ||
+    { echo "FAIL: runner image missing Azure deployment tool: $text" >&2; exit 1; }
+done
 grep -F 'USER runner' "$DOCKERFILE" >/dev/null
 grep -F 'ENTRYPOINT ["/home/runner/entrypoint.sh"]' "$DOCKERFILE" >/dev/null
 
