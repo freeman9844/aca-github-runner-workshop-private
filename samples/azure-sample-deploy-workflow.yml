@@ -43,11 +43,38 @@ jobs:
             --name "$AZURE_SAMPLE_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --output none 2>/dev/null; then
+            printf 'Existing Container App found; deleting %s.\n' "$AZURE_SAMPLE_APP"
             az containerapp delete \
               --name "$AZURE_SAMPLE_APP" \
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --yes \
               --output none
+
+            for delete_attempt in $(seq 1 24); do
+              if ! az containerapp show \
+                --name "$AZURE_SAMPLE_APP" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --output none 2>/dev/null; then
+                printf 'Confirmed existing Container App deletion after %s checks.\n' \
+                  "$delete_attempt"
+                break
+              fi
+
+              printf 'Waiting for Container App deletion (attempt %s/24).\n' \
+                "$delete_attempt" >&2
+              sleep 5
+            done
+
+            if az containerapp show \
+              --name "$AZURE_SAMPLE_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --output none 2>/dev/null; then
+              printf 'ERROR: Timed out waiting for Container App deletion after 24 checks.\n' \
+                >&2
+              exit 1
+            fi
+          else
+            printf 'No existing Container App named %s found.\n' "$AZURE_SAMPLE_APP"
           fi
 
           FQDN="$(az containerapp create \
