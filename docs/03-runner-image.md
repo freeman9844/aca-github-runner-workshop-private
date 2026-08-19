@@ -62,6 +62,11 @@ ENV_ID=$(az containerapp env show \
   --output tsv)
 ACR_SERVER=$(az acr show --name "$ACR" --query loginServer --output tsv)
 ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
+SUBSCRIPTION_ID=$(az account show --query id --output tsv)
+RG_ID=$(az group show \
+  --name "$RG" \
+  --query id \
+  --output tsv)
 UAMI_RID=$(az identity show \
   --resource-group "$RG" \
   --name "$UAMI" \
@@ -72,8 +77,13 @@ UAMI_PID=$(az identity show \
   --name "$UAMI" \
   --query principalId \
   --output tsv)
+UAMI_CLIENT_ID=$(az identity show \
+  --resource-group "$RG" \
+  --name "$UAMI" \
+  --query clientId \
+  --output tsv)
 
-export SUFFIX LOC RG LOG ENV ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID ACR_SERVER ACR_ID UAMI_RID UAMI_PID
+export SUFFIX LOC RG LOG ENV ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
 printf 'SUFFIX=%s ACR=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$IMAGE"
 ```
 

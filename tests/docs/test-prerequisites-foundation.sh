@@ -172,11 +172,18 @@ for text in \
   '--admin-enabled false' \
   'az acr config authentication-as-arm update' \
   'az identity create' \
+  'SUBSCRIPTION_ID=$(az account show' \
+  'RG_ID=$(az group show' \
+  'UAMI_CLIENT_ID=$(az identity show' \
+  '--query clientId' \
   'Contributor만으로는 Azure RBAC 역할을 할당할 수 없습니다.' \
   'Microsoft.Authorization/roleAssignments/write' \
   'Role Based Access Control Administrator' \
   '--role AcrPull' \
+  '--role "Container Apps Contributor"' \
+  '--scope "$RG_ID"' \
   '--assignee-principal-type ServicePrincipal' \
+  'Container Apps Contributor는 Container App을 관리하지만 Container Apps Job 권한은 포함하지 않습니다.' \
   'ACR="acracarunner$(openssl rand -hex 4)"' \
   '이 시점부터 `ACR`은 더 이상 `SUFFIX`에서 유도되지 않습니다.' \
   '이전에 적어 둔 `ACR` 값은 이 새 값으로 교체하세요.' \
@@ -206,7 +213,9 @@ for text in \
   'adminUserEnabled:adminUserEnabled' \
   'az acr config authentication-as-arm show \' \
   'az role assignment list \' \
-  'roleDefinitionName'; do
+  'roleDefinitionName' \
+  'AcrPull' \
+  'Container Apps Contributor'; do
   grep -F -- "$text" "$FOUNDATION" >/dev/null ||
     fail "module 02 lost safety check: $text"
 done

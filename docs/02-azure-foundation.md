@@ -1,6 +1,6 @@
 # 02. Azure 기반 리소스 준비
 
-> Azure Cloud Shell Bash에서 리소스 그룹, Log Analytics workspace, Azure Container Apps environment, Azure Monitor diagnostic settings, Azure Container Registry, User-Assigned Managed Identity를 만들고 `AcrPull` RBAC를 연결합니다.
+> Azure Cloud Shell Bash에서 리소스 그룹, Log Analytics workspace, Azure Container Apps environment, Azure Monitor diagnostic settings, Azure Container Registry, User-Assigned Managed Identity를 만들고 least-privilege RBAC를 연결합니다.
 
 ## 목표
 
@@ -9,8 +9,8 @@
 - `koreacentral`에 실습용 리소스 그룹과 공통 이름 변수를 만든다.
 - Log Analytics와 ACA environment를 Azure Monitor 로그 대상으로 연결한다.
 - ACR을 관리자 계정 없이 만들고 ARM authentication을 활성화한다.
-- UAMI를 만들고 ACR 범위에 `AcrPull` 역할을 부여한다.
-- 다음 모듈에서 사용할 `LOG_ID`, `LOG_RID`, `ENV_ID`, `ACR_SERVER`, `ACR_ID`, `UAMI_RID`, `UAMI_PID`를 확보한다.
+- UAMI를 만들고 ACR 범위에 `AcrPull`, Resource Group 범위에 `Container Apps Contributor` 역할을 부여한다.
+- 다음 모듈에서 사용할 `SUBSCRIPTION_ID`, `RG_ID`, `LOG_ID`, `LOG_RID`, `ENV_ID`, `ACR_SERVER`, `ACR_ID`, `UAMI_RID`, `UAMI_PID`, `UAMI_CLIENT_ID`를 확보한다.
 - 다음 모듈 재접속에 대비해 `SUFFIX`와 실제 `ACR` 이름을 각각 별도 값으로 저장해 둔다.
 
 ## 태그 범례
@@ -64,6 +64,12 @@ Log Analytics는 runner 등록/실행/정리 로그를 한곳에서 확인하는
 ```bash
 az group create --name "$RG" --location "$LOC" --output none
 
+SUBSCRIPTION_ID=$(az account show --query id --output tsv)
+RG_ID=$(az group show \
+  --name "$RG" \
+  --query id \
+  --output tsv)
+
 az monitor log-analytics workspace create \
   --resource-group "$RG" \
   --workspace-name "$LOG" \
@@ -91,7 +97,7 @@ LOG_RID=$(az monitor log-analytics workspace show \
 
 👁️ **설명**
 
-이 워크숍은 Log Analytics Shared Key를 쓰지 않고, ACA environment 자체를 Azure Monitor에 연결한 뒤 resource-based diagnostic setting으로 로그를 보냅니다.
+이 워크숍은 Log Analytics Shared Key를 쓰지 않고, ACA environment 자체를 Azure Monitor에 연결한 뒤 resource-based diagnostic setting으로 로그를 보냅니다. 앞 단계에서 구한 `SUBSCRIPTION_ID`와 `RG_ID`는 다음 모듈과 workflow가 사용할 Azure deployment context의 기준점입니다.
 
 🟢 **실행**
 
@@ -172,7 +178,7 @@ az acr config authentication-as-arm show \
 
 👁️ **설명**
 
-Azure Container Apps Job은 이 UAMI를 통해 ACR 이미지를 pull합니다. `UAMI_RID`는 Job identity 연결에, `UAMI_PID`는 RBAC 할당과 조회에 사용합니다.
+Azure Container Apps Job은 이 UAMI를 통해 ACR 이미지를 pull하고, 이후 workflow는 같은 identity의 client ID로 Azure 로그인 대상을 식별합니다. `UAMI_RID`는 Job identity 연결에, `UAMI_PID`는 RBAC 할당과 조회에, `UAMI_CLIENT_ID`는 workflow에 전달할 Azure 로그인 식별자에 사용합니다.
 
 🟢 **실행**
 
@@ -192,6 +198,11 @@ UAMI_PID=$(az identity show \
   --name "$UAMI" \
   --query principalId \
   --output tsv)
+UAMI_CLIENT_ID=$(az identity show \
+  --resource-group "$RG" \
+  --name "$UAMI" \
+  --query clientId \
+  --output tsv)
 ```
 
 ⚠️ **주의**
@@ -206,18 +217,29 @@ az role assignment create \
   --scope "$ACR_ID" \
   --output none
 
+az role assignment create \
+  --assignee-object-id "$UAMI_PID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Container Apps Contributor" \
+  --scope "$RG_ID" \
+  --output none
+
 az role assignment list \
   --assignee "$UAMI_PID" \
-  --scope "$ACR_ID" \
-  --query "[].{role:roleDefinitionName,principalType:principalType,scope:scope}" \
+  --query "[?scope=='$ACR_ID' || scope=='$RG_ID'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \
   --output table
 ```
+
+Container Apps Contributor는 Container App을 관리하지만 Container Apps Job 권한은 포함하지 않습니다.
+
+`Container Apps Contributor`는 Container App을 관리하지만 Container Apps Job 권한은 포함하지 않습니다. 따라서 workflow는 샘플 Container App을 만들고 갱신할 수 있지만 runner Job이나 그 PAT secret을 변경할 수 없습니다.
 
 📋 **예상 출력**
 
 - `UAMI_RID`는 `/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/...` 형식입니다.
 - `UAMI_PID`는 GUID 형식입니다.
-- `AcrPull`과 `ServicePrincipal`이 보이는 표가 출력됩니다.
+- `UAMI_CLIENT_ID`는 GUID 형식이며 다음 모듈의 `AZURE_CLIENT_ID` 값으로 사용됩니다.
+- `AcrPull`, `Container Apps Contributor`, `ServicePrincipal`이 보이는 표가 출력됩니다.
 
 ⚠️ **주의**
 

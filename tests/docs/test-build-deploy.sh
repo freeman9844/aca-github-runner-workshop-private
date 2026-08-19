@@ -83,6 +83,17 @@ assert_collapsed_recovery() {
 assert_collapsed_recovery "$IMAGE_DOC" "module 03"
 assert_collapsed_recovery "$JOB_DOC" "module 04"
 
+for doc in "$IMAGE_DOC" "$JOB_DOC"; do
+  for text in \
+    'SUBSCRIPTION_ID=$(az account show' \
+    'RG_ID=$(az group show' \
+    'UAMI_CLIENT_ID=$(az identity show' \
+    '--query clientId'; do
+    grep -F -- "$text" "$doc" >/dev/null ||
+      fail "$(basename "$doc") missing recovery value: $text"
+  done
+done
+
 for old_heading in \
   '## 1. 저장해 둔 `SUFFIX`와 `ACR`로 Azure 변수 복구' \
   '## 2. Fine-grained PAT 입력값 다시 로드' \
@@ -190,6 +201,11 @@ for text in \
   'personalAccessToken=personal-access-token' \
   'personal-access-token=$GITHUB_PAT' \
   'GITHUB_PAT=secretref:personal-access-token' \
+  '"AZURE_CLIENT_ID=$UAMI_CLIENT_ID"' \
+  '"AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID"' \
+  '"AZURE_RESOURCE_GROUP=$RG"' \
+  '"AZURE_CONTAINERAPPS_ENVIRONMENT=$ENV"' \
+  '"AZURE_SAMPLE_APP=hello-aca-$SUFFIX"' \
   'unset JOB_CREATE_ARGS GITHUB_PAT' \
   'Actions: Read-only' \
   'Administration: Read and write' \
