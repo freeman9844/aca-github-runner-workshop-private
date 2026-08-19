@@ -78,6 +78,10 @@ for text in \
   'ERROR: Container Apps Job execution이 없습니다.' \
   '--container github-actions-runner' \
   'ContainerAppConsoleLogs' \
+  'TimeGenerated > ago(2h)' \
+  'summarize Count=count(), LastSeen=max(TimeGenerated)' \
+  'job-ghrunner-145945-xh6w5-phfkj  2058' \
+  'PrimaryResult' \
   'ContainerGroupName startswith' \
   '5~10분' \
   'job-ghrunner-$SUFFIX-' \

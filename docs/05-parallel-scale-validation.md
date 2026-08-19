@@ -302,7 +302,42 @@ fi
 
 👁️ **설명**
 
-CLI 로그가 한 execution을 빠르게 보는 용도라면, Log Analytics는 시간순으로 누적 로그를 검토하는 데 적합합니다. 이 워크숍은 legacy 테이블이 아니라 resource-specific `ContainerAppConsoleLogs`를 사용합니다.
+CLI 로그가 한 execution을 빠르게 보는 용도라면, Log Analytics는 시간순으로
+누적 로그를 검토하는 데 적합합니다. 이 워크숍은 legacy 테이블이 아니라
+resource-specific `ContainerAppConsoleLogs`를 사용합니다.
+
+Log Analytics ingestion은 즉시 완료되지 않을 수 있습니다. execution 직후
+상세 query가 비어 있으면 먼저 최근 2시간의 로그 유입 여부와 실제
+`ContainerGroupName`을 집계합니다.
+
+🟢 **실행**
+
+```bash
+az monitor log-analytics query \
+  --workspace "$LOG_ID" \
+  --analytics-query "
+    ContainerAppConsoleLogs
+    | where TimeGenerated > ago(2h)
+    | summarize Count=count(), LastSeen=max(TimeGenerated)
+        by ContainerGroupName
+    | order by LastSeen desc
+  " \
+  --output table
+```
+
+📋 **예상 출력**
+
+```text
+ContainerGroupName               Count    LastSeen                      TableName
+-------------------------------  -------  ----------------------------  -------------
+job-ghrunner-145945-xh6w5-phfkj  2058     2026-08-19T05:12:18.2470166Z  PrimaryResult
+job-ghrunner-145945-bbqc9-m97mq  1867     2026-08-19T05:12:17.8271544Z  PrimaryResult
+```
+
+- replica suffix, `Count`, `LastSeen`은 실행과 수집 시점마다 달라집니다.
+- 결과가 비어 있으면 **5~10분** 기다린 뒤 같은 집계 query를 다시 실행합니다.
+- `$EXECUTION` 뒤에 replica suffix가 추가된 실제 `ContainerGroupName`을 확인한
+  다음 상세 로그를 조회합니다.
 
 🟢 **실행**
 
@@ -323,9 +358,8 @@ az monitor log-analytics query \
 
 - `ContainerAppConsoleLogs` 표에서 `ContainerGroupName`이 `$EXECUTION`으로 시작하는 행들이 시간순으로 출력됩니다.
 - CLI 로그와 같은 execution의 메시지를 Azure Monitor 쪽에서도 재확인할 수 있습니다.
-- Log Analytics ingestion은 즉시 완료되지 않을 수 있습니다. 결과가 비어 있으면
-  같은 query를 반복하되 전체 lifecycle marker 수집에 **5~10분** 정도 걸릴 수
-  있음을 감안합니다.
+- 집계 query에는 결과가 있지만 상세 query가 비어 있으면 `$EXECUTION`이 가장
+  최근 execution인지 다시 확인합니다.
 
 ## 8. runner lifecycle marker를 명시적으로 검증
 
