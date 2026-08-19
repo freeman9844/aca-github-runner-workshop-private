@@ -17,3 +17,13 @@ jobs:
       - name: Validate workshop
         shell: bash
         run: bash tests/validate-workshop.sh
+
+      - name: Validate workflow YAML syntax
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet PyYAML==6.0.2
+          python3 tests/test-workflow-yaml.py
+
+      - name: Build runner image
+        shell: bash
+        run: docker build --tag workshop-runner-validation ./runner

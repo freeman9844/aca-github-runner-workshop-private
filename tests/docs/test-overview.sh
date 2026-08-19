@@ -51,15 +51,13 @@ grep -F 'Private repository' "$README" >/dev/null
 grep -F 'Docker-in-Docker' "$README" >/dev/null
 grep -F '0 → N → 0' "$README" >/dev/null
 grep -F '| Azure Contributor | 실습용 Azure 리소스를 만들고 관리할 수 있어야 합니다. |' "$README" >/dev/null
-grep -F '| Azure RBAC 역할 할당 권한 | ACR 범위에 `AcrPull`을 할당할 수 있도록 `Microsoft.Authorization/roleAssignments/write`가 필요합니다. `Role Based Access Control Administrator`, `User Access Administrator`, `Owner` 등이 해당합니다. |' "$README" >/dev/null
-grep -F '| 워크숍 source HTTPS 인증 | Private workshop source repository를 HTTPS로 clone할 수 있어야 합니다. |' "$README" >/dev/null
+grep -F '| Azure RBAC 역할 할당 권한 | workshop Resource Group 또는 상위 범위에서 `Microsoft.Authorization/roleAssignments/write`가 필요합니다. ACR 범위의 `AcrPull`과 Resource Group 범위의 `Container Apps Contributor`를 모두 할당할 수 있어야 합니다. |' "$README" >/dev/null
+grep -F '| 워크숍 source 접근 | Public workshop source repository에 HTTPS로 접근할 수 있어야 합니다. |' "$README" >/dev/null
 grep -F '| Lab repository | 참가자 소유 Private `aca-runner-lab` repository를 만들거나 사용할 수 있어야 합니다. |' "$README" >/dev/null
 grep -F '| Fine-grained PAT 생성·승인 | lab repository만 선택한 Fine-grained PAT를 만들 수 있어야 하며, organization 정책이 요구하면 승인을 받아야 합니다. |' "$README" >/dev/null
 grep -F 'Enterprise Managed User 또는 organization 정책에 따라 Fine-grained PAT 승인이 필요할 수 있습니다.' "$README" >/dev/null
 grep -F 'Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해' "$README" >/dev/null
-grep -F 'gh auth login --hostname github.com --git-protocol https --web' "$README" >/dev/null
-grep -F 'gh auth setup-git' "$README" >/dev/null
-grep -F 'gh auth status --hostname github.com' "$README" >/dev/null
+grep -F 'Public workshop source는 GitHub CLI 로그인 없이 clone할 수 있습니다.' "$README" >/dev/null
 grep -F 'git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'cd ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다.' "$README" >/dev/null ||
@@ -121,7 +119,7 @@ grep -F '리소스 그룹 삭제' "$README" >/dev/null
 grep -F '🟢 **실행**' "$README" >/dev/null
 grep -F '📋 **예상 출력**' "$README" >/dev/null
 for text in \
-  '| workshop source clone 인증 실패 또는 잘못된 clone 경로 | [docs/01-prerequisites-github.md#트러블슈팅](docs/01-prerequisites-github.md#트러블슈팅) |' \
+  '| workshop source clone 네트워크·URL 오류 또는 잘못된 clone 경로 | [docs/01-prerequisites-github.md#트러블슈팅](docs/01-prerequisites-github.md#트러블슈팅) |' \
   '| Fine-grained PAT가 비어 있거나 만료·미승인 상태이거나 GitHub API가 401/403을 반환함 | [docs/01-prerequisites-github.md#트러블슈팅](docs/01-prerequisites-github.md#트러블슈팅) |' \
   '| ACR 이름이 이미 사용 중임 | [docs/02-azure-foundation.md#트러블슈팅](docs/02-azure-foundation.md#트러블슈팅) |' \
   '| 동일 repository와 label을 감시하는 Event Job이 이미 있음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |' \
@@ -174,6 +172,12 @@ fi
 
 if grep -F 'Azure Cloud Shell만 사용해' "$README" >/dev/null; then
   echo 'FAIL: README incorrectly claims the workshop uses only Cloud Shell' >&2
+  exit 1
+fi
+
+if grep -E 'private workshop source|Private workshop source|gh auth login|gh auth setup-git|gh auth status' \
+  "$README" >/dev/null; then
+  echo 'FAIL: README still requires authentication for the public workshop source' >&2
   exit 1
 fi
 

@@ -236,8 +236,6 @@ az role assignment list \
   --output table
 ```
 
-Container Apps Contributor는 Container App을 관리하지만 Container Apps Job 권한은 포함하지 않습니다.
-
 `Container Apps Contributor`는 Container App을 관리하지만 Container Apps Job 권한은 포함하지 않습니다. 따라서 workflow는 샘플 Container App을 만들고 갱신할 수 있지만 runner Job이나 그 PAT secret을 변경할 수 없습니다.
 
 📋 **예상 출력**

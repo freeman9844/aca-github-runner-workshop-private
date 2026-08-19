@@ -93,9 +93,9 @@ for text in \
   'Repository access: OK' \
   'Actions read: OK' \
   'Runner administration: OK' \
-  'gh auth login --hostname github.com --git-protocol https --web' \
-  'gh auth setup-git' \
-  'gh auth status --hostname github.com' \
+  'Public workshop source' \
+  '이름에 `private`가 포함되어 있지만 저장소 visibility는 **Public**입니다.' \
+  'GitHub CLI login 없이 clone할 수 있습니다.' \
   '## Cloud Shell 최초 준비' \
   'Mount storage account' \
   'No storage account required' \
@@ -107,12 +107,12 @@ for text in \
   '![Cloud Shell 스토리지 계정 자동 생성 선택](images/01-cloudshell-step3-mount-storage.png)' \
   '![Cloud Shell Bash 프롬프트 준비 완료](images/01-cloudshell-step4-ready.png)' \
   '![GitHub Fine-grained PAT 저장소와 권한 설정 예시](images/01-github-fine-grained-pat-settings.png)' \
-  '워크숍 source 인증과 lab Fine-grained PAT는 서로 다른 용도입니다.' \
+  'Public workshop source clone과 lab Fine-grained PAT는 서로 다른 흐름입니다.' \
   'git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' \
   'cd ~/aca-github-runner-workshop' \
   'until [[ -n "$GITHUB_PAT" ]]' \
   'ERROR: Fine-grained PAT cannot be empty. Try again.' \
-  'az extension add --name containerapp --upgrade --only-show-errors' \
+  'az extension add --name containerapp --version 0.3.55 --only-show-errors' \
   'az provider register -n Microsoft.App --wait' \
   'az provider register -n Microsoft.ContainerRegistry --wait' \
   'az provider register -n Microsoft.OperationalInsights --wait' \
@@ -135,7 +135,7 @@ if grep -E '^[[:space:]]*export[[:space:]].*GITHUB_PAT' "$PREREQ" >/dev/null; th
 fi
 
 for text in \
-  'Private workshop source HTTPS 인증·권한 또는 SSO authorization 실패' \
+  'Public workshop source clone 네트워크 또는 URL 오류' \
   'https://github.com/freeman9844/aca-github-runner-workshop-private/tree/master' \
   '브라우저의 `/tree/master` URL은 접근 확인용이며 clone URL이 아닙니다.' \
   'clone에는 `https://github.com/freeman9844/aca-github-runner-workshop-private.git`을 사용합니다.' \
@@ -145,6 +145,11 @@ for text in \
   grep -F -- "$text" "$PREREQ" >/dev/null ||
     fail "module 01 missing clone troubleshooting contract: $text"
 done
+
+if grep -E 'Private workshop source|private source 접근|gh auth login|gh auth setup-git|gh auth status|SSO authorization' \
+  "$PREREQ" >/dev/null; then
+  fail "module 01 still requires authentication for the public workshop source"
+fi
 
 if grep -E 'rm[[:space:]]+-rf[[:space:]]+("?\$HOME/aca-github-runner-workshop"?|"?~/aca-github-runner-workshop"?)' \
   "$PREREQ" >/dev/null; then
@@ -207,7 +212,7 @@ for text in \
   'Contributor만으로는 Azure RBAC 역할을 할당할 수 없습니다.' \
   'Microsoft.Authorization/roleAssignments/write' \
   'Role Based Access Control Administrator' \
-  'Container Apps Contributor는 Container App을 관리하지만 Container Apps Job 권한은 포함하지 않습니다.' \
+  '`Container Apps Contributor`는 Container App을 관리하지만 Container Apps Job 권한은 포함하지 않습니다.' \
   'ACR="acracarunner$(openssl rand -hex 4)"' \
   '이 시점부터 `ACR`은 더 이상 `SUFFIX`에서 유도되지 않습니다.' \
   '이전에 적어 둔 `ACR` 값은 이 새 값으로 교체하세요.' \
@@ -217,6 +222,9 @@ for text in \
   'SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3'; do
   grep -F -- "$text" "$FOUNDATION" >/dev/null || { echo "FAIL: module 02 missing $text" >&2; exit 1; }
 done
+
+[[ "$(grep -Fc 'Container Apps Job 권한은 포함하지 않습니다.' "$FOUNDATION")" -eq 1 ]] ||
+  fail "module 02 must explain the Container Apps Job boundary exactly once"
 
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \

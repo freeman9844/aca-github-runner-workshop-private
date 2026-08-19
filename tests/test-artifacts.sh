@@ -6,23 +6,26 @@ DOCKERFILE="$ROOT/runner/Dockerfile"
 WORKFLOW="$ROOT/samples/parallel-runner-workflow.yml"
 AZURE_DEPLOY_WORKFLOW="$ROOT/samples/azure-sample-deploy-workflow.yml"
 CI_WORKFLOW="$ROOT/.github/workflows/validate-workshop.yml"
+YAML_TEST="$ROOT/tests/test-workflow-yaml.py"
 
 [[ -f "$DOCKERFILE" ]] || { echo "FAIL: runner/Dockerfile missing" >&2; exit 1; }
 [[ -f "$WORKFLOW" ]] || { echo "FAIL: workflow sample missing" >&2; exit 1; }
 [[ -f "$AZURE_DEPLOY_WORKFLOW" ]] || { echo "FAIL: Azure deploy workflow sample missing" >&2; exit 1; }
 [[ -f "$CI_WORKFLOW" ]] || { echo "FAIL: validation workflow missing" >&2; exit 1; }
+[[ -f "$YAML_TEST" ]] || { echo "FAIL: workflow YAML syntax test missing" >&2; exit 1; }
 
-grep -F 'FROM ghcr.io/actions/actions-runner:2.336.0' "$DOCKERFILE" >/dev/null
+grep -F 'FROM ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda' "$DOCKERFILE" >/dev/null
 for package in ca-certificates curl jq; do
   grep -F -- "$package" "$DOCKERFILE" >/dev/null ||
     { echo "FAIL: runner image missing package $package" >&2; exit 1; }
 done
 
 for text in \
+  'ARG AZURE_CLI_VERSION=2.89.1-1~noble' \
   'packages.microsoft.com/keys/microsoft.asc' \
   'packages.microsoft.com/repos/azure-cli/' \
-  'apt-get install -y --no-install-recommends azure-cli' \
-  'az extension add --name containerapp --upgrade --only-show-errors'; do
+  'apt-get install -y --no-install-recommends azure-cli="$AZURE_CLI_VERSION"' \
+  'az extension add --name containerapp --version 0.3.55 --only-show-errors'; do
   grep -F -- "$text" "$DOCKERFILE" >/dev/null ||
     { echo "FAIL: runner image missing Azure deployment tool: $text" >&2; exit 1; }
 done
@@ -58,6 +61,9 @@ grep -F 'runs-on: [aca-runner]' "$WORKFLOW" >/dev/null
 grep -F 'fail-fast: false' "$WORKFLOW" >/dev/null
 grep -F 'sleep 45' "$WORKFLOW" >/dev/null
 grep -F 'bash tests/validate-workshop.sh' "$CI_WORKFLOW" >/dev/null
+grep -F 'python3 -m pip install --disable-pip-version-check --quiet PyYAML==6.0.2' "$CI_WORKFLOW" >/dev/null
+grep -F 'python3 tests/test-workflow-yaml.py' "$CI_WORKFLOW" >/dev/null
+grep -F 'docker build --tag workshop-runner-validation ./runner' "$CI_WORKFLOW" >/dev/null
 
 if grep -E '(^|[[:space:]])docker([[:space:]]|$)|services:' "$WORKFLOW" >/dev/null; then
   echo "FAIL: workflow must not depend on Docker" >&2

@@ -87,7 +87,7 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 - workflow를 수정할 수 있는 사람은 **trusted workflow authors**로 제한하세요.
 - Module 06의 샘플 배포에서 사용한 `Container Apps Contributor`는 의도적으로 resource-group scope에만 부여합니다. broad `Contributor`로 바꾸지 마세요.
 - Fine-grained PAT, registration token, remove token은 `echo`, 로그, 스크린샷, Git 기록에 출력하지 마세요.
-- runner image는 `ghcr.io/actions/actions-runner:2.336.0`처럼 **pinned runner image**로 고정하고 정기적으로 rebuild/scanning 하세요.
+- runner image는 `ghcr.io/actions/actions-runner:2.336.0@sha256:...`처럼 version과 digest를 함께 고정하고 정기적으로 rebuild/scanning 하세요.
 - 오래 남은 offline runner나 stale registration record는 주기적으로 삭제하세요.
 - 실습에서는 ACA secret에 PAT를 저장했지만 production에서는 separate credentials, Azure Key Vault 또는 external token broker를 우선 고려하세요.
 

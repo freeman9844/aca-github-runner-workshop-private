@@ -93,8 +93,9 @@ for text in \
   "--query \"[?roleDefinitionName=='Container Apps Contributor' && scope=='\$RG_ID'].roleDefinitionName | [0]\"" \
   'if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]' \
   'for role_attempt in $(seq 1 30); do' \
-  'Waiting for Container Apps Contributor propagation' \
+  'Waiting for Container Apps Contributor assignment visibility' \
   'ERROR: Container Apps Contributor was not visible after 30 checks.' \
+  '실제 managed identity 권한 전파 완료를 보장하지 않습니다.' \
   '--assignee-object-id "$UAMI_PID"' \
   '--assignee-principal-type ServicePrincipal' \
   '--role "Container Apps Contributor"' \
@@ -102,7 +103,7 @@ for text in \
   '--name "$UAMI"' \
   '--query clientId' \
   'az login --identity --client-id' \
-  'mcr.microsoft.com/k8se/quickstart:latest' \
+  'mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c' \
   'Actions → ACA Runner Azure Sample Deploy → Run workflow' \
   'APP_URL=https://' \
   'az containerapp show' \
@@ -110,7 +111,7 @@ for text in \
   'Container App' \
   'Azure Portal' \
   'az: command not found' \
-  'az extension add --name containerapp --upgrade --only-show-errors' \
+  'az extension add --name containerapp --version 0.3.55 --only-show-errors' \
   'AuthorizationFailed' \
   'No existing Container App named' \
   'behavior of this command has been altered' \
@@ -234,11 +235,17 @@ for text in \
   'az account set --subscription "$AZURE_SUBSCRIPTION_ID"' \
   'az containerapp create' \
   'az containerapp delete' \
+  'APP_SHOW_ERROR="$(mktemp)"' \
+  "trap 'rm -f \"\$APP_SHOW_ERROR\"' EXIT" \
+  'container_app_exists()' \
+  'ResourceNotFound|ContainerAppNotFound' \
+  'ERROR: Failed to inspect Container App' \
+  'deleted=false' \
   'for delete_attempt in $(seq 1 24); do' \
   'Waiting for Container App deletion (attempt %s/24).' \
   'Confirmed existing Container App deletion after %s checks.' \
   'ERROR: Timed out waiting for Container App deletion after 24 checks.' \
-  '--image mcr.microsoft.com/k8se/quickstart:latest' \
+  '--image mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c' \
   '--environment "$AZURE_CONTAINERAPPS_ENVIRONMENT"' \
   '--resource-group "$AZURE_RESOURCE_GROUP"' \
   '--name "$AZURE_SAMPLE_APP"' \
@@ -279,6 +286,14 @@ fi
 if grep -E 'azure/login|AZURE_CREDENTIALS|client-secret|(^|[[:space:]])docker([[:space:]]|$)|services:|actions/checkout(@|[[:space:]]|$)' \
   "$WORKFLOW" >/dev/null; then
   fail "workflow contains a forbidden credential, checkout action, or Docker dependency"
+fi
+
+if grep -F '2>/dev/null' "$WORKFLOW" >/dev/null; then
+  fail "workflow must not hide Container App inspection failures"
+fi
+
+if grep -F 'quickstart:latest' "$DOC" "$WORKFLOW" >/dev/null; then
+  fail "Module 06 must use the immutable quickstart image digest"
 fi
 
 if grep -F '선택 모듈입니다.' "$DOC" >/dev/null; then

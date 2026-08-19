@@ -44,10 +44,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if az containerapp show \
-            --name "$AZURE_SAMPLE_APP" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --output none 2>/dev/null; then
+          APP_SHOW_ERROR="$(mktemp)"
+          trap 'rm -f "$APP_SHOW_ERROR"' EXIT
+
+          container_app_exists() {
+            : > "$APP_SHOW_ERROR"
+            if az containerapp show \
+              --name "$AZURE_SAMPLE_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --output none 2>"$APP_SHOW_ERROR"; then
+              return 0
+            fi
+
+            if grep -Eq 'ResourceNotFound|ContainerAppNotFound' "$APP_SHOW_ERROR"; then
+              return 1
+            fi
+
+            cat "$APP_SHOW_ERROR" >&2
+            printf 'ERROR: Failed to inspect Container App %s.\n' \
+              "$AZURE_SAMPLE_APP" >&2
+            return 2
+          }
+
+          if container_app_exists; then
             printf 'Existing Container App found; deleting %s.\n' "$AZURE_SAMPLE_APP"
             az containerapp delete \
               --name "$AZURE_SAMPLE_APP" \
@@ -55,38 +74,46 @@ jobs:
               --yes \
               --output none
 
+            deleted=false
             for delete_attempt in $(seq 1 24); do
-              if ! az containerapp show \
-                --name "$AZURE_SAMPLE_APP" \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --output none 2>/dev/null; then
+              if container_app_exists; then
+                printf 'Waiting for Container App deletion (attempt %s/24).\n' \
+                  "$delete_attempt" >&2
+                sleep 5
+                continue
+              else
+                inspect_status=$?
+              fi
+
+              if [[ "$inspect_status" == "1" ]]; then
                 printf 'Confirmed existing Container App deletion after %s checks.\n' \
                   "$delete_attempt"
+                deleted=true
                 break
               fi
 
-              printf 'Waiting for Container App deletion (attempt %s/24).\n' \
-                "$delete_attempt" >&2
-              sleep 5
+              exit "$inspect_status"
             done
 
-            if az containerapp show \
-              --name "$AZURE_SAMPLE_APP" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --output none 2>/dev/null; then
+            if [[ "$deleted" != "true" ]]; then
               printf 'ERROR: Timed out waiting for Container App deletion after 24 checks.\n' \
                 >&2
               exit 1
             fi
           else
-            printf 'No existing Container App named %s found.\n' "$AZURE_SAMPLE_APP"
+            inspect_status=$?
+            if [[ "$inspect_status" == "1" ]]; then
+              printf 'No existing Container App named %s found.\n' "$AZURE_SAMPLE_APP"
+            else
+              exit "$inspect_status"
+            fi
           fi
 
           FQDN="$(az containerapp create \
             --name "$AZURE_SAMPLE_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --environment "$AZURE_CONTAINERAPPS_ENVIRONMENT" \
-            --image mcr.microsoft.com/k8se/quickstart:latest \
+            --image mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c \
             --ingress external \
             --target-port 80 \
             --min-replicas 0 \

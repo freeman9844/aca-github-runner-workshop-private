@@ -109,7 +109,9 @@ SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 
 <!-- BEGIN RUNNER_DOCKERFILE -->
 ```dockerfile
-FROM ghcr.io/actions/actions-runner:2.336.0
+FROM ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
+
+ARG AZURE_CLI_VERSION=2.89.1-1~noble
 
 USER root
 
@@ -139,7 +141,7 @@ RUN apt-get update \
       'Signed-by: /etc/apt/keyrings/microsoft.gpg' \
       > /etc/apt/sources.list.d/azure-cli.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends azure-cli \
+    && apt-get install -y --no-install-recommends azure-cli="$AZURE_CLI_VERSION" \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -151,7 +153,7 @@ RUN chmod 0555 /home/runner/entrypoint.sh
 USER runner
 
 # Install and verify the Container Apps extension while building the image.
-RUN az extension add --name containerapp --upgrade --only-show-errors
+RUN az extension add --name containerapp --version 0.3.55 --only-show-errors
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null
 WORKDIR /home/runner
@@ -297,7 +299,7 @@ exit "$runner_status"
 
 ⚠️ **주의**
 
-base image tag와 문서의 `IMAGE="github-actions-runner:2.336.0"`는 같이 움직여야 합니다. 둘 중 하나만 바꾸면 태그 확인이나 다음 모듈 배포 단계가 어긋납니다.
+base image의 runner version·digest와 문서의 `IMAGE="github-actions-runner:2.336.0"`는 같이 움직여야 합니다. runner version을 올릴 때는 새 manifest digest를 확인하고 ACR image tag도 함께 변경해야 합니다.
 
 ## 2. 로컬 정적 검사 먼저 실행
 
@@ -373,7 +375,8 @@ az acr show \
 
 | 항목 | 이유 |
 |------|------|
-| base image pinning | `ghcr.io/actions/actions-runner:2.336.0`처럼 고정 버전을 써야 워크숍 결과와 트러블슈팅 기준이 흔들리지 않습니다. |
+| base image pinning | `ghcr.io/actions/actions-runner:2.336.0@sha256:...`처럼 version과 manifest digest를 함께 고정해야 upstream tag 변경에도 워크숍 결과와 트러블슈팅 기준이 흔들리지 않습니다. |
+| Azure CLI pinning | image 안의 Azure CLI `2.89.1`과 Container Apps extension `0.3.55`를 함께 고정해 workflow 명령 동작이 build 시점마다 달라지지 않게 합니다. |
 | `--disableupdate` | ephemeral runner가 시작될 때마다 self-update를 시도하면 실행 시간이 늘고 재현성이 떨어집니다. 워크숍은 검증된 tag를 새로 빌드해 배포하는 방식을 사용합니다. |
 | ACR cloud build | Cloud Shell 로컬 Docker에 의존하지 않고 Azure 쪽에서 build/push를 끝내므로 참가자 환경 편차가 작습니다. |
 | non-root 실행 | `USER runner`로 내려가 GitHub runner 프로세스를 최소 권한으로 실행합니다. |
@@ -383,7 +386,7 @@ az acr show \
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| `az acr build`가 `unauthorized` 또는 upstream pull 오류로 실패함 | `ghcr.io/actions/actions-runner:2.336.0` pull 과정의 일시적 네트워크 문제 또는 upstream rate/availability 이슈 | 잠시 후 같은 명령을 다시 실행합니다. 장시간 지속되면 `runner/Dockerfile`의 `FROM ghcr.io/actions/actions-runner:2.336.0`가 오타 없는지 먼저 확인합니다. |
+| `az acr build`가 `unauthorized` 또는 upstream pull 오류로 실패함 | pinned `ghcr.io/actions/actions-runner:2.336.0@sha256:...` pull 과정의 일시적 네트워크 문제 또는 upstream rate/availability 이슈 | 잠시 후 같은 명령을 다시 실행합니다. 장시간 지속되면 `runner/Dockerfile`의 version과 digest가 현재 함께 유효한지 확인합니다. |
 | build는 성공했는데 다음 모듈에서 image pull 실패 | `AcrPull` RBAC 전파가 아직 끝나지 않음 | 몇 분 기다린 뒤 `az role assignment list --assignee "$UAMI_PID" --scope "$ACR_ID" --query "[].roleDefinitionName" --output tsv`로 `AcrPull`을 확인하고 Job 생성/업데이트를 다시 시도합니다. |
 | `COPY entrypoint.sh` 관련 오류가 남 | 잘못된 build context에서 `az acr build`를 실행함 | 명령 끝 인자가 반드시 `./runner`인지 확인합니다. 루트(`.`)나 다른 경로로 실행하면 Dockerfile 옆 파일 기준이 달라질 수 있습니다. |
 | `runner/entrypoint.sh` 또는 테스트 파일을 못 찾음 | 워크숍 저장소 루트가 아닌 위치에서 검사 명령을 실행함 | `cd ~/aca-github-runner-workshop` 후 `ls`로 `runner`, `tests`, `docs`가 보이는지 확인한 다음 다시 실행합니다. |
