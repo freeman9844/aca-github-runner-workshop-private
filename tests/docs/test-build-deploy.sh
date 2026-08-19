@@ -180,11 +180,13 @@ for text in \
   'adminUserEnabled:adminUserEnabled' \
   '--image "$IMAGE"' \
   './runner' \
-  'ghcr.io/actions/actions-runner:2.336.0' \
+  'ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda' \
+  'ARG AZURE_CLI_VERSION=2.89.1-1~noble' \
+  'apt-get install -y --no-install-recommends azure-cli="$AZURE_CLI_VERSION"' \
   'read -rp "Saved SUFFIX: " SUFFIX' \
   'read -rp "Saved ACR name: " ACR' \
   'SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0' \
-  'az extension add --name containerapp --upgrade --only-show-errors' \
+  'az extension add --name containerapp --version 0.3.55 --only-show-errors' \
   'az version' \
   'az containerapp --help' \
   'GITHUB_PAT' \
@@ -253,9 +255,13 @@ for text in \
   '동일한 repository와 label' \
   'az containerapp job show --name "$JOB" --resource-group "$RG" --output none' \
   'az containerapp job delete \' \
-  'Do not instruct participants to recreate the whole resource group for a Job configuration error.'; do
+  'Job 설정 오류를 복구할 때는 Resource Group 전체를 다시 만들지 말고 이 워크숍 Job만 삭제 후 재생성합니다.'; do
   grep -F -- "$text" "$JOB_DOC" >/dev/null || { echo "FAIL: module 04 missing $text" >&2; exit 1; }
 done
+
+if grep -F 'Do not instruct participants' "$JOB_DOC" >/dev/null; then
+  fail "module 04 still exposes an internal authoring note"
+fi
 
 if grep -F 'REGISTRATION_TOKEN_API_URL=' "$JOB_DOC" >/dev/null; then
   fail "module 04 must derive the registration-token endpoint from GH_URL"

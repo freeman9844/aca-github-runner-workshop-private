@@ -9,7 +9,7 @@
 - `samples/azure-sample-deploy-workflow.yml`을 Cloud Shell에서 확인한 뒤 GitHub 웹 UI로 workflow를 만든다.
 - `UAMI_CLIENT_ID`와 `SUBSCRIPTION_ID`가 식별자이며, runner 환경에서는 각각 `AZURE_CLIENT_ID`와 `AZURE_SUBSCRIPTION_ID`로 전달된다는 점을 설명할 수 있다.
 - GitHub Actions, 브라우저, Cloud Shell, Azure Portal에서 같은 배포 결과를 교차 확인한다.
-- managed identity login, RBAC propagation, HTTP warm-up failure 시 안전한 복구 경로를 적용한다.
+- managed identity login, RBAC assignment 확인과 권한 전파 지연, HTTP warm-up failure 시 안전한 복구 경로를 적용한다.
 
 ## 0. 세션 재연결 시 변수 복구 (선택)
 
@@ -137,7 +137,7 @@ if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]; then
     --role "Container Apps Contributor" \
     --scope "$RG_ID" \
     --output none
-  printf '역할 할당 완료. RBAC 전파를 위해 1~5분 기다립니다.\n'
+  printf '역할 할당 요청 완료. Azure control plane 조회에 표시될 때까지 확인합니다.\n'
 else
   printf 'Container Apps Contributor 역할이 이미 할당되어 있습니다.\n'
 fi
@@ -153,7 +153,7 @@ for role_attempt in $(seq 1 30); do
     break
   fi
 
-  printf 'Waiting for Container Apps Contributor propagation (attempt %s/30).\n' \
+  printf 'Waiting for Container Apps Contributor assignment visibility (attempt %s/30).\n' \
     "$role_attempt" >&2
   sleep 10
 done
@@ -169,8 +169,9 @@ printf 'CONTAINER_APPS_ROLE=%s\n' "${CONTAINER_APPS_ROLE:-MISSING}"
 📋 **예상 출력**
 
 - 기존 역할이 있으면 `Container Apps Contributor 역할이 이미 할당되어 있습니다.`가 출력됩니다.
-- 새 역할을 할당했다면 `역할 할당 완료`가 출력되고, 최대 5분 동안 역할이 보일 때까지 자동으로 재조회합니다.
-- 최종적으로 `CONTAINER_APPS_ROLE=Container Apps Contributor`가 확인된 뒤 2단계로 이동합니다.
+- 새 역할을 할당했다면 역할 assignment가 Azure control plane 조회에 표시될 때까지 최대 5분 동안 자동으로 재조회합니다.
+- 이 조회는 role assignment 존재 여부를 확인하며 실제 managed identity 권한 전파 완료를 보장하지 않습니다.
+- 최종적으로 `CONTAINER_APPS_ROLE=Container Apps Contributor`가 확인되면 2단계로 이동합니다. 이후 workflow에서 `AuthorizationFailed`가 발생하면 역할 범위를 넓히지 말고 1~5분 기다린 뒤 다시 실행합니다.
 
 ## 2. 샘플 workflow를 GitHub에 생성
 
@@ -244,10 +245,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if az containerapp show \
-            --name "$AZURE_SAMPLE_APP" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --output none 2>/dev/null; then
+          APP_SHOW_ERROR="$(mktemp)"
+          trap 'rm -f "$APP_SHOW_ERROR"' EXIT
+
+          container_app_exists() {
+            : > "$APP_SHOW_ERROR"
+            if az containerapp show \
+              --name "$AZURE_SAMPLE_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --output none 2>"$APP_SHOW_ERROR"; then
+              return 0
+            fi
+
+            if grep -Eq 'ResourceNotFound|ContainerAppNotFound' "$APP_SHOW_ERROR"; then
+              return 1
+            fi
+
+            cat "$APP_SHOW_ERROR" >&2
+            printf 'ERROR: Failed to inspect Container App %s.\n' \
+              "$AZURE_SAMPLE_APP" >&2
+            return 2
+          }
+
+          if container_app_exists; then
             printf 'Existing Container App found; deleting %s.\n' "$AZURE_SAMPLE_APP"
             az containerapp delete \
               --name "$AZURE_SAMPLE_APP" \
@@ -255,38 +275,46 @@ jobs:
               --yes \
               --output none
 
+            deleted=false
             for delete_attempt in $(seq 1 24); do
-              if ! az containerapp show \
-                --name "$AZURE_SAMPLE_APP" \
-                --resource-group "$AZURE_RESOURCE_GROUP" \
-                --output none 2>/dev/null; then
+              if container_app_exists; then
+                printf 'Waiting for Container App deletion (attempt %s/24).\n' \
+                  "$delete_attempt" >&2
+                sleep 5
+                continue
+              else
+                inspect_status=$?
+              fi
+
+              if [[ "$inspect_status" == "1" ]]; then
                 printf 'Confirmed existing Container App deletion after %s checks.\n' \
                   "$delete_attempt"
+                deleted=true
                 break
               fi
 
-              printf 'Waiting for Container App deletion (attempt %s/24).\n' \
-                "$delete_attempt" >&2
-              sleep 5
+              exit "$inspect_status"
             done
 
-            if az containerapp show \
-              --name "$AZURE_SAMPLE_APP" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --output none 2>/dev/null; then
+            if [[ "$deleted" != "true" ]]; then
               printf 'ERROR: Timed out waiting for Container App deletion after 24 checks.\n' \
                 >&2
               exit 1
             fi
           else
-            printf 'No existing Container App named %s found.\n' "$AZURE_SAMPLE_APP"
+            inspect_status=$?
+            if [[ "$inspect_status" == "1" ]]; then
+              printf 'No existing Container App named %s found.\n' "$AZURE_SAMPLE_APP"
+            else
+              exit "$inspect_status"
+            fi
           fi
 
           FQDN="$(az containerapp create \
             --name "$AZURE_SAMPLE_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --environment "$AZURE_CONTAINERAPPS_ENVIRONMENT" \
-            --image mcr.microsoft.com/k8se/quickstart:latest \
+            --image mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c \
             --ingress external \
             --target-port 80 \
             --min-replicas 0 \
@@ -377,7 +405,7 @@ GitHub repository에서 **Actions → ACA Runner Azure Sample Deploy → Run wor
 - `Verify the deployed HTTPS endpoint` step에는 `Verified https://...`가 보이며, 실패 시 끝부분에 `HTTP verification failed after` 메시지가 남습니다.
 - `Show deployed Azure resource` step에는 새 `Container App` 이름, image, FQDN이 출력됩니다.
 
-> **참고 화면:** 아래 화면처럼 `Deploy sample Container App` Job과 모든 step이 성공하고, `Show deployed Azure resource` 출력에 앱 이름, `Succeeded`, FQDN, `mcr.microsoft.com/k8se/quickstart:latest`가 보이면 GitHub Actions 배포가 완료된 것입니다. 앱 suffix와 FQDN은 참가자와 실행마다 달라집니다.
+> **참고 화면:** 아래 화면처럼 `Deploy sample Container App` Job과 모든 step이 성공하고, `Show deployed Azure resource` 출력에 앱 이름, `Succeeded`, FQDN, pinned `mcr.microsoft.com/k8se/quickstart@sha256:...` image가 보이면 GitHub Actions 배포가 완료된 것입니다. 앱 suffix와 FQDN은 참가자와 실행마다 달라집니다.
 
 ![GitHub Actions에서 Azure 샘플 Container App 배포가 성공한 화면](images/06-github-actions-deployment-success.png)
 
@@ -411,7 +439,7 @@ printf 'APP_URL=%s\n' "$APP_URL"
 curl --fail --silent --show-error "https://$FQDN" | sed -n '1,12p'
 ```
 
-이제 브라우저에서 `APP_URL` 또는 `https://$FQDN`을 새 탭으로 열어 `mcr.microsoft.com/k8se/quickstart:latest` 기본 quickstart page가 보이는지 확인합니다.
+이제 브라우저에서 `APP_URL` 또는 `https://$FQDN`을 새 탭으로 열어 pinned `mcr.microsoft.com/k8se/quickstart@sha256:...` image의 기본 quickstart page가 보이는지 확인합니다.
 
 📋 **예상 출력**
 
@@ -447,7 +475,7 @@ az containerapp show \
 1. **Resource groups**에서 `$RG`를 엽니다.
 2. `hello-aca-<suffix>` 리소스를 찾고 type이 `Container App`인지 확인합니다.
 3. **Overview** 또는 **Ingress**에서 external ingress가 켜져 있고 Application Url이 Cloud Shell의 `https://$FQDN`과 같은지 확인합니다.
-4. Container image가 `mcr.microsoft.com/k8se/quickstart:latest`인지 확인합니다.
+4. Container image가 `mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c`인지 확인합니다.
 
 📋 **예상 출력**
 
@@ -468,10 +496,11 @@ az containerapp show \
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
 | `az: command not found` | Azure Cloud Shell 세션이 Bash가 아니거나 CLI 초기화가 끝나지 않음 | Cloud Shell Bash를 다시 열고 `az version`이 동작할 때까지 기다립니다. 로컬 터미널에서 따라 하고 있다면 이 워크숍과 동일한 Cloud Shell Bash로 돌아옵니다. |
-| `az containerapp` 명령이 없거나 일부 subcommand가 보이지 않음 | `containerapp` extension이 아직 없거나 오래됨 | Cloud Shell에서 `az extension add --name containerapp --upgrade --only-show-errors`를 실행한 뒤 `az containerapp show --help`로 다시 확인합니다. |
+| `az containerapp` 명령이 없거나 일부 subcommand가 보이지 않음 | `containerapp` extension이 없거나 워크숍 기준 버전과 다름 | Cloud Shell에서 `az extension add --name containerapp --version 0.3.55 --only-show-errors`를 실행한 뒤 `az containerapp show --help`로 다시 확인합니다. |
 | `az login --identity --client-id` step이 실패함 | runner managed identity 연결이 끊겼거나 `AZURE_CLIENT_ID`가 현재 Job 환경과 맞지 않음 | GitHub Actions의 **Sign in with the runner managed identity** step 로그를 확인하고, Module 04의 Event Job 정의에서 user-assigned identity와 `AZURE_CLIENT_ID` env 값을 다시 검토합니다. client secret을 추가하지 말고 managed identity 경로만 복구하세요. |
 | `The environment '.../managedEnvironments/...' does not exist. Specify a valid environment` | ACA Environment가 실제로 존재해도 runner UAMI에 ACR 범위 `AcrPull`만 있고 RG 범위 `Container Apps Contributor`가 없으면 Environment를 읽거나 샘플 앱을 만들 수 없어 not-found 형태로 보일 수 있음 | 1단계의 `ENV_STATE`와 `CONTAINER_APPS_ROLE`을 다시 확인합니다. 역할이 `MISSING`이면 안내된 `az role assignment create`를 실행하고 1~5분 기다린 뒤 workflow를 다시 실행합니다. Environment나 Event Job을 다시 만들 필요는 없습니다. |
 | `AuthorizationFailed`가 발생함 | `Container Apps Contributor` role assignment 직후라 RBAC propagation이 아직 끝나지 않음 | 1~5분 정도 기다린 뒤 같은 workflow를 다시 실행합니다. role을 더 넓히지 말고 기존 resource-group scope assignment가 전파될 시간을 먼저 줍니다. |
+| `ERROR: Failed to inspect Container App`이 발생함 | 기존 앱 조회 중 인증, 네트워크 또는 Azure CLI 오류가 발생해 리소스 존재 여부를 안전하게 판단할 수 없음 | 바로 새 앱을 만들거나 삭제 완료로 간주하지 마세요. 바로 앞에 출력된 Azure CLI 오류를 기준으로 subscription, RBAC, 네트워크 상태를 복구한 뒤 workflow를 다시 실행합니다. |
 | `ERROR: AZURE_CLIENT_ID is required.` 같은 missing Job environment variables 오류가 남 | Event Job에 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_CONTAINERAPPS_ENVIRONMENT`, `AZURE_SAMPLE_APP`가 빠졌음 | GitHub secret을 새로 만들지 말고 Module 04의 Job 환경 변수 정의를 다시 확인합니다. 필요한 경우 Event Job을 같은 값으로 다시 생성한 뒤 workflow를 재실행합니다. |
 | GitHub run은 배포를 끝냈지만 첫 HTTP 확인이 실패하거나 `HTTP verification failed after`로 끝남 | sample app revision은 만들어졌지만 temporary HTTP cold start로 첫 HTTPS 응답이 늦음 | 20~60초 정도 기다린 뒤 브라우저에서 URL을 새로고침하고, Cloud Shell `curl --fail --silent --show-error "https://$FQDN"`를 다시 실행합니다. FQDN이 정상이라면 코드 수정 없이 회복될 수 있습니다. |
 | deployment workflow가 계속 queued 상태이며 이전 실습 run이 섞여 보임 | 같은 `aca-runner` label을 쓰는 `stale runner workflow`가 아직 queued/running 상태이거나 최신 YAML이 아닌 오래된 workflow가 남아 있음 | GitHub Actions에서 오래된 queued run을 취소하고, `.github/workflows/aca-runner-azure-deploy.yml`과 scale test workflow가 모두 최신 sample인지 확인합니다. 특히 배포 workflow는 single job + `runs-on: [aca-runner]`만 유지한 뒤 다시 실행합니다. |
