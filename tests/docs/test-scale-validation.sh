@@ -5,9 +5,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DOC="$ROOT/docs/05-parallel-scale-validation.md"
 QUEUED_SCREENSHOT="$ROOT/docs/images/05-github-actions-queued-matrix.png"
 SUCCESS_SCREENSHOT="$ROOT/docs/images/05-github-actions-successful-matrix.png"
+NO_RUNNERS_SCREENSHOT="$ROOT/docs/images/05-github-actions-no-self-hosted-runners.png"
 [[ -f "$DOC" ]] || { echo "FAIL: module 05 missing" >&2; exit 1; }
 [[ -f "$QUEUED_SCREENSHOT" ]] || { echo "FAIL: module 05 queued screenshot missing" >&2; exit 1; }
 [[ -f "$SUCCESS_SCREENSHOT" ]] || { echo "FAIL: module 05 successful matrix screenshot missing" >&2; exit 1; }
+[[ -f "$NO_RUNNERS_SCREENSHOT" ]] || { echo "FAIL: module 05 no-runners screenshot missing" >&2; exit 1; }
 
 fail() {
   echo "FAIL: $*" >&2
@@ -16,6 +18,18 @@ fail() {
 
 grep -Fx '## 0. 세션 재연결 시 변수 복구 (선택)' "$DOC" >/dev/null ||
   fail "module 05 missing optional Step 0 recovery heading"
+step_numbers="$(sed -nE 's/^## ([0-9]+)\..*/\1/p' "$DOC" | paste -sd ' ' -)"
+[[ "$step_numbers" == '0 1 2 3 4 5 6 7 8 9 10' ]] ||
+  fail "module 05 numbered steps must run consecutively from 0 through 10"
+grep -Fx '## 8. GitHub에서 네 개 Job 성공과 runner hostname 차이 확인' "$DOC" >/dev/null ||
+  fail "module 05 missing renumbered Step 8 heading"
+grep -Fx '## 9. Running execution이 다시 0으로 돌아오는지 확인' "$DOC" >/dev/null ||
+  fail "module 05 missing renumbered Step 9 heading"
+grep -Fx '## 10. GitHub Settings에서 permanent online runner가 남지 않았는지 확인' "$DOC" >/dev/null ||
+  fail "module 05 missing renumbered Step 10 heading"
+if grep -Fx '## 8. runner lifecycle marker를 명시적으로 검증' "$DOC" >/dev/null; then
+  fail "module 05 still contains the redundant lifecycle-marker step"
+fi
 details_open_line="$(grep -nF -m1 '<details>' "$DOC" | cut -d: -f1)"
 summary_line="$(grep -nF -m1 '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$DOC" | cut -d: -f1)"
 details_close_line="$(grep -nF -m1 '</details>' "$DOC" | cut -d: -f1)"
@@ -55,6 +69,7 @@ for text in \
   '기존 workflow가 이미 있으면' \
   '![GitHub Actions에서 네 개 matrix Job이 queued 상태인 화면](images/05-github-actions-queued-matrix.png)' \
   'Worker 1은 성공했고 Worker 4는 아직 진행 중인 중간 상태' \
+  '![GitHub Actions Self-hosted runners 목록이 비어 있는 정상 화면](images/05-github-actions-no-self-hosted-runners.png)' \
   '# 수동 실행으로만 scale test를 시작합니다.' \
   'name: ACA Runner Scale Test' \
   'workflow_dispatch:' \

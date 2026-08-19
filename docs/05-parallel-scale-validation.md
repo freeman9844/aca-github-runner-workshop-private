@@ -295,7 +295,7 @@ fi
 
 - timestamp, 임시 script UUID, PID와 repository 작업 경로는 실행마다 달라집니다.
 - `--tail 100` 구간에 따라 `Requesting registration token`, `Runner configured`,
-  `Runner process exited`가 보이지 않을 수 있습니다. lifecycle marker는 7~8단계의
+  `Runner process exited`가 보이지 않을 수 있습니다. lifecycle marker는 7단계의
   Log Analytics 조회로 다시 확인합니다.
 
 ## 7. Log Analytics에서 resource-specific `ContainerAppConsoleLogs`를 KQL로 확인
@@ -361,26 +361,7 @@ az monitor log-analytics query \
 - 집계 query에는 결과가 있지만 상세 query가 비어 있으면 `$EXECUTION`이 가장
   최근 execution인지 다시 확인합니다.
 
-## 8. runner lifecycle marker를 명시적으로 검증
-
-👁️ **설명**
-
-scale 검증은 단순히 execution 개수만 보는 것으로 끝나지 않습니다. runner가 GitHub registration token을 받고, 정상 등록한 뒤, workflow job을 끝내고, 프로세스를 종료했는지 lifecycle marker로 확인해야 합니다. 이 registration token은 `GITHUB_PAT`가 직접 workflow를 수정해서 얻는 것이 아니라, `personal-access-token` secret으로 queue를 감시하고 runner bootstrap이 short-lived token을 요청하는 흐름에서만 사용됩니다.
-
-🟢 **실행**
-
-CLI 로그와 KQL 결과에서 다음 문자열을 직접 찾습니다.
-
-- `Requesting registration token`
-- `Runner configured`
-- `Runner process exited`
-
-📋 **예상 출력**
-
-- 세 marker가 순서대로 보이면 ephemeral runner lifecycle이 정상적으로 끝난 것입니다.
-- `Runner configured`까지만 있고 `Runner process exited`가 없으면 아직 실행 중이거나 로그 수집이 덜 끝났을 수 있습니다.
-
-## 9. GitHub에서 네 개 Job 성공과 runner hostname 차이 확인
+## 8. GitHub에서 네 개 Job 성공과 runner hostname 차이 확인
 
 👁️ **설명**
 
@@ -403,7 +384,7 @@ GitHub Actions 실행 화면에서 `Worker 1` ~ `Worker 4` 로그를 열고 `Sho
 
 ![GitHub Actions에서 Worker 1은 성공했고 Worker 4는 아직 진행 중인 중간 상태 화면](images/05-github-actions-successful-matrix.png)
 
-## 10. Running execution이 다시 0으로 돌아오는지 확인
+## 9. Running execution이 다시 0으로 돌아오는지 확인
 
 👁️ **설명**
 
@@ -430,7 +411,7 @@ az containerapp job execution list \
 대기 Job 처리가 끝나면 active execution 수는 0이 됩니다. 완료 execution 이력은 남을 수 있습니다.
 ```
 
-## 11. GitHub Settings에서 permanent online runner가 남지 않았는지 확인
+## 10. GitHub Settings에서 permanent online runner가 남지 않았는지 확인
 
 👁️ **설명**
 
@@ -444,6 +425,10 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 
 - workflow가 모두 끝난 뒤에는 runner가 permanently online 상태로 남아 있지 않아야 합니다.
 - 일시적으로 offline record가 보일 수는 있지만, 장시간 고정된 online runner가 보이면 ephemeral 정리 흐름을 다시 확인해야 합니다.
+
+> **참고 화면:** 아래 화면처럼 **Self-hosted runners** 목록에 runner가 없으면 ephemeral runner가 workflow 종료 후 정상적으로 정리된 상태입니다.
+
+![GitHub Actions Self-hosted runners 목록이 비어 있는 정상 화면](images/05-github-actions-no-self-hosted-runners.png)
 
 ## 트러블슈팅
 
