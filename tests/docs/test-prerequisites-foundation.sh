@@ -17,6 +17,14 @@ fail() {
   exit 1
 }
 
+assert_contains_multiline() {
+  local haystack="$1"
+  local needle="$2"
+  local message="$3"
+
+  [[ "$haystack" == *"$needle"* ]] || fail "$message"
+}
+
 operational_github_app_pattern='GITHUB_APP_|Developer settings → GitHub Apps|Generate a private key|App ID|installation ID|private key PEM|github-app-private-key'
 stdout_pat_print_pattern='^[[:space:]]*(printf|echo|cat)\b.*\$GITHUB_PAT([^[:alnum:]_]|$)'
 safe_printf_v_pattern='^[0-9]+:[[:space:]]*printf[[:space:]]+-v\b'
@@ -29,6 +37,7 @@ grep_forbidden_pat_stdout_prints() {
 [[ -f "$FOUNDATION" ]] || { echo "FAIL: module 02 missing" >&2; exit 1; }
 [[ -f "$PORTAL_SCREENSHOT" ]] ||
   fail "module 02 Azure portal screenshot missing"
+FOUNDATION_TEXT="$(<"$FOUNDATION")"
 for screenshot in "${CLOUD_SHELL_SCREENSHOTS[@]}"; do
   [[ -f "$screenshot" ]] ||
     fail "module 01 Cloud Shell screenshot missing: $(basename "$screenshot")"
@@ -172,20 +181,45 @@ for text in \
   '--admin-enabled false' \
   'az acr config authentication-as-arm update' \
   'az identity create' \
+  'SUBSCRIPTION_ID=$(az account show' \
+  'RG_ID=$(az group show' \
+  'printf '\''다음 값을 저장하세요: SUFFIX=%s ACR=%s SUBSCRIPTION_ID=%s\n'\''' \
+  '선택 Module 06을 Cloud Shell 재접속 후 이어가려면 위에서 출력한 `SUBSCRIPTION_ID`를 `SUFFIX`, 실제 `ACR` 이름과 함께 저장해 둡니다.' \
+  '다음 값을 저장하세요: SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000' \
+  'UAMI_CLIENT_ID=$(az identity show' \
+  '--query clientId' \
   'Contributor만으로는 Azure RBAC 역할을 할당할 수 없습니다.' \
   'Microsoft.Authorization/roleAssignments/write' \
   'Role Based Access Control Administrator' \
-  '--role AcrPull' \
-  '--assignee-principal-type ServicePrincipal' \
+  'Container Apps Contributor는 Container App을 관리하지만 Container Apps Job 권한은 포함하지 않습니다.' \
   'ACR="acracarunner$(openssl rand -hex 4)"' \
   '이 시점부터 `ACR`은 더 이상 `SUFFIX`에서 유도되지 않습니다.' \
   '이전에 적어 둔 `ACR` 값은 이 새 값으로 교체하세요.' \
-  '다음 모듈 재접속에 대비해 `SUFFIX`와 실제 `ACR` 이름을 각각 별도 값으로 저장해 둔다.' \
+  '다음 모듈 재접속과 선택 Module 06 복구에 대비해 `SUFFIX`, 실제 `ACR` 이름, 원래 `SUBSCRIPTION_ID`를 각각 별도 값으로 저장해 둔다.' \
   '이미 앞 단계의 RG, workspace, environment를 만들었다면 전체 `SUFFIX`를 바꾸지 마세요.' \
   '리소스 이름을 모두 새 suffix로 통일하려면 기존 실습 리소스를 정리하고 모듈 02의 1단계부터 다시 시작합니다.' \
   'SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3'; do
   grep -F -- "$text" "$FOUNDATION" >/dev/null || { echo "FAIL: module 02 missing $text" >&2; exit 1; }
 done
+
+assert_contains_multiline \
+  "$FOUNDATION_TEXT" \
+  $'az role assignment create \\\n  --assignee-object-id "$UAMI_PID" \\\n  --assignee-principal-type ServicePrincipal \\\n  --role AcrPull \\\n  --scope "$ACR_ID" \\\n  --output none' \
+  'module 02 must keep AcrPull assigned at the ACR scope'
+
+assert_contains_multiline \
+  "$FOUNDATION_TEXT" \
+  $'az role assignment create \\\n  --assignee-object-id "$UAMI_PID" \\\n  --assignee-principal-type ServicePrincipal \\\n  --role "Container Apps Contributor" \\\n  --scope "$RG_ID" \\\n  --output none' \
+  'module 02 must keep Container Apps Contributor assigned at the resource-group scope'
+
+assert_contains_multiline \
+  "$FOUNDATION_TEXT" \
+  $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$RG_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
+  'module 02 must verify both RBAC scopes while showing role names'
+
+grep -Fx -- '- `AcrPull`, `Container Apps Contributor`, `ServicePrincipal`이 보이는 표가 출력됩니다.' \
+  "$FOUNDATION" >/dev/null ||
+  fail "module 02 missing RBAC verification output for both roles"
 
 portal_reference_line="$(
   grep -nF -m1 '## 참고: Azure 관리 포털에서 생성된 리소스 확인' \

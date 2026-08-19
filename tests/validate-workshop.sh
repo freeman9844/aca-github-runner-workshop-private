@@ -11,6 +11,7 @@ bash tests/docs/test-overview.sh
 bash tests/docs/test-prerequisites-foundation.sh
 bash tests/docs/test-build-deploy.sh
 bash tests/docs/test-scale-validation.sh
+bash tests/docs/test-azure-sample-deployment.sh
 bash tests/docs/test-security-cleanup.sh
 
 core_workshop_paths=(
@@ -20,8 +21,10 @@ core_workshop_paths=(
   docs/03-runner-image.md
   docs/04-event-job-keda.md
   docs/05-parallel-scale-validation.md
-  docs/06-security-limitations-cleanup.md
+  docs/06-azure-sample-deployment.md
+  docs/07-security-limitations-cleanup.md
   runner
+  samples/azure-sample-deploy-workflow.yml
   samples
 )
 
@@ -30,12 +33,14 @@ required_files=(
   runner/Dockerfile
   runner/entrypoint.sh
   samples/parallel-runner-workflow.yml
+  samples/azure-sample-deploy-workflow.yml
   docs/01-prerequisites-github.md
   docs/02-azure-foundation.md
   docs/03-runner-image.md
   docs/04-event-job-keda.md
   docs/05-parallel-scale-validation.md
-  docs/06-security-limitations-cleanup.md
+  docs/06-azure-sample-deployment.md
+  docs/07-security-limitations-cleanup.md
 )
 
 for file in "${required_files[@]}"; do
@@ -86,8 +91,10 @@ navigation_checks=(
   'docs/04-event-job-keda.md:docs/03-runner-image.md'
   'docs/04-event-job-keda.md:docs/05-parallel-scale-validation.md'
   'docs/05-parallel-scale-validation.md:docs/04-event-job-keda.md'
-  'docs/05-parallel-scale-validation.md:docs/06-security-limitations-cleanup.md'
-  'docs/06-security-limitations-cleanup.md:docs/05-parallel-scale-validation.md'
+  'docs/05-parallel-scale-validation.md:docs/06-azure-sample-deployment.md'
+  'docs/06-azure-sample-deployment.md:docs/05-parallel-scale-validation.md'
+  'docs/06-azure-sample-deployment.md:docs/07-security-limitations-cleanup.md'
+  'docs/07-security-limitations-cleanup.md:docs/06-azure-sample-deployment.md'
 )
 
 for check in "${navigation_checks[@]}"; do

@@ -1,13 +1,14 @@
-# 06. 보안·제약·정리
+# 07. 보안·제약·정리
 
-> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 실습 구성을 그대로 운영에 올리지 않고, 어떤 지점을 production 확장으로 보완해야 하는지까지 연결해 설명합니다.
+> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 코어 90분 경로의 필수 마무리이며, Module 06을 수행했다면 deployment workflow cleanup까지 함께 정리합니다. 실습 구성을 그대로 운영에 올리지 않고, 어떤 지점을 production 확장으로 보완해야 하는지까지 연결해 설명합니다.
 
 ## 목표
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
 - 워크숍 구성을 production 기준으로 어떻게 확장할지 설명할 수 있다.
-- `Private repository`와 trusted workflow author 전제를 지키며 self-hosted runner 노출면을 줄일 수 있다.
+- `Private repository`와 trusted workflow authors 전제를 지키며 self-hosted runner 노출면을 줄일 수 있다.
+- attached managed identity와 `Container Apps Contributor` 범위를 왜 좁게 유지해야 하는지 설명할 수 있다.
 - Fine-grained PAT permission, rotation, revoke 순서를 다시 확인할 수 있다.
 - Azure Container Apps Job과 GitHub runner 모델의 제약을 운영 관점에서 설명할 수 있다.
 - Azure 리소스 그룹과 GitHub 측 실습 흔적을 안전하게 정리할 수 있다.
@@ -79,10 +80,12 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 ⚠️ **주의**
 
 - 이 워크숍은 **private repository only**를 전제로 합니다. `public repository`에 self-hosted runner를 연결하지 마세요.
+- runner에 연결된 managed identity는 workflow code가 그대로 사용할 수 있습니다. 따라서 self-hosted runner는 **private repository**와 **trusted workflow authors**만 사용하는 경계 안에 두세요.
 - Fine-grained PAT의 repository access는 반드시 **Only select repositories**로 제한하고 `aca-runner-lab` 같은 실습 대상 repository만 선택하세요.
 - repository permission은 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`만 유지하세요.
 - 워크숍용 PAT는 **30 days** 만료를 선호하고, 만료 전에 rotation을 끝내세요.
 - workflow를 수정할 수 있는 사람은 **trusted workflow authors**로 제한하세요.
+- Module 06의 배포 확장에서 사용한 `Container Apps Contributor`는 의도적으로 resource-group scope에만 부여합니다. broad `Contributor`로 바꾸지 마세요.
 - Fine-grained PAT, registration token, remove token은 `echo`, 로그, 스크린샷, Git 기록에 출력하지 마세요.
 - runner image는 `ghcr.io/actions/actions-runner:2.336.0`처럼 **pinned runner image**로 고정하고 정기적으로 rebuild/scanning 하세요.
 - 오래 남은 offline runner나 stale registration record는 주기적으로 삭제하세요.
@@ -122,7 +125,7 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 
 👁️ **설명**
 
-실습 비용을 멈추는 가장 확실한 방법은 리소스 그룹 전체를 삭제하는 것입니다. 이 워크숍의 모든 Azure 리소스는 `$RG` 아래에 있으므로 개별 삭제보다 RG 삭제를 우선합니다.
+실습 비용을 멈추는 가장 확실한 방법은 리소스 그룹 전체를 삭제하는 것입니다. 이 워크숍의 모든 Azure 리소스는 `$RG` 아래에 있으므로 개별 삭제보다 RG 삭제를 우선합니다. Module 06에서 만든 sample `Container App`도 `$RG`에 포함되므로, 정리 단계에서는 별도 `az containerapp delete`보다 resource-group 삭제가 authoritative path입니다.
 
 🟢 **실행**
 
@@ -182,7 +185,7 @@ az resource list \
 
 👁️ **설명**
 
-Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이나 불필요한 PAT가 계속 남을 수 있습니다.
+Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이나 불필요한 PAT가 계속 남을 수 있습니다. Module 06을 수행했다면 배포 workflow도 같은 trusted boundary 안에 남아 있으므로, 더 이상 쓰지 않을 때는 함께 정리하세요.
 
 🟢 **실행**
 
@@ -191,6 +194,8 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 1. 실습용 Fine-grained PAT를 revoke하여 PAT 삭제를 완료합니다.
 2. Cloud Shell에서 `unset GITHUB_PAT`를 실행합니다.
 3. `aca-runner-lab`의 `.github/workflows/aca-runner-scale-test.yml`, stale runner record, lab repository 보존 여부를 정리합니다.
+4. `.github/workflows/aca-runner-azure-deploy.yml`을 더 이상 사용할 필요가
+   없으면 삭제합니다.
 
 ⚠️ **주의**
 
@@ -211,4 +216,4 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 
 ---
 
-[← 이전: 병렬 실행과 스케일 검증](05-parallel-scale-validation.md)
+[← 이전: Azure 샘플 배포와 결과 확인](06-azure-sample-deployment.md)
