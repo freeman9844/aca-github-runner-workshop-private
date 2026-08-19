@@ -10,6 +10,7 @@ NO_RUNNERS_SCREENSHOT="$ROOT/docs/images/05-github-actions-no-self-hosted-runner
 [[ -f "$QUEUED_SCREENSHOT" ]] || { echo "FAIL: module 05 queued screenshot missing" >&2; exit 1; }
 [[ -f "$SUCCESS_SCREENSHOT" ]] || { echo "FAIL: module 05 successful matrix screenshot missing" >&2; exit 1; }
 [[ -f "$NO_RUNNERS_SCREENSHOT" ]] || { echo "FAIL: module 05 no-runners screenshot missing" >&2; exit 1; }
+[[ ! -x "$NO_RUNNERS_SCREENSHOT" ]] || { echo "FAIL: module 05 no-runners screenshot must not be executable" >&2; exit 1; }
 
 fail() {
   echo "FAIL: $*" >&2
