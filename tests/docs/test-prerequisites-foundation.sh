@@ -94,7 +94,7 @@ for text in \
   '![Cloud Shell 스토리지 계정 자동 생성 선택](images/01-cloudshell-step3-mount-storage.png)' \
   '![Cloud Shell Bash 프롬프트 준비 완료](images/01-cloudshell-step4-ready.png)' \
   '워크숍 source 인증과 lab Fine-grained PAT는 서로 다른 용도입니다.' \
-  'git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' \
+  'git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' \
   'cd ~/aca-github-runner-workshop' \
   'until [[ -n "$GITHUB_PAT" ]]' \
   'ERROR: Fine-grained PAT cannot be empty. Try again.' \
@@ -115,9 +115,9 @@ fi
 
 for text in \
   'Private workshop source HTTPS 인증·권한 또는 SSO authorization 실패' \
-  'https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private/tree/master' \
+  'https://github.com/freeman9844/aca-github-runner-workshop-private/tree/master' \
   '브라우저의 `/tree/master` URL은 접근 확인용이며 clone URL이 아닙니다.' \
-  'clone에는 `https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git`을 사용합니다.' \
+  'clone에는 `https://github.com/freeman9844/aca-github-runner-workshop-private.git`을 사용합니다.' \
   '목적지 `~/aca-github-runner-workshop`이 이미 존재하거나 예상과 다른 clone destination' \
   '기존 디렉터리는 삭제하지 마세요.' \
   '정확한 목적지 `~/aca-github-runner-workshop`'; do

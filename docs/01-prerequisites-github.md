@@ -140,7 +140,7 @@ gh auth login --hostname github.com --git-protocol https --web
 gh auth setup-git
 gh auth status --hostname github.com
 
-git clone https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
+git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
 cd ~/aca-github-runner-workshop
 ls
 ```
@@ -291,7 +291,7 @@ Runner administration: OK
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| Private workshop source HTTPS 인증·권한 또는 SSO authorization 실패 | private source 접근 권한, GitHub CLI HTTPS 인증, 또는 organization SSO 승인이 없거나 만료됨. | `gh auth status --hostname github.com`으로 현재 계정을 확인하고 필요하면 `gh auth login --hostname github.com --git-protocol https --web`와 `gh auth setup-git`을 다시 실행합니다. 브라우저에서 `https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private/tree/master` 접근과 organization SSO authorization 상태도 확인합니다. 브라우저의 `/tree/master` URL은 접근 확인용이며 clone URL이 아닙니다. clone에는 `https://github.com/jungwoonlee_microsoft/aca-github-runner-workshop-private.git`을 사용합니다. |
+| Private workshop source HTTPS 인증·권한 또는 SSO authorization 실패 | private source 접근 권한, GitHub CLI HTTPS 인증, 또는 organization SSO 승인이 없거나 만료됨. | `gh auth status --hostname github.com`으로 현재 계정을 확인하고 필요하면 `gh auth login --hostname github.com --git-protocol https --web`와 `gh auth setup-git`을 다시 실행합니다. 브라우저에서 `https://github.com/freeman9844/aca-github-runner-workshop-private/tree/master` 접근과 organization SSO authorization 상태도 확인합니다. 브라우저의 `/tree/master` URL은 접근 확인용이며 clone URL이 아닙니다. clone에는 `https://github.com/freeman9844/aca-github-runner-workshop-private.git`을 사용합니다. |
 | 목적지 `~/aca-github-runner-workshop`이 이미 존재하거나 예상과 다른 clone destination | 고정 목적지에 기존 디렉터리가 있거나 workshop source를 다른 경로에 clone함. | 기존 디렉터리는 삭제하지 마세요. 올바른 workshop clone이면 `cd ~/aca-github-runner-workshop`으로 계속합니다. 다른 내용이면 별도 이름이나 위치로 옮겨 보존한 뒤, 4단계의 `.git` clone URL과 정확한 목적지 `~/aca-github-runner-workshop`을 사용해 다시 clone합니다. |
 | `401 Unauthorized` | copied token is wrong, expired, or revoked. | GitHub에서 토큰 값을 다시 복사하거나 새 Fine-grained PAT를 발급한 뒤 6단계 입력 블록을 다시 실행합니다. |
 | `403 Forbidden` | organization approval is pending or enterprise policy blocks Fine-grained PAT use. | organization approval 상태를 확인하고, enterprise 정책 제한이 있으면 관리자 승인 또는 정책 변경 후 다시 시도합니다. |
