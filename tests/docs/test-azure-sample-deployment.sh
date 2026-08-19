@@ -6,6 +6,9 @@ WORKFLOW="$ROOT/samples/azure-sample-deploy-workflow.yml"
 DOC="$ROOT/docs/06-azure-sample-deployment.md"
 MODULE05_DOC="$ROOT/docs/05-parallel-scale-validation.md"
 GITHUB_WORKFLOWS_SCREENSHOT="$ROOT/docs/images/06-github-workflows-console.png"
+GITHUB_DEPLOYMENT_SCREENSHOT="$ROOT/docs/images/06-github-actions-deployment-success.png"
+AZURE_PORTAL_SCREENSHOT="$ROOT/docs/images/06-azure-portal-resource-group-result.png"
+APP_RESULT_SCREENSHOT="$ROOT/docs/images/06-container-app-hello-world-result.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -17,6 +20,12 @@ fail() {
 [[ -f "$MODULE05_DOC" ]] || fail "Module 05 missing"
 [[ -f "$GITHUB_WORKFLOWS_SCREENSHOT" ]] || fail "Module 06 GitHub workflows screenshot missing"
 [[ ! -x "$GITHUB_WORKFLOWS_SCREENSHOT" ]] || fail "Module 06 GitHub workflows screenshot must not be executable"
+[[ -f "$GITHUB_DEPLOYMENT_SCREENSHOT" ]] || fail "Module 06 deployment success screenshot missing"
+[[ ! -x "$GITHUB_DEPLOYMENT_SCREENSHOT" ]] || fail "Module 06 deployment success screenshot must not be executable"
+[[ -f "$AZURE_PORTAL_SCREENSHOT" ]] || fail "Module 06 Azure portal screenshot missing"
+[[ ! -x "$AZURE_PORTAL_SCREENSHOT" ]] || fail "Module 06 Azure portal screenshot must not be executable"
+[[ -f "$APP_RESULT_SCREENSHOT" ]] || fail "Module 06 app result screenshot missing"
+[[ ! -x "$APP_RESULT_SCREENSHOT" ]] || fail "Module 06 app result screenshot must not be executable"
 
 for heading in \
   '# 06. Azure 샘플 배포와 결과 확인' \
@@ -121,16 +130,32 @@ done
 [[ "$(grep -Fc 'SAMPLE_APP="hello-aca-$SUFFIX"' "$DOC")" -eq 2 ]] ||
   fail "Module 06 must initialize SAMPLE_APP in recovery and normal-session paths"
 
-step3_expected_line="$(grep -nF -m1 '`Show deployed Azure resource` step에는 새 `Container App` 이름, image, FQDN이 출력됩니다.' "$DOC" | cut -d: -f1)"
-screenshot_line="$(grep -nF -m1 '![GitHub workflows 폴더에 배포 및 스케일 테스트 workflow가 준비된 화면](images/06-github-workflows-console.png)' "$DOC" | cut -d: -f1)"
+step2_expected_line="$(grep -nF -m1 'reviewed sample과 같은 single-job workflow가 저장됩니다.' "$DOC" | cut -d: -f1)"
 step3_heading_line="$(grep -nF -m1 '## 3. GitHub Actions에서 배포 실행' "$DOC" | cut -d: -f1)"
+workflows_screenshot_line="$(grep -nF -m1 '![GitHub workflows 폴더에 배포 및 스케일 테스트 workflow가 준비된 화면](images/06-github-workflows-console.png)' "$DOC" | cut -d: -f1)"
+[[ -n "$step2_expected_line" && -n "$workflows_screenshot_line" && -n "$step3_heading_line" ]] ||
+  fail "Module 06 missing Step 2 workflows screenshot placement markers"
+(( step2_expected_line < workflows_screenshot_line && workflows_screenshot_line < step3_heading_line )) ||
+  fail "Module 06 workflows screenshot must follow Step 2 expected output"
+
+step3_expected_line="$(grep -nF -m1 '`Show deployed Azure resource` step에는 새 `Container App` 이름, image, FQDN이 출력됩니다.' "$DOC" | cut -d: -f1)"
+deployment_screenshot_line="$(grep -nF -m1 '![GitHub Actions에서 Azure 샘플 Container App 배포가 성공한 화면](images/06-github-actions-deployment-success.png)' "$DOC" | cut -d: -f1)"
 step4_heading_line="$(grep -nF -m1 '## 4. 배포 URL과 HTTP 결과 확인' "$DOC" | cut -d: -f1)"
 step3_warning_line="$(awk -v start="$step3_heading_line" -v end="$step4_heading_line" \
   'NR > start && NR < end && $0 == "⚠️ **주의**" { print NR; exit }' "$DOC")"
-[[ -n "$step3_expected_line" && -n "$screenshot_line" && -n "$step3_warning_line" ]] ||
-  fail "Module 06 missing Step 3 GitHub console screenshot placement markers"
-(( step3_expected_line < screenshot_line && screenshot_line < step3_warning_line )) ||
-  fail "Module 06 GitHub console screenshot must follow Step 3 expected output"
+[[ -n "$step3_expected_line" && -n "$deployment_screenshot_line" && -n "$step3_warning_line" ]] ||
+  fail "Module 06 missing Step 3 deployment screenshot placement markers"
+(( step3_expected_line < deployment_screenshot_line && deployment_screenshot_line < step3_warning_line )) ||
+  fail "Module 06 deployment screenshot must follow Step 3 expected output"
+
+step5_expected_line="$(grep -nF -m1 'GitHub Actions, 브라우저, Cloud Shell, Portal 네 곳에서 같은 앱 이름과 URL을 가리키면 검증 완료입니다.' "$DOC" | cut -d: -f1)"
+portal_screenshot_line="$(grep -nF -m1 '![Azure Portal에서 워크숍 Resource Group과 배포된 Container App을 확인한 화면](images/06-azure-portal-resource-group-result.png)' "$DOC" | cut -d: -f1)"
+app_result_screenshot_line="$(grep -nF -m1 '![브라우저에서 Azure Container Apps Hello World 결과를 확인한 화면](images/06-container-app-hello-world-result.png)' "$DOC" | cut -d: -f1)"
+troubleshooting_line="$(grep -nF -m1 '## 트러블슈팅' "$DOC" | cut -d: -f1)"
+[[ -n "$step5_expected_line" && -n "$portal_screenshot_line" && -n "$app_result_screenshot_line" && -n "$troubleshooting_line" ]] ||
+  fail "Module 06 missing Step 5 result screenshot placement markers"
+(( step5_expected_line < portal_screenshot_line && portal_screenshot_line < app_result_screenshot_line && app_result_screenshot_line < troubleshooting_line )) ||
+  fail "Module 06 Step 5 screenshots must show the portal before the browser result"
 
 grep -Fx '[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing Module 06 navigation link"
