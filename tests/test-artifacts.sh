@@ -4,10 +4,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCKERFILE="$ROOT/runner/Dockerfile"
 WORKFLOW="$ROOT/samples/parallel-runner-workflow.yml"
+AZURE_DEPLOY_WORKFLOW="$ROOT/samples/azure-sample-deploy-workflow.yml"
 CI_WORKFLOW="$ROOT/.github/workflows/validate-workshop.yml"
 
 [[ -f "$DOCKERFILE" ]] || { echo "FAIL: runner/Dockerfile missing" >&2; exit 1; }
 [[ -f "$WORKFLOW" ]] || { echo "FAIL: workflow sample missing" >&2; exit 1; }
+[[ -f "$AZURE_DEPLOY_WORKFLOW" ]] || { echo "FAIL: Azure deploy workflow sample missing" >&2; exit 1; }
 [[ -f "$CI_WORKFLOW" ]] || { echo "FAIL: validation workflow missing" >&2; exit 1; }
 
 grep -F 'FROM ghcr.io/actions/actions-runner:2.336.0' "$DOCKERFILE" >/dev/null
@@ -66,5 +68,7 @@ if grep -F 'runs-on: [self-hosted, linux, x64, aca-runner]' "$WORKFLOW" >/dev/nu
   echo "FAIL: workflow still depends on default self-hosted runner labels" >&2
   exit 1
 fi
+
+bash "$ROOT/tests/docs/test-azure-sample-deployment.sh"
 
 printf 'PASS: runner image and workflow artifacts\n'

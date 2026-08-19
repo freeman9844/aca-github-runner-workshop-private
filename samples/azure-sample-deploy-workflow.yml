@@ -1,0 +1,99 @@
+name: ACA Runner Azure Sample Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-sample:
+    name: Deploy sample Container App
+    runs-on: [aca-runner]
+    timeout-minutes: 15
+    steps:
+      - name: Validate Azure deployment context
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variable in \
+            AZURE_CLIENT_ID \
+            AZURE_SUBSCRIPTION_ID \
+            AZURE_RESOURCE_GROUP \
+            AZURE_CONTAINERAPPS_ENVIRONMENT \
+            AZURE_SAMPLE_APP; do
+            if [[ -z "${!variable:-}" ]]; then
+              printf 'ERROR: %s is required.\n' "$variable" >&2
+              exit 1
+            fi
+          done
+
+      - name: Sign in with the runner managed identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          az login --identity --client-id "$AZURE_CLIENT_ID" --output none
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          az account show \
+            --query "{subscription:name,subscriptionId:id,tenantId:tenantId}" \
+            --output table
+
+      - name: Deploy the sample Container App
+        shell: bash
+        run: |
+          set -euo pipefail
+          if az containerapp show \
+            --name "$AZURE_SAMPLE_APP" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --output none 2>/dev/null; then
+            az containerapp delete \
+              --name "$AZURE_SAMPLE_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --yes \
+              --output none
+          fi
+
+          FQDN="$(az containerapp create \
+            --name "$AZURE_SAMPLE_APP" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --environment "$AZURE_CONTAINERAPPS_ENVIRONMENT" \
+            --image mcr.microsoft.com/k8se/quickstart:latest \
+            --ingress external \
+            --target-port 80 \
+            --min-replicas 0 \
+            --max-replicas 1 \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)"
+
+          if [[ -z "$FQDN" ]]; then
+            printf 'ERROR: Azure did not return a Container App FQDN.\n' >&2
+            exit 1
+          fi
+
+          APP_URL="https://$FQDN"
+          printf 'APP_URL=%s\n' "$APP_URL" >> "$GITHUB_ENV"
+
+      - name: Verify the deployed HTTPS endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 18); do
+            if response="$(curl --fail --silent --show-error "$APP_URL")"; then
+              printf 'Verified %s\n' "$APP_URL"
+              printf '%s\n' "$response" | sed -n '1,12p'
+              exit 0
+            fi
+            printf 'Endpoint not ready (attempt %s/18); retrying in 5 seconds.\n' \
+              "$attempt" >&2
+            sleep 5
+          done
+          printf 'ERROR: HTTP verification failed after 18 attempts: %s\n' \
+            "$APP_URL" >&2
+          exit 1
+
+      - name: Show deployed Azure resource
+        shell: bash
+        run: |
+          set -euo pipefail
+          az containerapp show \
+            --name "$AZURE_SAMPLE_APP" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "{name:name,provisioningState:properties.provisioningState,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
+            --output table

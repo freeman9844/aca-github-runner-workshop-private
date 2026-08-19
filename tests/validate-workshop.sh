@@ -11,6 +11,7 @@ bash tests/docs/test-overview.sh
 bash tests/docs/test-prerequisites-foundation.sh
 bash tests/docs/test-build-deploy.sh
 bash tests/docs/test-scale-validation.sh
+bash tests/docs/test-azure-sample-deployment.sh
 bash tests/docs/test-security-cleanup.sh
 
 core_workshop_paths=(
@@ -30,6 +31,7 @@ required_files=(
   runner/Dockerfile
   runner/entrypoint.sh
   samples/parallel-runner-workflow.yml
+  samples/azure-sample-deploy-workflow.yml
   docs/01-prerequisites-github.md
   docs/02-azure-foundation.md
   docs/03-runner-image.md
