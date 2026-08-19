@@ -30,7 +30,7 @@ fail() {
 for heading in \
   '# 06. Azure 샘플 배포와 결과 확인' \
   '## 0. 세션 재연결 시 변수 복구 (선택)' \
-  '## 1. 배포 권한과 실행 흐름 확인' \
+  '## 1. 배포 권한 확인과 Container Apps Contributor 부여' \
   '## 2. 샘플 workflow를 GitHub에 생성' \
   '## 3. GitHub Actions에서 배포 실행' \
   '## 4. 배포 URL과 HTTP 결과 확인' \
@@ -91,6 +91,9 @@ for text in \
   'CONTAINER_APPS_ROLE=$(az role assignment list' \
   "--query \"[?roleDefinitionName=='Container Apps Contributor' && scope=='\$RG_ID'].roleDefinitionName | [0]\"" \
   'if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]' \
+  'for role_attempt in $(seq 1 30); do' \
+  'Waiting for Container Apps Contributor propagation' \
+  'ERROR: Container Apps Contributor was not visible after 30 checks.' \
   '--assignee-object-id "$UAMI_PID"' \
   '--assignee-principal-type ServicePrincipal' \
   '--role "Container Apps Contributor"' \
@@ -129,6 +132,21 @@ done
 
 [[ "$(grep -Fc 'SAMPLE_APP="hello-aca-$SUFFIX"' "$DOC")" -eq 2 ]] ||
   fail "Module 06 must initialize SAMPLE_APP in recovery and normal-session paths"
+
+role_grant_heading_line="$(grep -nF -m1 '### Container Apps Contributor 권한 부여' "$DOC" | cut -d: -f1 || true)"
+role_create_line="$(grep -nF -m1 'az role assignment create \' "$DOC" | cut -d: -f1 || true)"
+step2_heading_line="$(grep -nF -m1 '## 2. 샘플 workflow를 GitHub에 생성' "$DOC" | cut -d: -f1)"
+mapfile -t role_query_lines < <(
+  grep -nF 'CONTAINER_APPS_ROLE=$(az role assignment list' "$DOC" |
+    cut -d: -f1
+)
+[[ -n "$role_grant_heading_line" && -n "$role_create_line" && "${#role_query_lines[@]}" -eq 2 ]] ||
+  fail "Module 06 missing explicit role grant and verification flow"
+(( role_query_lines[0] < role_grant_heading_line &&
+   role_grant_heading_line < role_create_line &&
+   role_create_line < role_query_lines[1] &&
+   role_query_lines[1] < step2_heading_line )) ||
+  fail "Module 06 must check, grant, and recheck the role before Step 2"
 
 step2_expected_line="$(grep -nF -m1 'reviewed sample과 같은 single-job workflow가 저장됩니다.' "$DOC" | cut -d: -f1)"
 step3_heading_line="$(grep -nF -m1 '## 3. GitHub Actions에서 배포 실행' "$DOC" | cut -d: -f1)"
