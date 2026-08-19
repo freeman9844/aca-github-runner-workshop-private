@@ -7,7 +7,7 @@
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
 - `samples/azure-sample-deploy-workflow.yml`을 Cloud Shell에서 확인한 뒤 GitHub 웹 UI로 workflow를 만든다.
-- `AZURE_CLIENT_ID`와 `AZURE_SUBSCRIPTION_ID`가 식별자이며 credentials가 아니라는 점을 설명할 수 있다.
+- `UAMI_CLIENT_ID`와 `SUBSCRIPTION_ID`가 식별자이며, runner 환경에서는 각각 `AZURE_CLIENT_ID`와 `AZURE_SUBSCRIPTION_ID`로 전달된다는 점을 설명할 수 있다.
 - GitHub Actions, 브라우저, Cloud Shell, Azure Portal에서 같은 배포 결과를 교차 확인한다.
 - managed identity login, RBAC propagation, HTTP warm-up failure 시 안전한 복구 경로를 적용한다.
 
@@ -18,39 +18,41 @@
 
 👁️ **설명**
 
-같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼다면 **원래 저장해 둔 SUFFIX와 subscription ID**를 다시 넣어 Module 04에서 만든 Event Job 환경과 이 모듈의 샘플 앱 이름을 복구하세요. Cloud Shell이 다른 subscription을 기본값으로 잡고 돌아올 수 있으므로, Azure resource query 전에 workshop subscription context를 먼저 되돌려야 합니다. 새 suffix를 만들면 기존 trusted runner와 다른 리소스를 보게 됩니다.
+같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼다면 **원래 저장해 둔 SUFFIX와 subscription ID**를 다시 입력해 Module 02~04에서 사용한 변수명 그대로 Event Job 환경과 이 모듈의 샘플 앱 이름을 복구하세요. Cloud Shell이 다른 subscription을 기본값으로 잡고 돌아올 수 있으므로, Azure resource query 전에 workshop subscription context를 먼저 되돌려야 합니다. 새 suffix를 만들면 기존 trusted runner와 다른 리소스를 보게 됩니다.
 
 🟢 **실행**
 
 ```bash
-SUFFIX="<your-saved-suffix>"
+read -rp "Saved SUFFIX: " SUFFIX
+read -rp "Saved subscription ID: " SUBSCRIPTION_ID
+
 RG="rg-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
 UAMI="id-acarunner-$SUFFIX"
-AZURE_SAMPLE_APP="hello-aca-$SUFFIX"
-AZURE_SUBSCRIPTION_ID="<your-saved-subscription-id>"
-az account set --subscription "$AZURE_SUBSCRIPTION_ID"
-AZURE_CLIENT_ID=$(az identity show \
+SAMPLE_APP="hello-aca-$SUFFIX"
+
+az account set --subscription "$SUBSCRIPTION_ID"
+UAMI_CLIENT_ID=$(az identity show \
   --resource-group "$RG" \
   --name "$UAMI" \
   --query clientId \
   --output tsv)
 
-printf 'RG=%s\nENV=%s\nUAMI=%s\nAZURE_SAMPLE_APP=%s\nAZURE_CLIENT_ID=%s\nAZURE_SUBSCRIPTION_ID=%s\n' \
-  "$RG" "$ENV" "$UAMI" "$AZURE_SAMPLE_APP" "$AZURE_CLIENT_ID" "$AZURE_SUBSCRIPTION_ID"
+printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_ID=%s\n' \
+  "$RG" "$ENV" "$UAMI" "$SAMPLE_APP" "$UAMI_CLIENT_ID" "$SUBSCRIPTION_ID"
 ```
 
 📋 **예상 출력**
 
-- `RG`, `ENV`, `UAMI`, `AZURE_SAMPLE_APP`는 원래 실습에서 만든 이름으로 다시 채워집니다.
-- `AZURE_SUBSCRIPTION_ID`는 현재 Cloud Shell 기본값이 아니라, **원래 저장해 둔 workshop subscription ID** 그대로 유지됩니다.
-- `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`는 이후 workflow가 참조할 식별자입니다.
+- `RG`, `ENV`, `UAMI`, `SAMPLE_APP`은 원래 실습에서 만든 이름으로 다시 채워집니다.
+- `SUBSCRIPTION_ID`는 현재 Cloud Shell 기본값이 아니라, **원래 저장해 둔 workshop subscription ID** 그대로 유지됩니다.
+- `UAMI_CLIENT_ID`, `SUBSCRIPTION_ID`는 Module 02~04와 같은 Cloud Shell 변수명입니다.
 - `az identity show`가 실패하면 SUFFIX 오타, 저장한 subscription ID 오타, 또는 Module 02/04 리소스 이름 기록 오류를 먼저 확인합니다.
 
 ⚠️ **주의**
 
 - 여기서 복구하는 값은 식별자이며 secret이 아닙니다. 그래도 화면 공유 중이라면 불필요한 노출을 줄이기 위해 현재 탭만 사용하세요.
-- 이후 `az containerapp show` 같은 Azure resource query도 모두 방금 복구한 `AZURE_SUBSCRIPTION_ID` context를 기준으로 실행해야 합니다.
+- 이후 `az containerapp show` 같은 Azure resource query도 모두 방금 복구한 `SUBSCRIPTION_ID` context를 기준으로 실행해야 합니다.
 - Cloud Shell에 새로운 repository write credential이나 Azure client secret을 추가하지 마세요.
 
 </details>
@@ -68,7 +70,7 @@ printf 'RG=%s\nENV=%s\nUAMI=%s\nAZURE_SAMPLE_APP=%s\nAZURE_CLIENT_ID=%s\nAZURE_S
 
 👁️ **설명**
 
-이 모듈은 Module 04의 Event Job과 user-assigned managed identity를 그대로 재사용합니다. `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `RG`, `ENV`, `AZURE_SAMPLE_APP`는 배포 대상을 가리키는 **식별자**이고, Azure에 실제로 인증하는 credentials는 runner에 연결된 managed identity뿐입니다. 따라서 GitHub secret이나 Cloud Shell 환경 변수에 client secret을 추가하지 않습니다.
+이 모듈은 Module 04의 Event Job과 user-assigned managed identity를 그대로 재사용합니다. Cloud Shell의 공통 값은 Module 02~04와 동일하게 `UAMI_CLIENT_ID`, `SUBSCRIPTION_ID`, `RG`, `ENV`를 사용하고, 이 모듈에서만 조회할 샘플 앱 이름은 `SAMPLE_APP`으로 둡니다. Module 04에서 Event Job을 만들 때 대응 값들은 runner 환경 변수 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_CONTAINERAPPS_ENVIRONMENT`, `AZURE_SAMPLE_APP`으로 전달되었습니다. Azure에 실제로 인증하는 credentials는 runner에 연결된 managed identity뿐이므로 GitHub secret이나 Cloud Shell 환경 변수에 client secret을 추가하지 않습니다.
 
 샘플 배포를 위해 runner managed identity에는 workshop resource group 범위의 `Container Apps Contributor`가 필요합니다. 이 role은 샘플 `Container App` 생성·조회·삭제에 충분하며, **Container Apps Job 권한은 포함하지 않습니다.** Event Job 생성/수정 권한을 넓히지 않는 이유는 기존 trusted runner 경계를 유지하기 위해서입니다.
 
@@ -79,14 +81,16 @@ printf 'RG=%s\nENV=%s\nUAMI=%s\nAZURE_SAMPLE_APP=%s\nAZURE_CLIENT_ID=%s\nAZURE_S
 복구한 값이 현재 실습 대상과 맞는지 다시 출력해 확인합니다.
 
 ```bash
-printf 'RG=%s\nENV=%s\nUAMI=%s\nAZURE_SAMPLE_APP=%s\nAZURE_CLIENT_ID=%s\nAZURE_SUBSCRIPTION_ID=%s\n' \
-  "$RG" "$ENV" "$UAMI" "$AZURE_SAMPLE_APP" "$AZURE_CLIENT_ID" "$AZURE_SUBSCRIPTION_ID"
+SAMPLE_APP="hello-aca-$SUFFIX"
+
+printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_ID=%s\n' \
+  "$RG" "$ENV" "$UAMI" "$SAMPLE_APP" "$UAMI_CLIENT_ID" "$SUBSCRIPTION_ID"
 ```
 
 📋 **예상 출력**
 
 - 모든 값이 비어 있지 않아야 합니다.
-- `AZURE_CLIENT_ID`와 `AZURE_SUBSCRIPTION_ID`는 표시되어도 되는 식별자지만, PAT나 client secret 같은 credentials는 출력하지 않습니다.
+- `UAMI_CLIENT_ID`와 `SUBSCRIPTION_ID`는 표시되어도 되는 식별자지만, PAT나 client secret 같은 credentials는 출력하지 않습니다.
 - 이후 GitHub Actions에서 사용하는 Azure 로그인 명령은 `az login --identity --client-id` 한 줄뿐이어야 합니다.
 
 ## 2. 샘플 workflow를 GitHub에 생성
@@ -175,7 +179,7 @@ GitHub Actions 성공만으로 끝내지 말고 브라우저와 Cloud Shell에�
 
 ```bash
 FQDN=$(az containerapp show \
-  --name "$AZURE_SAMPLE_APP" \
+  --name "$SAMPLE_APP" \
   --resource-group "$RG" \
   --query properties.configuration.ingress.fqdn \
   --output tsv)
@@ -211,7 +215,7 @@ Cloud Shell에서 deployed resource summary를 다시 조회합니다.
 
 ```bash
 az containerapp show \
-  --name "$AZURE_SAMPLE_APP" \
+  --name "$SAMPLE_APP" \
   --resource-group "$RG" \
   --query "{name:name,provisioningState:properties.provisioningState,externalIngress:properties.configuration.ingress.external,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
   --output table
