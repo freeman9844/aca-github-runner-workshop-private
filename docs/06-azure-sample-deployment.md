@@ -162,6 +162,10 @@ GitHub repository에서 **Actions → ACA Runner Azure Sample Deploy → Run wor
 - `Verify the deployed HTTPS endpoint` step에는 `Verified https://...`가 보이며, 실패 시 끝부분에 `HTTP verification failed after` 메시지가 남습니다.
 - `Show deployed Azure resource` step에는 새 `Container App` 이름, image, FQDN이 출력됩니다.
 
+> **참고 화면:** GitHub 기본 브랜치의 `.github/workflows` 폴더에 Module 05의 `aca-runner-scale-test.yml`과 Module 06의 `aca-runner-azure-deploy.yml`이 함께 보이면 두 검증 workflow가 모두 준비된 상태입니다. 이 화면은 workflow 파일 존재 여부를 확인하는 예시이며, 실제 배포 성공 여부는 위의 GitHub Actions 실행 결과와 Azure 리소스로 확인해야 합니다.
+
+![GitHub workflows 폴더에 배포 및 스케일 테스트 workflow가 준비된 화면](images/06-github-workflows-console.png)
+
 ⚠️ **주의**
 
 - workflow가 queued 상태로 오래 머물면 먼저 오래된 queued run이나 `stale runner workflow`가 같은 `aca-runner` label을 붙잡고 있지 않은지 확인하세요.
@@ -233,10 +237,6 @@ az containerapp show \
 - Cloud Shell table에는 `Succeeded`, `true`, FQDN, quickstart image가 표시됩니다.
 - `Azure Portal`에서도 같은 이름의 `Container App`이 보이고 외부 ingress가 활성화되어 있어야 합니다.
 - GitHub Actions, 브라우저, Cloud Shell, Portal 네 곳에서 같은 앱 이름과 URL을 가리키면 검증 완료입니다.
-
-> **참고 화면:** GitHub 기본 브랜치의 `.github/workflows` 폴더에 Module 05의 `aca-runner-scale-test.yml`과 Module 06의 `aca-runner-azure-deploy.yml`이 함께 보이면 두 검증 workflow가 모두 준비된 상태입니다. 이 화면은 workflow 파일 존재 여부를 확인하는 예시이며, 실제 배포 성공 여부는 위의 GitHub Actions 실행 결과와 Azure 리소스로 확인해야 합니다.
-
-![GitHub workflows 폴더에 배포 및 스케일 테스트 workflow가 준비된 화면](images/06-github-workflows-console.png)
 
 ## 트러블슈팅
 
