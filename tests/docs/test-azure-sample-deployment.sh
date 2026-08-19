@@ -48,12 +48,12 @@ details_prev_line="$(sed -n "$((details_close_line - 1))p" "$DOC")"
 [[ -z "${details_prev_line//[[:space:]]/}" ]] ||
   fail "Module 06 details close must be preceded by a blank line"
 
-subscription_placeholder_line="$(grep -nF -m1 'AZURE_SUBSCRIPTION_ID="<your-saved-subscription-id>"' "$DOC" | cut -d: -f1 || true)"
-account_set_line="$(grep -nF -m1 'az account set --subscription "$AZURE_SUBSCRIPTION_ID"' "$DOC" | cut -d: -f1 || true)"
-identity_show_line="$(grep -nF -m1 'AZURE_CLIENT_ID=$(az identity show' "$DOC" | cut -d: -f1 || true)"
-[[ -n "$subscription_placeholder_line" && -n "$account_set_line" && -n "$identity_show_line" ]] ||
+subscription_prompt_line="$(grep -nF -m1 'read -rp "Saved subscription ID: " SUBSCRIPTION_ID' "$DOC" | cut -d: -f1 || true)"
+account_set_line="$(grep -nF -m1 'az account set --subscription "$SUBSCRIPTION_ID"' "$DOC" | cut -d: -f1 || true)"
+identity_show_line="$(grep -nF -m1 'UAMI_CLIENT_ID=$(az identity show' "$DOC" | cut -d: -f1 || true)"
+[[ -n "$subscription_prompt_line" && -n "$account_set_line" && -n "$identity_show_line" ]] ||
   fail "Module 06 missing saved subscription recovery commands"
-(( subscription_placeholder_line < account_set_line && account_set_line < identity_show_line )) ||
+(( subscription_prompt_line < account_set_line && account_set_line < identity_show_line )) ||
   fail "Module 06 must restore the saved subscription before az identity show"
 
 for text in \
@@ -65,14 +65,14 @@ for text in \
   'trusted workflow authors' \
   '식별자' \
   'credentials' \
-  'SUFFIX="<your-saved-suffix>"' \
-  'AZURE_SUBSCRIPTION_ID="<your-saved-subscription-id>"' \
-  'az account set --subscription "$AZURE_SUBSCRIPTION_ID"' \
+  'read -rp "Saved SUFFIX: " SUFFIX' \
+  'read -rp "Saved subscription ID: " SUBSCRIPTION_ID' \
+  'az account set --subscription "$SUBSCRIPTION_ID"' \
   'RG="rg-acarunner-$SUFFIX"' \
   'ENV="env-acarunner-$SUFFIX"' \
   'UAMI="id-acarunner-$SUFFIX"' \
-  'AZURE_SAMPLE_APP="hello-aca-$SUFFIX"' \
-  'AZURE_CLIENT_ID=$(az identity show' \
+  'SAMPLE_APP="hello-aca-$SUFFIX"' \
+  'UAMI_CLIENT_ID=$(az identity show' \
   '--name "$UAMI"' \
   '--query clientId' \
   'az login --identity --client-id' \
@@ -92,9 +92,17 @@ for text in \
     fail "Module 06 missing $text"
 done
 
-if grep -F 'AZURE_SUBSCRIPTION_ID=$(az account show --query id --output tsv)' "$DOC" >/dev/null; then
-  fail "Module 06 must not derive the workshop subscription from the current Cloud Shell context"
-fi
+for assignment in \
+  'AZURE_SUBSCRIPTION_ID=' \
+  'AZURE_CLIENT_ID=$(az identity show' \
+  'AZURE_SAMPLE_APP="hello-aca-$SUFFIX"'; do
+  if grep -F "$assignment" "$DOC" >/dev/null; then
+    fail "Module 06 must reserve $assignment for the runner environment contract"
+  fi
+done
+
+[[ "$(grep -Fc 'SAMPLE_APP="hello-aca-$SUFFIX"' "$DOC")" -eq 2 ]] ||
+  fail "Module 06 must initialize SAMPLE_APP in recovery and normal-session paths"
 
 grep -Fx '[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing Module 06 navigation link"
