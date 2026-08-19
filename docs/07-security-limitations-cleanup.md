@@ -1,6 +1,6 @@
 # 07. 보안·제약·정리
 
-> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 코어 90분 경로의 필수 마무리이며, Module 06을 수행했다면 deployment workflow cleanup까지 함께 정리합니다. 실습 구성을 그대로 운영에 올리지 않고, 어떤 지점을 production 확장으로 보완해야 하는지까지 연결해 설명합니다.
+> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 105분 필수 경로의 마지막 단계이며, Module 06에서 만든 deployment workflow까지 함께 정리합니다. 실습 구성을 그대로 운영에 올리지 않고, 어떤 지점을 production 확장으로 보완해야 하는지까지 연결해 설명합니다.
 
 ## 목표
 
@@ -85,7 +85,7 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 - repository permission은 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`만 유지하세요.
 - 워크숍용 PAT는 **30 days** 만료를 선호하고, 만료 전에 rotation을 끝내세요.
 - workflow를 수정할 수 있는 사람은 **trusted workflow authors**로 제한하세요.
-- Module 06의 배포 확장에서 사용한 `Container Apps Contributor`는 의도적으로 resource-group scope에만 부여합니다. broad `Contributor`로 바꾸지 마세요.
+- Module 06의 샘플 배포에서 사용한 `Container Apps Contributor`는 의도적으로 resource-group scope에만 부여합니다. broad `Contributor`로 바꾸지 마세요.
 - Fine-grained PAT, registration token, remove token은 `echo`, 로그, 스크린샷, Git 기록에 출력하지 마세요.
 - runner image는 `ghcr.io/actions/actions-runner:2.336.0`처럼 **pinned runner image**로 고정하고 정기적으로 rebuild/scanning 하세요.
 - 오래 남은 offline runner나 stale registration record는 주기적으로 삭제하세요.
@@ -185,7 +185,7 @@ az resource list \
 
 👁️ **설명**
 
-Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이나 불필요한 PAT가 계속 남을 수 있습니다. Module 06을 수행했다면 배포 workflow도 같은 trusted boundary 안에 남아 있으므로, 더 이상 쓰지 않을 때는 함께 정리하세요.
+Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이나 불필요한 PAT가 계속 남을 수 있습니다. Module 06에서 만든 배포 workflow도 같은 trusted boundary 안에 남아 있으므로, 더 이상 쓰지 않을 때는 함께 정리하세요.
 
 🟢 **실행**
 

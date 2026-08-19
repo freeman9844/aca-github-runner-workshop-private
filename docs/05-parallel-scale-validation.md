@@ -452,4 +452,4 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 [← 이전: Event Job + KEDA 구성](04-event-job-keda.md)
 [다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)
 
-Module 06은 선택이며, 90분 핵심 경로가 필요하면 [Module 07 정리 문서](07-security-limitations-cleanup.md)로 바로 이동해도 됩니다.
+Module 06은 필수 단계입니다. 위 링크로 이동해 Azure 샘플 배포와 결과 확인을 계속합니다.
