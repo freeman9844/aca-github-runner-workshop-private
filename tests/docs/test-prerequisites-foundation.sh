@@ -17,6 +17,14 @@ fail() {
   exit 1
 }
 
+assert_contains_multiline() {
+  local haystack="$1"
+  local needle="$2"
+  local message="$3"
+
+  [[ "$haystack" == *"$needle"* ]] || fail "$message"
+}
+
 operational_github_app_pattern='GITHUB_APP_|Developer settings → GitHub Apps|Generate a private key|App ID|installation ID|private key PEM|github-app-private-key'
 stdout_pat_print_pattern='^[[:space:]]*(printf|echo|cat)\b.*\$GITHUB_PAT([^[:alnum:]_]|$)'
 safe_printf_v_pattern='^[0-9]+:[[:space:]]*printf[[:space:]]+-v\b'
@@ -29,6 +37,7 @@ grep_forbidden_pat_stdout_prints() {
 [[ -f "$FOUNDATION" ]] || { echo "FAIL: module 02 missing" >&2; exit 1; }
 [[ -f "$PORTAL_SCREENSHOT" ]] ||
   fail "module 02 Azure portal screenshot missing"
+FOUNDATION_TEXT="$(<"$FOUNDATION")"
 for screenshot in "${CLOUD_SHELL_SCREENSHOTS[@]}"; do
   [[ -f "$screenshot" ]] ||
     fail "module 01 Cloud Shell screenshot missing: $(basename "$screenshot")"
@@ -179,10 +188,6 @@ for text in \
   'Contributor만으로는 Azure RBAC 역할을 할당할 수 없습니다.' \
   'Microsoft.Authorization/roleAssignments/write' \
   'Role Based Access Control Administrator' \
-  '--role AcrPull' \
-  '--role "Container Apps Contributor"' \
-  '--scope "$RG_ID"' \
-  '--assignee-principal-type ServicePrincipal' \
   'Container Apps Contributor는 Container App을 관리하지만 Container Apps Job 권한은 포함하지 않습니다.' \
   'ACR="acracarunner$(openssl rand -hex 4)"' \
   '이 시점부터 `ACR`은 더 이상 `SUFFIX`에서 유도되지 않습니다.' \
@@ -193,6 +198,25 @@ for text in \
   'SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3'; do
   grep -F -- "$text" "$FOUNDATION" >/dev/null || { echo "FAIL: module 02 missing $text" >&2; exit 1; }
 done
+
+assert_contains_multiline \
+  "$FOUNDATION_TEXT" \
+  $'az role assignment create \\\n  --assignee-object-id "$UAMI_PID" \\\n  --assignee-principal-type ServicePrincipal \\\n  --role AcrPull \\\n  --scope "$ACR_ID" \\\n  --output none' \
+  'module 02 must keep AcrPull assigned at the ACR scope'
+
+assert_contains_multiline \
+  "$FOUNDATION_TEXT" \
+  $'az role assignment create \\\n  --assignee-object-id "$UAMI_PID" \\\n  --assignee-principal-type ServicePrincipal \\\n  --role "Container Apps Contributor" \\\n  --scope "$RG_ID" \\\n  --output none' \
+  'module 02 must keep Container Apps Contributor assigned at the resource-group scope'
+
+assert_contains_multiline \
+  "$FOUNDATION_TEXT" \
+  $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$RG_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
+  'module 02 must verify both RBAC scopes while showing role names'
+
+grep -Fx -- '- `AcrPull`, `Container Apps Contributor`, `ServicePrincipal`이 보이는 표가 출력됩니다.' \
+  "$FOUNDATION" >/dev/null ||
+  fail "module 02 missing RBAC verification output for both roles"
 
 portal_reference_line="$(
   grep -nF -m1 '## 참고: Azure 관리 포털에서 생성된 리소스 확인' \
@@ -213,9 +237,7 @@ for text in \
   'adminUserEnabled:adminUserEnabled' \
   'az acr config authentication-as-arm show \' \
   'az role assignment list \' \
-  'roleDefinitionName' \
-  'AcrPull' \
-  'Container Apps Contributor'; do
+  'roleDefinitionName'; do
   grep -F -- "$text" "$FOUNDATION" >/dev/null ||
     fail "module 02 lost safety check: $text"
 done
