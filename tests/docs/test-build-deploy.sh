@@ -4,16 +4,57 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE_DOC="$ROOT/docs/03-runner-image.md"
 JOB_DOC="$ROOT/docs/04-event-job-keda.md"
+RUNNER_DOCKERFILE="$ROOT/runner/Dockerfile"
+RUNNER_ENTRYPOINT="$ROOT/runner/entrypoint.sh"
 
 fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
 
+assert_documented_file_matches() {
+  local marker="$1"
+  local actual_file="$2"
+  local documented_file
+
+  documented_file="$(
+    awk -v marker="$marker" '
+      $0 == "<!-- BEGIN " marker " -->" { found = 1; next }
+      found && /^```/ && !in_code { in_code = 1; next }
+      found && /^```/ && in_code { exit }
+      in_code { print }
+    ' "$IMAGE_DOC"
+  )"
+
+  [[ -n "$documented_file" ]] ||
+    fail "module 03 missing documented source block: $marker"
+  diff -u "$actual_file" <(printf '%s\n' "$documented_file") >/dev/null ||
+    fail "module 03 source block differs from $(basename "$actual_file")"
+}
+
 operational_github_app_pattern='GITHUB_APP_|github_app_jwt|/app/installations/|openssl dgst|BEGIN [A-Z0-9 ]*PRIVATE KEY|applicationID=|installationID=|appKey=|github-app-private-key'
 
 [[ -f "$IMAGE_DOC" ]] || { echo "FAIL: module 03 missing" >&2; exit 1; }
 [[ -f "$JOB_DOC" ]] || { echo "FAIL: module 04 missing" >&2; exit 1; }
+[[ -f "$RUNNER_DOCKERFILE" ]] || fail "runner Dockerfile missing"
+[[ -f "$RUNNER_ENTRYPOINT" ]] || fail "runner entrypoint missing"
+
+assert_documented_file_matches "RUNNER_DOCKERFILE" "$RUNNER_DOCKERFILE"
+assert_documented_file_matches "RUNNER_ENTRYPOINT" "$RUNNER_ENTRYPOINT"
+
+for comment in \
+  '# Install the tools required by the runner and Azure deployment workflow.' \
+  '# Run the container as the non-root runner user.'; do
+  grep -F -- "$comment" "$RUNNER_DOCKERFILE" >/dev/null ||
+    fail "runner Dockerfile missing explanatory comment: $comment"
+done
+
+for comment in \
+  '# Keep the PAT inside this wrapper process so workflow steps cannot inherit it.' \
+  '# Deregister the ephemeral runner when the container exits.'; do
+  grep -F -- "$comment" "$RUNNER_ENTRYPOINT" >/dev/null ||
+    fail "runner entrypoint missing explanatory comment: $comment"
+done
 
 assert_collapsed_recovery() {
   local doc="$1"
@@ -143,16 +184,11 @@ for text in \
   'read -rp "Saved SUFFIX: " SUFFIX' \
   'read -rp "Saved ACR name: " ACR' \
   'SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0' \
-  'Azure CLI' \
   'az extension add --name containerapp --upgrade --only-show-errors' \
   'az version' \
   'az containerapp --help' \
-  'ca-certificates`, `curl`, `jq`' \
-  'Fine-grained PAT' \
   'GITHUB_PAT' \
-  'non-exported wrapper-shell variable' \
-  'unset' \
-  'workflow process cannot inherit the PAT'; do
+  'unset'; do
   grep -F -- "$text" "$IMAGE_DOC" >/dev/null || { echo "FAIL: module 03 missing $text" >&2; exit 1; }
 done
 

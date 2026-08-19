@@ -101,21 +101,199 @@ SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 
 👁️ **설명**
 
-이 모듈의 빌드 입력은 `runner/Dockerfile`과 `runner/entrypoint.sh` 두 파일입니다.
+이 모듈의 빌드 입력은 아래의 실제 `runner/Dockerfile`과
+`runner/entrypoint.sh`입니다. 각 파일의 주석을 따라 이미지 구성, PAT 격리,
+일회성 runner 등록과 cleanup 흐름을 확인합니다.
 
-- `runner/Dockerfile`은 `ghcr.io/actions/actions-runner:2.336.0`를 기반으로 시작합니다.
-- GitHub API와 HTTP 확인에 필요한 `ca-certificates`, `curl`, `jq`를 추가 설치합니다.
-- Managed Identity 로그인과 Azure 배포에 필요한 Azure CLI를 추가 설치합니다.
-- `az containerapp` 명령을 위한 최신 Container Apps extension을 `az extension add --name containerapp --upgrade --only-show-errors`로 설치합니다.
-- Docker build는 확장 설치 뒤 이미지 안에서 `az version`과 `az containerapp --help`를 실행해 Azure CLI와 extension이 실제로 동작하는지 확인합니다.
-- 마지막에 `USER runner`로 내려가 non-root로 실행합니다.
-- `runner/entrypoint.sh`는 Fine-grained PAT를 non-exported wrapper-shell variable로 복사한 뒤 exported `GITHUB_PAT`를 unset합니다.
-- wrapper는 PAT로 registration token과 cleanup 시 remove token을 요청하지만, workflow process cannot inherit the PAT.
-- `./config.sh --ephemeral --disableupdate --no-default-labels`를 사용하므로 Job 1회당 1회성 runner가 뜨고, `aca-runner` custom label만 광고하며, 컨테이너 안에서 자체 업데이트를 시도하지 않습니다.
-- GitHub REST API endpoint는 검증된 `GH_URL`의 owner/repository에서 내부적으로 유도하므로 PAT를 임의 host로 보내지 않습니다.
-- GitHub API 요청에는 connect timeout과 전체 request timeout을 적용합니다.
-- The exported GITHUB_PAT is unset before the workflow runner starts.
-- Docker daemon은 넣지 않습니다. Azure Container Apps Jobs는 Docker-in-Docker를 지원하지 않으므로 이 워크숍의 workflow도 Docker 명령을 전제로 하지 않습니다.
+### `runner/Dockerfile`
+
+<!-- BEGIN RUNNER_DOCKERFILE -->
+```dockerfile
+FROM ghcr.io/actions/actions-runner:2.336.0
+
+USER root
+
+# Install the tools required by the runner and Azure deployment workflow.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      gnupg \
+      jq \
+      lsb-release \
+    && mkdir -p /etc/apt/keyrings \
+    && curl --fail --silent --show-error --location \
+      https://packages.microsoft.com/keys/microsoft.asc \
+      --output /tmp/microsoft.asc \
+    && gpg --dearmor \
+      --output /etc/apt/keyrings/microsoft.gpg \
+      /tmp/microsoft.asc \
+    && rm /tmp/microsoft.asc \
+    && chmod go+r /etc/apt/keyrings/microsoft.gpg \
+    && printf '%s\n' \
+      'Types: deb' \
+      'URIs: https://packages.microsoft.com/repos/azure-cli/' \
+      "Suites: $(lsb_release -cs)" \
+      'Components: main' \
+      "Architectures: $(dpkg --print-architecture)" \
+      'Signed-by: /etc/apt/keyrings/microsoft.gpg' \
+      > /etc/apt/sources.list.d/azure-cli.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends azure-cli \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the registration wrapper without granting write access at runtime.
+COPY --chown=runner:runner entrypoint.sh /home/runner/entrypoint.sh
+RUN chmod 0555 /home/runner/entrypoint.sh
+
+# Run the container as the non-root runner user.
+USER runner
+
+# Install and verify the Container Apps extension while building the image.
+RUN az extension add --name containerapp --upgrade --only-show-errors
+RUN az version >/dev/null \
+    && az containerapp --help >/dev/null
+WORKDIR /home/runner
+
+# Register the ephemeral runner before starting the workflow process.
+ENTRYPOINT ["/home/runner/entrypoint.sh"]
+```
+<!-- END RUNNER_DOCKERFILE -->
+
+### `runner/entrypoint.sh`
+
+<!-- BEGIN RUNNER_ENTRYPOINT -->
+```bash
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Validate required inputs before making any GitHub API request.
+required_variables=(
+  GITHUB_PAT
+  GH_URL
+)
+
+for variable_name in "${required_variables[@]}"; do
+  if [[ -z "${!variable_name:-}" ]]; then
+    printf 'ERROR: %s is required\n' "$variable_name" >&2
+    exit 64
+  fi
+done
+
+# Accept only a canonical GitHub repository URL before deriving API endpoints.
+if [[ "$GH_URL" =~ ^https://github\.com/([^/?#]+)/([^/?#]+)$ ]]; then
+  github_owner="${BASH_REMATCH[1]}"
+  github_repo="${BASH_REMATCH[2]}"
+else
+  printf 'ERROR: GH_URL must match https://github.com/OWNER/REPO\n' >&2
+  exit 64
+fi
+
+REGISTRATION_TOKEN_API_URL="https://api.github.com/repos/$github_owner/$github_repo/actions/runners/registration-token"
+RUNNER_LABELS="${RUNNER_LABELS:-aca-runner}"
+RUNNER_NAME_PREFIX="${RUNNER_NAME_PREFIX:-aca-runner}"
+RUNNER_NAME="${RUNNER_NAME_PREFIX}-$(hostname)-${RANDOM}"
+REMOVAL_TOKEN_API_URL="${REGISTRATION_TOKEN_API_URL%/registration-token}/remove-token"
+CLEANED_UP=0
+
+# Keep the PAT inside this wrapper process so workflow steps cannot inherit it.
+github_pat="$GITHUB_PAT"
+unset GITHUB_PAT
+runner_pid=""
+
+# Exchange the PAT for a short-lived runner registration or removal token.
+github_api_token() {
+  local url="$1"
+  local response
+  local authorization_header
+  printf -v authorization_header '%s: %s %s' \
+    'Authorization' 'Bearer' "$github_pat"
+  response="$(
+    curl --fail --silent --show-error --request POST \
+      --connect-timeout 10 \
+      --max-time 30 \
+      --header 'Accept: application/vnd.github+json' \
+      --header "$authorization_header" \
+      --header 'X-GitHub-Api-Version: 2026-03-10' \
+      "$url"
+  )" || return $?
+  jq --exit-status --raw-output \
+    '.token | select(type == "string" and length > 0)' <<<"$response"
+}
+
+# Deregister the ephemeral runner when the container exits.
+cleanup() {
+  local cleanup_status=0 removal_token=""
+
+  if [[ "$CLEANED_UP" == "1" ]]; then
+    return 0
+  fi
+  CLEANED_UP=1
+
+  if [[ ! -f .runner ]]; then
+    return 0
+  fi
+
+  set +e
+  removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL")"
+  cleanup_status=$?
+  if [[ "$cleanup_status" == "0" ]]; then
+    ./config.sh remove --token "$removal_token"
+    cleanup_status=$?
+  fi
+  set -e
+
+  if [[ "$cleanup_status" != "0" ]]; then
+    printf 'ERROR: Runner cleanup failed with status %s\n' "$cleanup_status" >&2
+  fi
+  return 0
+}
+
+# Forward termination signals to the runner process and preserve exit semantics.
+forward_signal() {
+  local signal_name="$1"
+  local exit_status="$2"
+  if [[ -n "$runner_pid" ]]; then
+    kill -s "$signal_name" "$runner_pid" 2>/dev/null || true
+    wait "$runner_pid" 2>/dev/null || true
+    runner_pid=""
+  fi
+  exit "$exit_status"
+}
+
+trap cleanup EXIT
+trap 'forward_signal INT 130' INT
+trap 'forward_signal TERM 143' TERM
+
+# Configure a uniquely named, single-use runner with only the custom label.
+printf 'Requesting registration token\n'
+registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
+
+./config.sh \
+  --url "$GH_URL" \
+  --token "$registration_token" \
+  --name "$RUNNER_NAME" \
+  --labels "$RUNNER_LABELS" \
+  --no-default-labels \
+  --unattended \
+  --ephemeral \
+  --disableupdate
+
+printf 'Runner configured: %s\n' "$RUNNER_NAME"
+
+# Run one workflow job and return the runner process status to Container Apps.
+set +e
+./run.sh &
+runner_pid=$!
+wait "$runner_pid"
+runner_status=$?
+runner_pid=""
+set -e
+printf 'Runner process exited with status %s\n' "$runner_status"
+exit "$runner_status"
+```
+<!-- END RUNNER_ENTRYPOINT -->
 
 ⚠️ **주의**
 

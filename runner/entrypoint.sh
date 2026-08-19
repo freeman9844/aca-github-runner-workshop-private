@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Validate required inputs before making any GitHub API request.
 required_variables=(
   GITHUB_PAT
   GH_URL
@@ -13,6 +14,7 @@ for variable_name in "${required_variables[@]}"; do
   fi
 done
 
+# Accept only a canonical GitHub repository URL before deriving API endpoints.
 if [[ "$GH_URL" =~ ^https://github\.com/([^/?#]+)/([^/?#]+)$ ]]; then
   github_owner="${BASH_REMATCH[1]}"
   github_repo="${BASH_REMATCH[2]}"
@@ -27,10 +29,13 @@ RUNNER_NAME_PREFIX="${RUNNER_NAME_PREFIX:-aca-runner}"
 RUNNER_NAME="${RUNNER_NAME_PREFIX}-$(hostname)-${RANDOM}"
 REMOVAL_TOKEN_API_URL="${REGISTRATION_TOKEN_API_URL%/registration-token}/remove-token"
 CLEANED_UP=0
+
+# Keep the PAT inside this wrapper process so workflow steps cannot inherit it.
 github_pat="$GITHUB_PAT"
 unset GITHUB_PAT
 runner_pid=""
 
+# Exchange the PAT for a short-lived runner registration or removal token.
 github_api_token() {
   local url="$1"
   local response
@@ -50,6 +55,7 @@ github_api_token() {
     '.token | select(type == "string" and length > 0)' <<<"$response"
 }
 
+# Deregister the ephemeral runner when the container exits.
 cleanup() {
   local cleanup_status=0 removal_token=""
 
@@ -77,6 +83,7 @@ cleanup() {
   return 0
 }
 
+# Forward termination signals to the runner process and preserve exit semantics.
 forward_signal() {
   local signal_name="$1"
   local exit_status="$2"
@@ -92,6 +99,7 @@ trap cleanup EXIT
 trap 'forward_signal INT 130' INT
 trap 'forward_signal TERM 143' TERM
 
+# Configure a uniquely named, single-use runner with only the custom label.
 printf 'Requesting registration token\n'
 registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
 
@@ -106,6 +114,8 @@ registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
   --disableupdate
 
 printf 'Runner configured: %s\n' "$RUNNER_NAME"
+
+# Run one workflow job and return the runner process status to Container Apps.
 set +e
 ./run.sh &
 runner_pid=$!
