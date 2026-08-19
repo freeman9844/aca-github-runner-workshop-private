@@ -76,6 +76,16 @@ for text in \
   'UAMI="id-acarunner-$SUFFIX"' \
   'SAMPLE_APP="hello-aca-$SUFFIX"' \
   'UAMI_CLIENT_ID=$(az identity show' \
+  'UAMI_PID=$(az identity show' \
+  'RG_ID=$(az group show' \
+  'ENV_STATE=$(az containerapp env show' \
+  'CONTAINER_APPS_ROLE=$(az role assignment list' \
+  "--query \"[?roleDefinitionName=='Container Apps Contributor' && scope=='\$RG_ID'].roleDefinitionName | [0]\"" \
+  'if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]' \
+  '--assignee-object-id "$UAMI_PID"' \
+  '--assignee-principal-type ServicePrincipal' \
+  '--role "Container Apps Contributor"' \
+  '--scope "$RG_ID"' \
   '--name "$UAMI"' \
   '--query clientId' \
   'az login --identity --client-id' \
@@ -89,6 +99,10 @@ for text in \
   'az: command not found' \
   'az extension add --name containerapp --upgrade --only-show-errors' \
   'AuthorizationFailed' \
+  'No existing Container App named' \
+  'behavior of this command has been altered' \
+  'does not exist. Specify a valid environment' \
+  '`AcrPull`만 있고' \
   'HTTP verification failed after' \
   'stale runner workflow'; do
   grep -F -- "$text" "$DOC" >/dev/null ||
