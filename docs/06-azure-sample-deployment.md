@@ -176,6 +176,10 @@ jobs:
 - 파일 경로는 `.github/workflows/aca-runner-azure-deploy.yml`이어야 합니다.
 - reviewed sample과 같은 single-job workflow가 저장됩니다.
 
+> **참고 화면:** GitHub 기본 브랜치의 `.github/workflows` 폴더에 Module 05의 `aca-runner-scale-test.yml`과 Module 06의 `aca-runner-azure-deploy.yml`이 함께 보이면 두 검증 workflow 파일이 모두 준비된 상태입니다.
+
+![GitHub workflows 폴더에 배포 및 스케일 테스트 workflow가 준비된 화면](images/06-github-workflows-console.png)
+
 ## 3. GitHub Actions에서 배포 실행
 
 👁️ **설명**
@@ -201,9 +205,9 @@ GitHub repository에서 **Actions → ACA Runner Azure Sample Deploy → Run wor
 - `Verify the deployed HTTPS endpoint` step에는 `Verified https://...`가 보이며, 실패 시 끝부분에 `HTTP verification failed after` 메시지가 남습니다.
 - `Show deployed Azure resource` step에는 새 `Container App` 이름, image, FQDN이 출력됩니다.
 
-> **참고 화면:** GitHub 기본 브랜치의 `.github/workflows` 폴더에 Module 05의 `aca-runner-scale-test.yml`과 Module 06의 `aca-runner-azure-deploy.yml`이 함께 보이면 두 검증 workflow가 모두 준비된 상태입니다. 이 화면은 workflow 파일 존재 여부를 확인하는 예시이며, 실제 배포 성공 여부는 위의 GitHub Actions 실행 결과와 Azure 리소스로 확인해야 합니다.
+> **참고 화면:** 아래 화면처럼 `Deploy sample Container App` Job과 모든 step이 성공하고, `Show deployed Azure resource` 출력에 앱 이름, `Succeeded`, FQDN, `mcr.microsoft.com/k8se/quickstart:latest`가 보이면 GitHub Actions 배포가 완료된 것입니다. 앱 suffix와 FQDN은 참가자와 실행마다 달라집니다.
 
-![GitHub workflows 폴더에 배포 및 스케일 테스트 workflow가 준비된 화면](images/06-github-workflows-console.png)
+![GitHub Actions에서 Azure 샘플 Container App 배포가 성공한 화면](images/06-github-actions-deployment-success.png)
 
 ⚠️ **주의**
 
@@ -278,6 +282,14 @@ az containerapp show \
 - Cloud Shell table에는 `Succeeded`, `true`, FQDN, quickstart image가 표시됩니다.
 - `Azure Portal`에서도 같은 이름의 `Container App`이 보이고 외부 ingress가 활성화되어 있어야 합니다.
 - GitHub Actions, 브라우저, Cloud Shell, Portal 네 곳에서 같은 앱 이름과 URL을 가리키면 검증 완료입니다.
+
+> **관리 콘솔 참고 화면:** Azure Portal의 workshop Resource Group에 ACR, Container Apps Environment, `hello-aca-<suffix>` Container App, managed identity, runner Job, Log Analytics workspace가 함께 보이는지 확인합니다. 화면의 suffix는 참가자마다 다릅니다.
+
+![Azure Portal에서 워크숍 Resource Group과 배포된 Container App을 확인한 화면](images/06-azure-portal-resource-group-result.png)
+
+> **실제 결과 참고 화면:** 브라우저에서 Application URL을 열었을 때 Azure Container Apps의 **Your container app is running with a Hello World image** 페이지가 표시되면 외부 ingress와 quickstart image가 정상 동작하는 것입니다. 주소의 앱 이름과 FQDN은 실행마다 달라집니다.
+
+![브라우저에서 Azure Container Apps Hello World 결과를 확인한 화면](images/06-container-app-hello-world-result.png)
 
 ## 트러블슈팅
 
