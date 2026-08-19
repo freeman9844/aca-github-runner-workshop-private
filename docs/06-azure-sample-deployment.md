@@ -66,7 +66,7 @@ printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_I
 | 📋 **예상 출력** | 실행 결과와 비교할 기준 출력 |
 | ⚠️ **주의** | 보안, 권한, 복구 관련 안내 |
 
-## 1. 배포 권한과 실행 흐름 확인
+## 1. 배포 권한 확인과 Container Apps Contributor 부여
 
 👁️ **설명**
 
@@ -106,17 +106,6 @@ printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_I
   "$RG" "$ENV" "$UAMI" "$SAMPLE_APP" "$UAMI_CLIENT_ID" "$SUBSCRIPTION_ID"
 printf 'ENV_STATE=%s\nCONTAINER_APPS_ROLE=%s\n' \
   "$ENV_STATE" "${CONTAINER_APPS_ROLE:-MISSING}"
-
-if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]; then
-  printf 'Container Apps Contributor 역할이 없어 %s 범위에 할당합니다.\n' "$RG_ID"
-  az role assignment create \
-    --assignee-object-id "$UAMI_PID" \
-    --assignee-principal-type ServicePrincipal \
-    --role "Container Apps Contributor" \
-    --scope "$RG_ID" \
-    --output none
-  printf '역할 할당 완료. RBAC 전파를 위해 1~5분 기다린 뒤 workflow를 실행하세요.\n'
-fi
 ```
 
 📋 **예상 출력**
@@ -125,12 +114,63 @@ fi
 - `UAMI_CLIENT_ID`와 `SUBSCRIPTION_ID`는 표시되어도 되는 식별자지만, PAT나 client secret 같은 credentials는 출력하지 않습니다.
 - `ENV_STATE=Succeeded`가 보여야 실제 ACA Environment가 현재 subscription/RG에 존재하는 것입니다.
 - `CONTAINER_APPS_ROLE=Container Apps Contributor`가 보이면 runner UAMI가 샘플 Container App을 배포할 준비가 된 상태입니다.
-- `CONTAINER_APPS_ROLE=MISSING`이면 명령이 Module 02와 같은 RG 범위 역할을 할당합니다. `역할 할당 완료`가 출력되면 1~5분 기다린 뒤 3단계를 실행하세요.
+- `CONTAINER_APPS_ROLE=MISSING`이면 아래 권한 부여 절차를 실행해야 합니다.
 - 이후 GitHub Actions에서 사용하는 Azure 로그인 명령은 `az login --identity --client-id` 한 줄뿐이어야 합니다.
+
+### Container Apps Contributor 권한 부여
+
+👁️ **설명**
+
+`CONTAINER_APPS_ROLE=MISSING`일 때만 아래 블록이 Module 02와 동일하게 runner UAMI에 workshop resource group 범위의 `Container Apps Contributor`를 할당합니다. 이미 역할이 있으면 새 역할을 만들지 않고 현재 상태만 출력합니다.
 
 ⚠️ **주의**
 
 `az role assignment create`에는 `Microsoft.Authorization/roleAssignments/write` 권한이 필요합니다. `AuthorizationFailed`가 발생하면 `Role Based Access Control Administrator`, `User Access Administrator`, `Owner` 중 하나를 가진 계정으로 역할을 할당해야 합니다. 권한 범위를 넓히지 말고 workshop resource group의 `Container Apps Contributor`만 복구하세요.
+
+🟢 **실행**
+
+```bash
+if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]; then
+  az role assignment create \
+    --assignee-object-id "$UAMI_PID" \
+    --assignee-principal-type ServicePrincipal \
+    --role "Container Apps Contributor" \
+    --scope "$RG_ID" \
+    --output none
+  printf '역할 할당 완료. RBAC 전파를 위해 1~5분 기다립니다.\n'
+else
+  printf 'Container Apps Contributor 역할이 이미 할당되어 있습니다.\n'
+fi
+
+for role_attempt in $(seq 1 30); do
+  CONTAINER_APPS_ROLE=$(az role assignment list \
+    --assignee "$UAMI_PID" \
+    --scope "$RG_ID" \
+    --query "[?roleDefinitionName=='Container Apps Contributor' && scope=='$RG_ID'].roleDefinitionName | [0]" \
+    --output tsv)
+
+  if [[ "$CONTAINER_APPS_ROLE" == "Container Apps Contributor" ]]; then
+    break
+  fi
+
+  printf 'Waiting for Container Apps Contributor propagation (attempt %s/30).\n' \
+    "$role_attempt" >&2
+  sleep 10
+done
+
+if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]; then
+  printf 'ERROR: Container Apps Contributor was not visible after 30 checks.\n' >&2
+  exit 1
+fi
+
+printf 'CONTAINER_APPS_ROLE=%s\n' "${CONTAINER_APPS_ROLE:-MISSING}"
+```
+
+📋 **예상 출력**
+
+- 기존 역할이 있으면 `Container Apps Contributor 역할이 이미 할당되어 있습니다.`가 출력됩니다.
+- 새 역할을 할당했다면 `역할 할당 완료`가 출력되고, 최대 5분 동안 역할이 보일 때까지 자동으로 재조회합니다.
+- 최종적으로 `CONTAINER_APPS_ROLE=Container Apps Contributor`가 확인된 뒤 2단계로 이동합니다.
 
 ## 2. 샘플 workflow를 GitHub에 생성
 
