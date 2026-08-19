@@ -67,11 +67,21 @@ for text in \
   'sleep 45' \
   'az containerapp job execution list' \
   'properties.status' \
+  'job-ghrunner-145945-4vql7  Running   2026-08-19T05:10:51+00:00' \
   'az containerapp job logs show' \
+  "Well known directory 'Root': '/home/runner'" \
+  "File name: '/usr/bin/bash'" \
+  "Working directory: '/home/runner/_work/aca-runner-lab/aca-runner-lab'" \
+  'Process started with process id' \
+  'Try to upload 2 log files or attachments, success rate: 2/2.' \
   'if [[ -z "$EXECUTION" ]]' \
   'ERROR: Container Apps Job execution이 없습니다.' \
   '--container github-actions-runner' \
   'ContainerAppConsoleLogs' \
+  'TimeGenerated > ago(2h)' \
+  'summarize Count=count(), LastSeen=max(TimeGenerated)' \
+  'job-ghrunner-145945-xh6w5-phfkj  2058' \
+  'PrimaryResult' \
   'ContainerGroupName startswith' \
   '5~10분' \
   'job-ghrunner-$SUFFIX-' \
@@ -81,6 +91,9 @@ for text in \
   'active execution 수는 0'; do
   grep -F -- "$text" "$DOC" >/dev/null || { echo "FAIL: module 05 missing $text" >&2; exit 1; }
 done
+
+[[ "$(grep -Ec '^job-ghrunner-145945-[[:alnum:]]+[[:space:]]+Running' "$DOC")" -eq 4 ]] ||
+  fail "module 05 must show four Running execution rows"
 
 if grep -F 'runs-on: [self-hosted, linux, x64, aca-runner]' "$DOC" >/dev/null; then
   fail "module 05 still requires default self-hosted runner labels"
