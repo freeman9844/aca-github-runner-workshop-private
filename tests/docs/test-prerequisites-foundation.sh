@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PREREQ="$ROOT/docs/01-prerequisites-github.md"
 FOUNDATION="$ROOT/docs/02-azure-foundation.md"
 PORTAL_SCREENSHOT="$ROOT/docs/images/02-azure-portal-resource-group-resources.png"
+PAT_SETTINGS_SCREENSHOT="$ROOT/docs/images/01-github-fine-grained-pat-settings.png"
 CLOUD_SHELL_SCREENSHOTS=(
   "$ROOT/docs/images/01-cloudshell-step1-welcome.png"
   "$ROOT/docs/images/01-cloudshell-step2-getting-started.png"
@@ -37,6 +38,9 @@ grep_forbidden_pat_stdout_prints() {
 [[ -f "$FOUNDATION" ]] || { echo "FAIL: module 02 missing" >&2; exit 1; }
 [[ -f "$PORTAL_SCREENSHOT" ]] ||
   fail "module 02 Azure portal screenshot missing"
+[[ -f "$PAT_SETTINGS_SCREENSHOT" ]] ||
+  fail "module 01 GitHub PAT settings screenshot missing"
+PREREQ_TEXT="$(<"$PREREQ")"
 FOUNDATION_TEXT="$(<"$FOUNDATION")"
 for screenshot in "${CLOUD_SHELL_SCREENSHOTS[@]}"; do
   [[ -f "$screenshot" ]] ||
@@ -102,6 +106,7 @@ for text in \
   '![Getting started 화면에서 영구 스토리지와 구독 선택](images/01-cloudshell-step2-getting-started.png)' \
   '![Cloud Shell 스토리지 계정 자동 생성 선택](images/01-cloudshell-step3-mount-storage.png)' \
   '![Cloud Shell Bash 프롬프트 준비 완료](images/01-cloudshell-step4-ready.png)' \
+  '![GitHub Fine-grained PAT 저장소와 권한 설정 예시](images/01-github-fine-grained-pat-settings.png)' \
   '워크숍 source 인증과 lab Fine-grained PAT는 서로 다른 용도입니다.' \
   'git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' \
   'cd ~/aca-github-runner-workshop' \
@@ -113,6 +118,11 @@ for text in \
   'az provider register -n Microsoft.Insights --wait'; do
   grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
+
+assert_contains_multiline \
+  "$PREREQ_TEXT" \
+  $'GitHub owner: freeman9844\nPrivate repository name: aca-runner-lab\nFine-grained PAT:\nGITHUB_OWNER=freeman9844\nGITHUB_REPO=aca-runner-lab\nGITHUB_PAT=SET' \
+  'module 01 step 6 must show the complete safe variable-loading output'
 
 if grep -E 'gh repo clone|WORKSHOP_REPO(_URL)?' "$PREREQ" >/dev/null; then
   fail "module 01 clone flow is not the requested simple git clone"
