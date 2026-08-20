@@ -91,7 +91,7 @@ grep -F '| `aca-runner-lab` | 참가자 소유 Private lab repository | 참가�
 grep -F 'Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.' "$README" >/dev/null
 grep -F '워크숍은 Fine-grained PAT를 사용하지만 실제 운영 환경에서는 단기 installation token을 사용하는 GitHub App 방식을 권장합니다.' "$README" >/dev/null
 grep -F '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, Fine-grained PAT 실습과 운영용 GitHub App 권장 사항 | 15분 |' "$README" >/dev/null
-grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 실제 출력·Portal 확인과 복구용 식별자 | 25분 |' "$README" >/dev/null ||
+grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | delegated subnet 기반 VNet 통합 internal Environment, Private DNS, 실제 출력·Portal 확인과 복구용 식별자 | 25분 |' "$README" >/dev/null ||
   { echo 'FAIL: README Module 02 row must describe the VNet/internal Environment foundation with the updated duration' >&2; exit 1; }
 grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | 접힌 runner source, PAT 격리·권한 제한과 ACR image 빌드 | 10분 |' "$README" >/dev/null
 grep -F '| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | 실제 Event Job YAML과 Azure·GitHub 콘솔 기반 KEDA rule 확인 | 15분 |' "$README" >/dev/null
@@ -99,7 +99,7 @@ grep -F '| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-valid
 grep -F '| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | GitHub 실행 화면과 Managed Identity 기반 internal ingress HTTPS 검증 |' "$README" >/dev/null ||
   { echo 'FAIL: README Module 06 row must describe runner-internal HTTPS verification' >&2; exit 1; }
 grep -F '| 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |' "$README" >/dev/null
-grep -F 'VNet 통합 internal Environment, Private DNS, 실제 출력·Portal 확인과 복구용 식별자' "$README" >/dev/null
+grep -F 'delegated subnet 기반 VNet 통합 internal Environment, Private DNS, 실제 출력·Portal 확인과 복구용 식별자' "$README" >/dev/null
 grep -F '접힌 runner source, PAT 격리·권한 제한과 ACR image 빌드' "$README" >/dev/null
 grep -F '실제 Event Job YAML과 Azure·GitHub 콘솔 기반 KEDA rule 확인' "$README" >/dev/null
 grep -F 'matrix 4개 Job의 `0 → N → 0`과 조건 기반 Log Analytics 수집 검증' "$README" >/dev/null

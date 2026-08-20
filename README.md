@@ -63,6 +63,8 @@ flowchart LR
 이 워크숍의 네트워크 계약은 다음과 같습니다.
 
 - Task 1에서 만든 ACA Environment의 `network type`은 internal이며 생성 후 바꿀 수 없습니다.
+- ACA infrastructure subnet을 `Microsoft.App/environments`에 위임하면 ACA runtime이 사용자 VNet 안에 environment infrastructure를 배치·관리하고, Container App과 Job이 VNet 내부 IP 또는 별도로 구성한 Private Endpoint를 private 경로로 호출할 수 있습니다.
+- delegated subnet은 Private Endpoint, Private DNS, NSG, UDR 또는 firewall을 자동으로 만들지 않으므로 대상 리소스에 맞는 private 연결과 이름 해석, 트래픽 제어는 별도로 구성해야 합니다.
 - internal Environment는 inbound를 제한하지만 outbound 인터넷을 끄지 않습니다. 따라서 워크숍 runner와 KEDA는 public outbound로 GitHub API, ACR, Azure identity, ARM, Azure Monitor에 도달합니다.
 - sample app의 internal-ingress FQDN은 same Environment runner에서만 직접 검증합니다.
 - standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.
@@ -126,7 +128,7 @@ flowchart LR
 |---|------|------------|---:|
 | 00 | (현재 문서) | 전체 개요, 아키텍처, 목표, 비용, 이동 경로 | 5분 |
 | 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, Fine-grained PAT 실습과 운영용 GitHub App 권장 사항 | 15분 |
-| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 실제 출력·Portal 확인과 복구용 식별자 | 25분 |
+| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | delegated subnet 기반 VNet 통합 internal Environment, Private DNS, 실제 출력·Portal 확인과 복구용 식별자 | 25분 |
 | 03 | [Runner image 빌드](docs/03-runner-image.md) | 접힌 runner source, PAT 격리·권한 제한과 ACR image 빌드 | 10분 |
 | 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | 실제 Event Job YAML과 Azure·GitHub 콘솔 기반 KEDA rule 확인 | 15분 |
 | 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job의 `0 → N → 0`과 조건 기반 Log Analytics 수집 검증 | 20분 |
