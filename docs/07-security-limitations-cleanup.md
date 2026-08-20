@@ -110,7 +110,7 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 |------|-----------|-----------|
 | network type | ACA Environment의 `network type`은 생성 후 immutable | external/basic 환경을 internal로 전환하지 말고 새 Environment를 만듭니다. |
 | same-Environment internal ingress | internal ingress app은 같은 Environment runner에서만 직접 검증 | 다른 VNet, peered network, on-prem 경로는 별도 설계/검증이 필요합니다. |
-| standard Cloud Shell | `standard Cloud Shell`은 workshop VNet에 붙어 있지 않음 | Cloud Shell에서 private endpoint 실패는 정상이며, 이를 public path 회귀로 오해하지 않습니다. |
+| standard Cloud Shell | `standard Cloud Shell`은 workshop VNet에 붙어 있지 않음 | Cloud Shell에서 sample app의 internal-ingress FQDN 실패는 정상이며, 이를 public path 회귀로 오해하지 않습니다. |
 | custom DNS forwarding | `Private DNS zone/link`만으로 workshop VNet 내부 이름 해석을 완료 | hub/spoke 또는 on-prem DNS를 붙이면 `custom DNS forwarding`을 별도로 설계해야 합니다. |
 | Docker-in-Docker | 지원하지 않음 | workflow에서 `docker build` 또는 Docker daemon 의존 단계를 넣지 않습니다. |
 | service containers | Docker daemon이 필요한 service container 미지원 | DB/service container가 필요한 테스트는 다른 실행 환경을 고려합니다. |
@@ -125,7 +125,10 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 
 - `Docker-in-Docker` 미지원은 실습 편의 문제가 아니라 플랫폼 제약입니다.
 - active execution이 0이어도 과거 execution history는 일부 recent records로 남을 수 있습니다.
-- workshop VNet은 inbound를 internal로 제한하지만 egress는 계속 public outbound입니다. 별도 NSG, UDR, Azure Firewall, ACR Private Endpoint는 production extension으로만 다룹니다.
+- sample app의 internal-ingress FQDN은 same Environment runner에서만 직접 검증합니다.
+- standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.
+- workshop VNet은 inbound를 internal로 제한하지만 egress는 계속 public outbound입니다.
+- 이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, VNet-isolated Cloud Shell이 포함되지 않으며 모두 production extension입니다.
 
 ## 4. Azure 리소스 정리 요청
 

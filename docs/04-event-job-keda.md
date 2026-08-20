@@ -18,7 +18,8 @@
 
 Task 1에서 만든 internal ACA Environment는 **inbound access**를 제어하지만 outbound 인터넷을 자동으로 끄지 않습니다. 즉 **internal Environment controls inbound access**이며, 이 워크숍의 runner/KEDA 경로는 계속 **public outbound**를 사용합니다. Task 2의 sample app은 `externalIngress=false`인 **internal ingress** 앱이므로, Module 06에서는 **same Environment** 안의 runner만 앱 FQDN을 직접 호출합니다.
 
-이 워크숍은 학습 단순화를 위해 **NSG**, **UDR**, **Azure Firewall**, **ACR Private Endpoint**, NAT Gateway, **forced tunneling**을 추가하지 않습니다. 그 결과 Event Job과 KEDA는 GitHub queue를 감시하고 runner를 시작하기 위해 **GitHub API**, **ACR**, **Azure identity**, **ARM**, **Azure Monitor**에 그대로 도달할 수 있어야 합니다. 이 항목들은 production에서 필요 시 별도로 설계하는 out-of-scope extension입니다.
+따라서 워크숍 runner와 KEDA는 public outbound로 GitHub API, ACR, Azure identity, ARM, Azure Monitor에 도달해야 합니다.
+이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, NAT Gateway가 포함되지 않으며 모두 production extension입니다. 이 항목들은 production에서 필요 시 별도로 설계하는 out-of-scope extension입니다.
 
 ⚠️ **주의**
 

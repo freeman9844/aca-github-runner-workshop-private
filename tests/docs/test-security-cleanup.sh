@@ -51,12 +51,7 @@ for text in \
   'VNet' \
   'egress' \
   'public outbound' \
-  'ACR Private Endpoint' \
-  'Azure Firewall' \
-  'UDR' \
   'network type' \
-  'same-Environment internal ingress' \
-  'standard Cloud Shell' \
   'custom DNS forwarding' \
   'Private DNS zone/link' \
   'internal load balancer resources' \
@@ -80,6 +75,13 @@ for text in \
   'aca-runner-lab'; do
   grep -F -- "$text" "$DOC" >/dev/null || { echo "FAIL: module 07 missing $text" >&2; exit 1; }
 done
+
+grep -F 'sample app의 internal-ingress FQDN은 same Environment runner에서만 직접 검증합니다.' "$DOC" >/dev/null ||
+  fail "module 07 must describe same-environment internal-ingress verification exactly"
+grep -F 'standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.' "$DOC" >/dev/null ||
+  fail "module 07 must describe Cloud Shell internal-ingress isolation exactly"
+grep -F '이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, VNet-isolated Cloud Shell이 포함되지 않으며 모두 production extension입니다.' "$DOC" >/dev/null ||
+  fail "module 07 must describe excluded enterprise controls exactly"
 
 if grep -E '코어 90분|Module 06을 수행했다면|Module 06을 수행했다면 배포 workflow' \
   "$DOC" >/dev/null; then

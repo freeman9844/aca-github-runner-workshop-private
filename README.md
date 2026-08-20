@@ -62,9 +62,10 @@ flowchart LR
 이 워크숍의 네트워크 계약은 다음과 같습니다.
 
 - Task 1에서 만든 ACA Environment의 `network type`은 internal이며 생성 후 바꿀 수 없습니다.
-- internal Environment는 inbound를 제한하지만 outbound 인터넷을 끄지 않습니다. 따라서 워크숍 runner와 KEDA는 **public outbound**로 GitHub API, ACR, Azure identity, ARM, Azure Monitor에 도달합니다.
-- Task 2의 sample app은 **internal ingress**이며 **same Environment** 안의 runner에서만 직접 호출합니다.
-- **ACR Private Endpoint**, **Azure Firewall**, NSG, UDR, NAT Gateway, forced tunneling, VNet-isolated Cloud Shell은 이 워크숍에 포함하지 않으며 production extension으로만 다룹니다.
+- internal Environment는 inbound를 제한하지만 outbound 인터넷을 끄지 않습니다. 따라서 워크숍 runner와 KEDA는 public outbound로 GitHub API, ACR, Azure identity, ARM, Azure Monitor에 도달합니다.
+- sample app의 internal-ingress FQDN은 same Environment runner에서만 직접 검증합니다.
+- standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.
+- 이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, VNet-isolated Cloud Shell, NAT Gateway가 포함되지 않으며 모두 production extension입니다.
 
 이 워크숍의 코어 설정은 다음 값으로 고정합니다.
 
@@ -153,7 +154,7 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 - [ ] ACA Environment가 internal 상태입니다.
 - [ ] sample Container App이 `externalIngress=false` 상태입니다.
 - [ ] same Environment runner에서 runner-internal HTTP success와 HTTPS 검증이 확인됩니다.
-- [ ] standard Cloud Shell은 private endpoint에 직접 도달하지 못합니다.
+- [ ] standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.
 - [ ] GitHub에 permanent online ephemeral runner가 남지 않습니다.
 - [ ] Azure cleanup 후 조회 결과가 `ResourceGroupNotFound`에 도달합니다.
 - [ ] 안내에 따라 lab Fine-grained PAT와 GitHub lab artifact를 정리합니다.
@@ -227,7 +228,7 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 | Job execution이 생성되지 않음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
 | execution timeout 발생 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |
 | `AuthorizationFailed` 또는 `HTTP verification failed after`가 배포 workflow에서 발생함 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |
-| standard Cloud Shell에서 internal ingress 앱에 접근할 수 없음 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |
+| standard Cloud Shell에서 sample app의 internal-ingress FQDN에 접근할 수 없음 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |
 | 사용자 지정 NSG/UDR/Firewall 뒤에 GitHub API·ACR·Azure Monitor 접근이 막힘 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
 | CLI 또는 Log Analytics에서 runner 로그를 찾을 수 없음 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |
 | workflow의 Docker 단계가 실패함 | [docs/07-security-limitations-cleanup.md#트러블슈팅](docs/07-security-limitations-cleanup.md#트러블슈팅) |

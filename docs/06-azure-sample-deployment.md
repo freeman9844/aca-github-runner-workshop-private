@@ -427,13 +427,13 @@ internal ingress는 public browser나 기본 Cloud Shell 성공을 목표로 하
 
 - GitHub Actions의 runner step만 `Verified internal endpoint ...`를 출력합니다.
 - `Show deployed Azure resource`의 `externalIngress=false`는 public ingress가 꺼져 있음을 보여 줍니다.
-- 이후 5단계에서 기본 Cloud Shell이 private endpoint에 닿지 못하더라도 정상입니다.
+- 이후 5단계에서 기본 Cloud Shell이 sample app의 internal-ingress FQDN에 닿지 못하더라도 정상입니다.
 
 ## 5. 기본 Cloud Shell과 Azure Portal에서 확인
 
 👁️ **설명**
 
-이제 **기본 Cloud Shell**에서 control-plane 상태와 Private DNS 연결을 확인합니다. 이 Shell은 VNet에 붙지 않았으므로 metadata 조회는 성공해야 하지만, sample app의 private HTTPS endpoint에는 바로 닿지 않는 것이 정상입니다. 즉, control plane은 보이고 data plane은 격리되어야 합니다.
+이제 **기본 Cloud Shell**에서 control-plane 상태와 Private DNS 연결을 확인합니다. 이 Shell은 VNet에 붙지 않았으므로 metadata 조회는 성공해야 하지만, sample app의 internal-ingress FQDN에는 바로 닿지 않는 것이 정상입니다. 즉, control plane은 보이고 data plane은 격리되어야 합니다.
 
 🟢 **실행**
 
@@ -488,7 +488,7 @@ printf 'environmentInternal=%s\ninfrastructureSubnetId=%s\nexternalIngress=%s\nf
 if curl --fail --silent --show-error --connect-timeout 5 --max-time 10 "https://$FQDN"; then
   printf 'WARNING: 기본 Cloud Shell에서 internal endpoint 응답이 왔습니다. 현재 Shell이 별도 VNet 연결인지 확인하세요.\n'
 else
-  printf '기본 Cloud Shell에서 private endpoint에 바로 닿지 않는 것은 예상된 격리 동작입니다.\n'
+  printf '기본 Cloud Shell에서 sample app의 internal-ingress FQDN에 바로 닿지 않는 것은 예상된 격리 동작입니다.\n'
 fi
 ```
 
@@ -506,7 +506,7 @@ fi
 - `infrastructureSubnetId`는 Task 1에서 연결한 subnet resource ID여야 합니다.
 - `externalIngress=false`와 FQDN이 같은 앱을 가리켜야 합니다.
 - `Private DNS zone`, `VNet link`, `wildcard A record`가 모두 비어 있지 않아야 합니다.
-- 기본 Cloud Shell에서 private endpoint에 바로 닿지 않는 것은 예상된 격리 동작입니다.
+- 기본 Cloud Shell에서 sample app의 internal-ingress FQDN에 바로 닿지 않는 것은 예상된 격리 동작입니다.
 - `Azure Portal`에서도 Environment networking이 internal로 보이고 app ingress가 external off여야 합니다.
 
 ## 트러블슈팅
@@ -521,7 +521,7 @@ fi
 | `ERROR: Failed to inspect Container App`이 발생함 | 기존 앱 조회 중 인증, 네트워크 또는 Azure CLI 오류가 발생해 리소스 존재 여부를 안전하게 판단할 수 없음 | 바로 새 앱을 만들거나 삭제 완료로 간주하지 마세요. 바로 앞에 출력된 Azure CLI 오류를 기준으로 subscription, RBAC, 네트워크 상태를 복구한 뒤 workflow를 다시 실행합니다. |
 | `ERROR: AZURE_CLIENT_ID is required.` 같은 missing Job environment variables 오류가 남 | Event Job에 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_CONTAINERAPPS_ENVIRONMENT`, `AZURE_SAMPLE_APP`가 빠졌음 | GitHub secret을 새로 만들지 말고 Module 04의 Job 환경 변수 정의를 다시 확인합니다. 필요한 경우 Event Job을 같은 값으로 다시 생성한 뒤 workflow를 재실행합니다. |
 | GitHub run은 배포를 끝냈지만 `Verify the internal HTTPS endpoint from the runner` step이 `ERROR: Internal HTTP verification failed after`로 끝남 | internal ingress revision warm-up이 더 필요하거나 runner와 app가 같은 ACA Environment에 있지 않음 | 20~60초 정도 기다린 뒤 workflow를 다시 실행하고, `AZURE_CONTAINERAPPS_ENVIRONMENT`, Task 1의 internal Environment, app `externalIngress=false`, Private DNS 연결을 다시 확인합니다. |
-| 기본 Cloud Shell의 bounded `curl`이 실패함 | internal ingress app은 public endpoint가 아니므로 standard Cloud Shell에서 private endpoint로 바로 들어갈 수 없음 | 5단계의 control-plane 출력과 `Private DNS zone`, `VNet link`, `wildcard A record`를 확인했다면 이 실패는 정상 격리 결과로 취급합니다. browser 재시도나 external ingress 변경으로 우회하지 마세요. |
+| 기본 Cloud Shell의 bounded `curl`이 실패함 | internal ingress app은 public endpoint가 아니므로 standard Cloud Shell에서 sample app의 internal-ingress FQDN으로 바로 들어갈 수 없음 | 5단계의 control-plane 출력과 `Private DNS zone`, `VNet link`, `wildcard A record`를 확인했다면 이 실패는 정상 격리 결과로 취급합니다. browser 재시도나 external ingress 변경으로 우회하지 마세요. |
 | deployment workflow가 계속 queued 상태이며 이전 실습 run이 섞여 보임 | 같은 `aca-runner` label을 쓰는 `stale runner workflow`가 아직 queued/running 상태이거나 최신 YAML이 아닌 오래된 workflow가 남아 있음 | GitHub Actions에서 오래된 queued run을 취소하고, `.github/workflows/aca-runner-azure-deploy.yml`과 scale test workflow가 모두 최신 sample인지 확인합니다. 특히 배포 workflow는 single job + `runs-on: [aca-runner]`만 유지한 뒤 다시 실행합니다. |
 
 ---

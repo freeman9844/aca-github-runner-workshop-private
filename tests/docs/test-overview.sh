@@ -56,12 +56,18 @@ for text in \
   'same Environment' \
   'internal ingress' \
   'public outbound' \
-  'ACR Private Endpoint' \
-  'Azure Firewall' \
   'network type'; do
   grep -F -- "$text" "$README" >/dev/null ||
     { echo "FAIL: README missing internal networking narrative: $text" >&2; exit 1; }
 done
+grep -F '따라서 워크숍 runner와 KEDA는 public outbound로 GitHub API, ACR, Azure identity, ARM, Azure Monitor에 도달합니다.' "$README" >/dev/null ||
+  { echo 'FAIL: README must list the complete public outbound dependency sentence' >&2; exit 1; }
+grep -F 'sample app의 internal-ingress FQDN은 same Environment runner에서만 직접 검증합니다.' "$README" >/dev/null ||
+  { echo 'FAIL: README must describe same-environment internal-ingress verification exactly' >&2; exit 1; }
+grep -F 'standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.' "$README" >/dev/null ||
+  { echo 'FAIL: README must describe Cloud Shell internal-ingress isolation exactly' >&2; exit 1; }
+grep -F '이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, VNet-isolated Cloud Shell, NAT Gateway가 포함되지 않으며 모두 production extension입니다.' "$README" >/dev/null ||
+  { echo 'FAIL: README must describe excluded enterprise controls exactly' >&2; exit 1; }
 grep -F '| Azure Contributor | 실습용 Azure 리소스를 만들고 관리할 수 있어야 합니다. |' "$README" >/dev/null
 grep -F '| Azure RBAC 역할 할당 권한 | workshop Resource Group 또는 상위 범위에서 `Microsoft.Authorization/roleAssignments/write`가 필요합니다. ACR 범위의 `AcrPull`과 Resource Group 범위의 `Container Apps Contributor`를 모두 할당할 수 있어야 합니다. |' "$README" >/dev/null
 grep -F '| 워크숍 source 접근 | Public workshop source repository에 HTTPS로 접근할 수 있어야 합니다. |' "$README" >/dev/null
@@ -114,7 +120,7 @@ for text in \
   'ACA Environment가 internal 상태입니다.' \
   'sample Container App이 `externalIngress=false` 상태입니다.' \
   'same Environment runner에서 runner-internal HTTP success와 HTTPS 검증이 확인됩니다.' \
-  'standard Cloud Shell은 private endpoint에 직접 도달하지 못합니다.' \
+  'standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.' \
   '`ResourceGroupNotFound`' \
   'lab Fine-grained PAT와 GitHub lab artifact' \
   '검증된 범위와 남은 전제' \
@@ -146,26 +152,19 @@ for text in \
   '| 동일 repository와 label을 감시하는 Event Job이 이미 있음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |' \
   '| Event Job secret 또는 PAT 오류 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |' \
   '| `AuthorizationFailed` 또는 `HTTP verification failed after`가 배포 workflow에서 발생함 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |' \
-  '| standard Cloud Shell에서 internal ingress 앱에 접근할 수 없음 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |' \
+  '| standard Cloud Shell에서 sample app의 internal-ingress FQDN에 접근할 수 없음 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |' \
   '| CLI 또는 Log Analytics에서 runner 로그를 찾을 수 없음 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |'; do
   grep -F -- "$text" "$README" >/dev/null ||
     { echo "FAIL: README missing troubleshooting route: $text" >&2; exit 1; }
 done
 
 DOC04="$ROOT/docs/04-event-job-keda.md"
-for text in \
-  'internal Environment controls inbound access' \
-  'public outbound' \
-  'ACR Private Endpoint' \
-  'Azure Firewall' \
-  'GitHub API' \
-  'Azure Monitor' \
-  'NSG' \
-  'UDR' \
-  'forced tunneling'; do
-  grep -F -- "$text" "$DOC04" >/dev/null ||
-    { echo "FAIL: module 04 missing internal networking guidance: $text" >&2; exit 1; }
-done
+grep -F 'internal Environment controls inbound access' "$DOC04" >/dev/null ||
+  { echo 'FAIL: module 04 missing inbound-access clarification' >&2; exit 1; }
+grep -F '따라서 워크숍 runner와 KEDA는 public outbound로 GitHub API, ACR, Azure identity, ARM, Azure Monitor에 도달해야 합니다.' "$DOC04" >/dev/null ||
+  { echo 'FAIL: module 04 must list the complete public outbound dependency sentence' >&2; exit 1; }
+grep -F '이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, NAT Gateway가 포함되지 않으며 모두 production extension입니다.' "$DOC04" >/dev/null ||
+  { echo 'FAIL: module 04 must describe excluded outbound controls exactly' >&2; exit 1; }
 
 for obsolete in \
   '기존 GitHub OAuth credential' \

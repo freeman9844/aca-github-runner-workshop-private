@@ -207,7 +207,7 @@ fi
 
 step4_heading_line="$(grep -nF -m1 '## 4. 같은 ACA Environment 내부에서 internal ingress 앱에 접근할 수 있는 이유' "$DOC" | cut -d: -f1)"
 step5_heading_line="$(grep -nF -m1 '## 5. 기본 Cloud Shell과 Azure Portal에서 확인' "$DOC" | cut -d: -f1)"
-step5_expected_line="$(grep -nF -m1 '기본 Cloud Shell에서 private endpoint에 바로 닿지 않는 것은 예상된 격리 동작입니다.' "$DOC" | cut -d: -f1 || true)"
+step5_expected_line="$(grep -nF -m1 '기본 Cloud Shell에서 sample app의 internal-ingress FQDN에 바로 닿지 않는 것은 예상된 격리 동작입니다.' "$DOC" | cut -d: -f1 || true)"
 troubleshooting_line="$(grep -nF -m1 '## 트러블슈팅' "$DOC" | cut -d: -f1)"
 [[ -n "$step4_heading_line" && -n "$step5_heading_line" && -n "$step5_expected_line" && -n "$troubleshooting_line" ]] ||
   fail "Module 06 missing updated internal-ingress verification flow"
