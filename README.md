@@ -17,6 +17,7 @@ cd ~/aca-github-runner-workshop
 3. [Module 01: GitHub 사전 준비](docs/01-prerequisites-github.md)를 엽니다. 위 Quick Start에서 clone했으므로 Module 01의 4단계는 이미 완료되었으며 반드시 건너뜁니다. 그 외 Module 01 단계와 Module 02~07은 순서대로 모두 진행합니다. Module 07은 필수 cleanup입니다.
 
 상세 변수 설정, 예상 출력, 오류 해결 명령은 각 모듈에서 안내합니다.
+필요한 단계에는 실행 블록의 한글 주석, 실제 예상 출력, Azure와 GitHub 콘솔 참고 화면을 함께 제공합니다.
 
 ---
 
@@ -125,13 +126,15 @@ flowchart LR
 |---|------|------------|---:|
 | 00 | (현재 문서) | 전체 개요, 아키텍처, 목표, 비용, 이동 경로 | 5분 |
 | 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, Fine-grained PAT 실습과 운영용 GitHub App 권장 사항 | 15분 |
-| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID | 25분 |
-| 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 10분 |
-| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |
-| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |
-| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 internal ingress sample app과 runner-internal HTTPS verification | 20분 |
+| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 실제 출력·Portal 확인과 복구용 식별자 | 25분 |
+| 03 | [Runner image 빌드](docs/03-runner-image.md) | 접힌 runner source, PAT 격리·권한 제한과 ACR image 빌드 | 10분 |
+| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | 실제 Event Job YAML과 Azure·GitHub 콘솔 기반 KEDA rule 확인 | 15분 |
+| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job의 `0 → N → 0`과 조건 기반 Log Analytics 수집 검증 | 20분 |
+| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | GitHub 실행 화면과 Managed Identity 기반 internal ingress HTTPS 검증 | 20분 |
 | 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |
 |  | **워크숍 합계** |  | **120분** |
+
+Module 05는 로그 수집이 늦을 때 최대 10분 동안 30초 간격으로 실제 유입을 확인합니다.
 
 ---
 

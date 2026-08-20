@@ -6,6 +6,8 @@ WORKFLOW="$ROOT/samples/azure-sample-deploy-workflow.yml"
 DOC="$ROOT/docs/06-azure-sample-deployment.md"
 MODULE05_DOC="$ROOT/docs/05-parallel-scale-validation.md"
 GITHUB_WORKFLOWS_SCREENSHOT="$ROOT/docs/images/06-github-workflows-console.png"
+GITHUB_DISPATCH_SCREENSHOT="$ROOT/docs/images/06-github-run-workflow-dispatch.png"
+GITHUB_SUCCESS_SCREENSHOT="$ROOT/docs/images/06-github-deployment-success-details.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -16,7 +18,11 @@ fail() {
 [[ -f "$WORKFLOW" ]] || fail "Azure sample deployment workflow missing"
 [[ -f "$MODULE05_DOC" ]] || fail "Module 05 missing"
 [[ -f "$GITHUB_WORKFLOWS_SCREENSHOT" ]] || fail "Module 06 GitHub workflows screenshot missing"
+[[ -f "$GITHUB_DISPATCH_SCREENSHOT" ]] || fail "Module 06 workflow dispatch screenshot missing"
+[[ -f "$GITHUB_SUCCESS_SCREENSHOT" ]] || fail "Module 06 deployment success screenshot missing"
 [[ ! -x "$GITHUB_WORKFLOWS_SCREENSHOT" ]] || fail "Module 06 GitHub workflows screenshot must not be executable"
+[[ ! -x "$GITHUB_DISPATCH_SCREENSHOT" ]] || fail "Module 06 workflow dispatch screenshot must not be executable"
+[[ ! -x "$GITHUB_SUCCESS_SCREENSHOT" ]] || fail "Module 06 deployment success screenshot must not be executable"
 
 for heading in \
   '# 06. Azure 샘플 배포와 결과 확인' \
@@ -103,6 +109,9 @@ for text in \
   'Azure Portal' \
   'Verify the internal HTTPS endpoint from the runner' \
   'Verified internal endpoint' \
+  '![GitHub Actions에서 Azure Sample Deploy workflow 수동 실행](images/06-github-run-workflow-dispatch.png)' \
+  '![성공한 Azure Sample Deploy workflow의 HTTPS 및 Azure 리소스 검증 결과](images/06-github-deployment-success-details.png)' \
+  'run 번호, suffix, FQDN, 실행 시간은 참가자와 실행 시점마다 달라집니다.' \
   'externalIngress:properties.configuration.ingress.external' \
   '--query "aRecords[0].ipv4Address"' \
   'internal Environment' \
@@ -207,12 +216,16 @@ if ! cmp -s "$WORKFLOW" <(
 fi
 
 step4_heading_line="$(grep -nF -m1 '## 4. 같은 ACA Environment 내부에서 internal ingress 앱에 접근할 수 있는 이유' "$DOC" | cut -d: -f1)"
+dispatch_screenshot_line="$(grep -nF -m1 '![GitHub Actions에서 Azure Sample Deploy workflow 수동 실행](images/06-github-run-workflow-dispatch.png)' "$DOC" | cut -d: -f1 || true)"
+success_screenshot_line="$(grep -nF -m1 '![성공한 Azure Sample Deploy workflow의 HTTPS 및 Azure 리소스 검증 결과](images/06-github-deployment-success-details.png)' "$DOC" | cut -d: -f1 || true)"
 step5_heading_line="$(grep -nF -m1 '## 5. 기본 Cloud Shell과 Azure Portal에서 확인' "$DOC" | cut -d: -f1)"
 step5_expected_line="$(grep -nF -m1 '기본 Cloud Shell에서 sample app의 internal-ingress FQDN에 바로 닿지 않는 것은 예상된 격리 동작입니다.' "$DOC" | cut -d: -f1 || true)"
 troubleshooting_line="$(grep -nF -m1 '## 트러블슈팅' "$DOC" | cut -d: -f1)"
-[[ -n "$step4_heading_line" && -n "$step5_heading_line" && -n "$step5_expected_line" && -n "$troubleshooting_line" ]] ||
+[[ -n "$dispatch_screenshot_line" && -n "$success_screenshot_line" && -n "$step4_heading_line" && -n "$step5_heading_line" && -n "$step5_expected_line" && -n "$troubleshooting_line" ]] ||
   fail "Module 06 missing updated internal-ingress verification flow"
-(( step3_heading_line < step4_heading_line &&
+(( step3_heading_line < dispatch_screenshot_line &&
+   dispatch_screenshot_line < success_screenshot_line &&
+   success_screenshot_line < step4_heading_line &&
    step4_heading_line < step5_heading_line &&
    step5_heading_line < step5_expected_line &&
    step5_expected_line < troubleshooting_line )) ||
