@@ -3,7 +3,7 @@
 from pathlib import Path
 import os
 import subprocess
-import tempfile
+import shutil
 
 import yaml
 
@@ -39,8 +39,11 @@ with (ROOT / "samples/azure-sample-deploy-workflow.yml").open(
 
 deploy_script = deploy_workflow["jobs"]["deploy-sample"]["steps"][2]["run"]
 
-with tempfile.TemporaryDirectory() as temp_dir:
-    temp = Path(temp_dir)
+temp = ROOT / ".test-scratch" / "workflow-yaml"
+shutil.rmtree(temp, ignore_errors=True)
+temp.mkdir(parents=True)
+
+try:
     bin_dir = temp / "bin"
     bin_dir.mkdir()
     mock_az = bin_dir / "az"
@@ -120,10 +123,21 @@ exit 99
     absent = run_deploy_step("absent")
     if absent.returncode != 0 or "No existing Container App" not in absent.stdout:
         raise SystemExit("FAIL: ResourceNotFound must allow first deployment")
+    absent_calls = (temp / "az-calls.log").read_text(encoding="utf-8")
+    create_call = next(
+        (line for line in absent_calls.splitlines() if line.startswith("containerapp create ")),
+        "",
+    )
+    if "--ingress internal" not in create_call:
+        raise SystemExit("FAIL: containerapp create must use internal ingress")
+    if "--ingress external" in create_call:
+        raise SystemExit("FAIL: containerapp create must not use external ingress")
 
     (temp / "az-calls.log").unlink()
     existing = run_deploy_step("existing-delete")
     if existing.returncode != 0 or "Confirmed existing Container App deletion" not in existing.stdout:
         raise SystemExit("FAIL: existing app deletion was not confirmed")
+finally:
+    shutil.rmtree(temp, ignore_errors=True)
 
 print("PASS: workflow YAML syntax and deploy behavior")

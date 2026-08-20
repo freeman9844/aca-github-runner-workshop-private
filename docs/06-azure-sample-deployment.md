@@ -1,6 +1,6 @@
 # 06. Azure 샘플 배포와 결과 확인
 
-> 필수 모듈입니다. Azure Cloud Shell Bash, GitHub 웹 UI, 브라우저, Azure Portal을 함께 사용해 trusted single-job workflow로 샘플 Container App을 배포하고 결과를 교차 확인합니다. `private repository`와 `trusted workflow authors` 경계를 유지한 채, 기존 ACA runner trusted-workflow boundary 안에서만 Azure 배포 검증을 추가합니다.
+> 필수 모듈입니다. Azure Cloud Shell Bash, GitHub 웹 UI, Azure Portal을 함께 사용해 trusted single-job workflow로 샘플 Container App을 배포하고, 같은 ACA Environment 내부의 runner에서만 internal ingress HTTPS가 성공함을 검증합니다. `private repository`와 `trusted workflow authors` 경계를 유지한 채, 기존 ACA runner trusted-workflow boundary 안에서만 Azure 배포 검증을 추가합니다.
 
 ## 목표
 
@@ -8,8 +8,9 @@
 
 - `samples/azure-sample-deploy-workflow.yml`을 Cloud Shell에서 확인한 뒤 GitHub 웹 UI로 workflow를 만든다.
 - `UAMI_CLIENT_ID`와 `SUBSCRIPTION_ID`가 식별자이며, runner 환경에서는 각각 `AZURE_CLIENT_ID`와 `AZURE_SUBSCRIPTION_ID`로 전달된다는 점을 설명할 수 있다.
-- GitHub Actions, 브라우저, Cloud Shell, Azure Portal에서 같은 배포 결과를 교차 확인한다.
-- managed identity login, RBAC assignment 확인과 권한 전파 지연, HTTP warm-up failure 시 안전한 복구 경로를 적용한다.
+- GitHub Actions에서 managed identity login, internal ingress sample deployment, runner-internal HTTPS success를 확인한다.
+- 기본 Cloud Shell과 Azure Portal에서 internal Environment, `externalIngress=false`, Private DNS 격리를 교차 확인한다.
+- managed identity login, RBAC assignment 확인과 권한 전파 지연, internal HTTP warm-up failure 시 안전한 복구 경로를 적용한다.
 
 ## 0. 세션 재연결 시 변수 복구 (선택)
 
@@ -245,7 +246,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APP_SHOW_ERROR="$(mktemp)"
+          APP_SHOW_ERROR="${GITHUB_WORKSPACE:-$PWD}/.containerapp-show-error.log"
+          : > "$APP_SHOW_ERROR"
           trap 'rm -f "$APP_SHOW_ERROR"' EXIT
 
           container_app_exists() {
@@ -315,7 +317,7 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --environment "$AZURE_CONTAINERAPPS_ENVIRONMENT" \
             --image mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c \
-            --ingress external \
+            --ingress internal \
             --target-port 80 \
             --min-replicas 0 \
             --max-replicas 1 \
@@ -331,14 +333,14 @@ jobs:
           APP_URL="https://$FQDN"
           printf 'APP_URL=%s\n' "$APP_URL" >> "$GITHUB_ENV"
 
-      # 프로비저닝 후 ACA ingress가 준비될 때까지 시간이 걸릴 수 있습니다.
-      - name: Verify the deployed HTTPS endpoint
+      # 프로비저닝 후 internal ingress HTTPS가 runner에서 준비될 때까지 시간이 걸릴 수 있습니다.
+      - name: Verify the internal HTTPS endpoint from the runner
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 18); do
             if response="$(curl --fail --silent --show-error "$APP_URL")"; then
-              printf 'Verified %s\n' "$APP_URL"
+              printf 'Verified internal endpoint %s\n' "$APP_URL"
               printf '%s\n' "$response" | sed -n '1,12p'
               exit 0
             fi
@@ -346,11 +348,11 @@ jobs:
               "$attempt" >&2
             sleep 5
           done
-          printf 'ERROR: HTTP verification failed after 18 attempts: %s\n' \
+          printf 'ERROR: Internal HTTP verification failed after 18 attempts: %s\n' \
             "$APP_URL" >&2
           exit 1
 
-      # Azure Portal과 비교할 수 있도록 최종 resource 정보를 출력합니다.
+      # Azure Portal과 control-plane 조회를 비교할 수 있도록 최종 resource 정보를 출력합니다.
       - name: Show deployed Azure resource
         shell: bash
         run: |
@@ -358,7 +360,7 @@ jobs:
           az containerapp show \
             --name "$AZURE_SAMPLE_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "{name:name,provisioningState:properties.provisioningState,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
+            --query "{name:name,provisioningState:properties.provisioningState,externalIngress:properties.configuration.ingress.external,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
             --output table
 ```
 
@@ -384,7 +386,7 @@ jobs:
 
 👁️ **설명**
 
-이 workflow는 기존 ACA runner가 GitHub queued job을 가져와 Azure에 샘플 앱을 배포하는지 검증합니다. 내부적으로 `APP_URL=https://<fqdn>` 값을 구성한 뒤 다음 step의 HTTP 확인에 사용합니다. 브라우저에서 직접 수동 실행해야 trusted workflow author가 승인한 YAML만 동작합니다.
+이 workflow는 기존 ACA runner가 GitHub queued job을 가져와 Azure에 샘플 앱을 배포하고, 같은 ACA Environment 안에서만 internal ingress HTTPS가 성공하는지 검증합니다. workflow는 `APP_URL=https://<fqdn>` 값을 만든 뒤 runner에서 바로 `curl`로 확인합니다. 브라우저에서 직접 수동 실행해야 trusted workflow author가 승인한 YAML만 동작합니다.
 
 🟢 **실행**
 
@@ -395,19 +397,16 @@ GitHub repository에서 **Actions → ACA Runner Azure Sample Deploy → Run wor
 1. **Validate Azure deployment context**
 2. **Sign in with the runner managed identity**
 3. **Deploy the sample Container App**
-4. **Verify the deployed HTTPS endpoint**
+4. **Verify the internal HTTPS endpoint from the runner**
 5. **Show deployed Azure resource**
 
 📋 **예상 출력**
 
 - 전체 workflow가 `Success`로 끝나야 합니다.
 - `Sign in with the runner managed identity` step은 subscription table을 출력하고, 추가 secret 없이 로그인해야 합니다.
-- `Verify the deployed HTTPS endpoint` step에는 `Verified https://...`가 보이며, 실패 시 끝부분에 `HTTP verification failed after` 메시지가 남습니다.
-- `Show deployed Azure resource` step에는 새 `Container App` 이름, image, FQDN이 출력됩니다.
-
-> **참고 화면:** 아래 화면처럼 `Deploy sample Container App` Job과 모든 step이 성공하고, `Show deployed Azure resource` 출력에 앱 이름, `Succeeded`, FQDN, pinned `mcr.microsoft.com/k8se/quickstart@sha256:...` image가 보이면 GitHub Actions 배포가 완료된 것입니다. 앱 suffix와 FQDN은 참가자와 실행마다 달라집니다.
-
-![GitHub Actions에서 Azure 샘플 Container App 배포가 성공한 화면](images/06-github-actions-deployment-success.png)
+- `Deploy the sample Container App` step은 기존 앱이 있으면 삭제를 확인한 뒤 동일한 pinned image를 `--ingress internal`로 다시 만듭니다.
+- `Verify the internal HTTPS endpoint from the runner` step에는 `Verified internal endpoint https://...`가 보이며, 실패 시 끝부분에 `ERROR: Internal HTTP verification failed after 18 attempts: ...` 메시지가 남습니다.
+- `Show deployed Azure resource` step에는 새 `Container App` 이름, `externalIngress=false`, image, FQDN이 출력됩니다.
 
 ⚠️ **주의**
 
@@ -416,80 +415,99 @@ GitHub repository에서 **Actions → ACA Runner Azure Sample Deploy → Run wor
 - 첫 배포의 `No existing Container App named ... found.`는 기존 샘플 앱이 없다는 정상 안내입니다.
 - `WARNING: The behavior of this command has been altered by the following extension: containerapp`도 extension 사용 안내이며 배포 실패 원인이 아닙니다. 그 다음에 출력되는 `ERROR:` 행을 기준으로 문제를 판단하세요.
 
-## 4. 배포 URL과 HTTP 결과 확인
+## 4. 같은 ACA Environment 내부에서 internal ingress 앱에 접근할 수 있는 이유
 
 👁️ **설명**
 
-GitHub Actions 성공만으로 끝내지 말고 브라우저와 Cloud Shell에서 같은 HTTPS endpoint를 다시 확인합니다. 브라우저는 사람이 보는 결과를, Cloud Shell은 CLI 기반 재현 결과를 제공합니다.
+Task 1에서 만든 ACA Environment는 `internal Environment`이므로 앱 FQDN이 있어도 기본 인터넷 공개 endpoint가 아닙니다. 이 모듈의 샘플 앱과 GitHub Event Job runner는 **같은 ACA Environment** 안에 있으므로, runner는 Environment에 연결된 Private DNS와 내부 data plane을 사용해 `https://$FQDN`을 해석하고 HTTPS로 접근할 수 있습니다.
+
+internal ingress는 public browser나 기본 Cloud Shell 성공을 목표로 하지 않습니다. 이 워크숍에서 성공 기준은 **같은 ACA Environment** 안의 runner가 internal endpoint를 읽는 것입니다. 반대로 VNet 안의 `VM`이나 `Application Gateway`가 ACA Environment 밖에서 이 앱을 받아야 하는 시나리오라면, 같은 `internal Environment` 안에서도 보통 app 쪽은 external ingress를 사용합니다. 그 패턴은 VNet 내부 다른 hop을 대상으로 한 설계이며, 현재 워크숍의 same-Environment runner 검증 범위 밖입니다.
+
+📋 **예상 출력**
+
+- GitHub Actions의 runner step만 `Verified internal endpoint ...`를 출력합니다.
+- `Show deployed Azure resource`의 `externalIngress=false`는 public ingress가 꺼져 있음을 보여 줍니다.
+- 이후 5단계에서 기본 Cloud Shell이 private endpoint에 닿지 못하더라도 정상입니다.
+
+## 5. 기본 Cloud Shell과 Azure Portal에서 확인
+
+👁️ **설명**
+
+이제 **기본 Cloud Shell**에서 control-plane 상태와 Private DNS 연결을 확인합니다. 이 Shell은 VNet에 붙지 않았으므로 metadata 조회는 성공해야 하지만, sample app의 private HTTPS endpoint에는 바로 닿지 않는 것이 정상입니다. 즉, control plane은 보이고 data plane은 격리되어야 합니다.
 
 🟢 **실행**
 
-먼저 GitHub workflow에서 확인한 URL과 같은 endpoint를 Cloud Shell에서 다시 조회합니다.
+Cloud Shell에서 Environment, app, Private DNS를 다시 조회합니다.
 
 ```bash
+ENV_INTERNAL=$(az containerapp env show \
+  --name "$ENV" \
+  --resource-group "$RG" \
+  --query properties.vnetConfiguration.internal \
+  --output tsv)
+INFRASTRUCTURE_SUBNET_ID=$(az containerapp env show \
+  --name "$ENV" \
+  --resource-group "$RG" \
+  --query properties.vnetConfiguration.infrastructureSubnetId \
+  --output tsv)
 FQDN=$(az containerapp show \
   --name "$SAMPLE_APP" \
   --resource-group "$RG" \
   --query properties.configuration.ingress.fqdn \
   --output tsv)
-APP_URL="https://$FQDN"
-
-printf 'https://%s\n' "$FQDN"
-printf 'APP_URL=%s\n' "$APP_URL"
-curl --fail --silent --show-error "https://$FQDN" | sed -n '1,12p'
-```
-
-이제 브라우저에서 `APP_URL` 또는 `https://$FQDN`을 새 탭으로 열어 pinned `mcr.microsoft.com/k8se/quickstart@sha256:...` image의 기본 quickstart page가 보이는지 확인합니다.
-
-📋 **예상 출력**
-
-- Cloud Shell에는 `https://...azurecontainerapps.io` 형식의 URL이 출력됩니다.
-- `curl` 결과 앞부분에 HTML이 보이거나 quickstart page 텍스트가 출력됩니다.
-- 브라우저에서는 sample page가 열리고, 새로고침 직후 잠깐 지연되더라도 결국 HTTP 200 응답으로 표시되어야 합니다.
-
-⚠️ **주의**
-
-- 직후 몇 초 동안은 temporary HTTP cold start 때문에 첫 요청이 늦거나 실패할 수 있습니다.
-- 이 경우 workflow를 바로 수정하지 말고, 동일 URL을 브라우저에서 한 번 더 열거나 Cloud Shell `curl`을 잠시 후 다시 실행하세요.
-
-## 5. Cloud Shell과 Azure Portal에서 확인
-
-👁️ **설명**
-
-마지막으로 Azure control plane과 Portal UI 양쪽에서 같은 리소스를 확인합니다. 이렇게 하면 GitHub Actions output만 맞고 실제 Azure resource가 다른 subscription/RG에 생긴 경우를 걸러낼 수 있습니다.
-
-🟢 **실행**
-
-Cloud Shell에서 deployed resource summary를 다시 조회합니다.
-
-```bash
-az containerapp show \
+EXTERNAL_INGRESS=$(az containerapp show \
   --name "$SAMPLE_APP" \
   --resource-group "$RG" \
-  --query "{name:name,provisioningState:properties.provisioningState,externalIngress:properties.configuration.ingress.external,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
-  --output table
+  --query properties.configuration.ingress.external \
+  --output tsv)
+PRIVATE_DNS_ZONE=$(az network private-dns zone list \
+  --resource-group "$RG" \
+  --query "[?contains(name, 'azurecontainerapps.io')].name | [0]" \
+  --output tsv)
+VNET_LINK=$(az network private-dns link vnet list \
+  --resource-group "$RG" \
+  --zone-name "$PRIVATE_DNS_ZONE" \
+  --query "[0].virtualNetwork.id" \
+  --output tsv)
+WILDCARD_A_RECORD=$(az network private-dns record-set a show \
+  --resource-group "$RG" \
+  --zone-name "$PRIVATE_DNS_ZONE" \
+  --name '*' \
+  --query "arecords[0].ipv4Address" \
+  --output tsv)
+
+printf 'environmentInternal=%s\ninfrastructureSubnetId=%s\nexternalIngress=%s\nfqdn=%s\nPrivate DNS zone=%s\nVNet link=%s\nwildcard A record=%s\n' \
+  "$ENV_INTERNAL" \
+  "$INFRASTRUCTURE_SUBNET_ID" \
+  "$EXTERNAL_INGRESS" \
+  "$FQDN" \
+  "$PRIVATE_DNS_ZONE" \
+  "$VNET_LINK" \
+  "$WILDCARD_A_RECORD"
+
+if curl --fail --silent --show-error --connect-timeout 5 --max-time 10 "https://$FQDN"; then
+  printf 'WARNING: 기본 Cloud Shell에서 internal endpoint 응답이 왔습니다. 현재 Shell이 별도 VNet 연결인지 확인하세요.\n'
+else
+  printf '기본 Cloud Shell에서 private endpoint에 바로 닿지 않는 것은 예상된 격리 동작입니다.\n'
+fi
 ```
 
-이후 `Azure Portal`에서 다음 순서로 확인합니다.
+그리고 `Azure Portal`에서는 아래만 확인합니다.
 
-1. **Resource groups**에서 `$RG`를 엽니다.
-2. `hello-aca-<suffix>` 리소스를 찾고 type이 `Container App`인지 확인합니다.
-3. **Overview** 또는 **Ingress**에서 external ingress가 켜져 있고 Application Url이 Cloud Shell의 `https://$FQDN`과 같은지 확인합니다.
-4. Container image가 `mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c`인지 확인합니다.
+1. **Managed Environments**에서 `$ENV`를 열고 Networking에 internal/virtual network 구성이 보이는지 확인합니다.
+2. Environment detail에서 infrastructure subnet이 Cloud Shell 출력과 같은지 확인합니다.
+3. **Container Apps**에서 `hello-aca-<suffix>`를 열고 **Ingress**에서 external ingress가 꺼져 있으며 FQDN이 같은지 확인합니다.
+4. Environment와 app를 연결하는 `Private DNS zone`, `VNet link`, `wildcard A record`가 같은 Resource Group에 존재하는지 확인합니다.
+5. Portal에서는 Application URL을 브라우저로 여는 대신, `externalIngress=false`와 FQDN 일치만 비교합니다.
 
 📋 **예상 출력**
 
-- Cloud Shell table에는 `Succeeded`, `true`, FQDN, quickstart image가 표시됩니다.
-- `Azure Portal`에서도 같은 이름의 `Container App`이 보이고 외부 ingress가 활성화되어 있어야 합니다.
-- GitHub Actions, 브라우저, Cloud Shell, Portal 네 곳에서 같은 앱 이름과 URL을 가리키면 검증 완료입니다.
-
-> **관리 콘솔 참고 화면:** Azure Portal의 workshop Resource Group에 ACR, Container Apps Environment, `hello-aca-<suffix>` Container App, managed identity, runner Job, Log Analytics workspace가 함께 보이는지 확인합니다. 화면의 suffix는 참가자마다 다릅니다.
-
-![Azure Portal에서 워크숍 Resource Group과 배포된 Container App을 확인한 화면](images/06-azure-portal-resource-group-result.png)
-
-> **실제 결과 참고 화면:** 브라우저에서 Application URL을 열었을 때 Azure Container Apps의 **Your container app is running with a Hello World image** 페이지가 표시되면 외부 ingress와 quickstart image가 정상 동작하는 것입니다. 주소의 앱 이름과 FQDN은 실행마다 달라집니다.
-
-![브라우저에서 Azure Container Apps Hello World 결과를 확인한 화면](images/06-container-app-hello-world-result.png)
+- `environmentInternal=true`가 보이면 Environment가 internal 모드입니다.
+- `infrastructureSubnetId`는 Task 1에서 연결한 subnet resource ID여야 합니다.
+- `externalIngress=false`와 FQDN이 같은 앱을 가리켜야 합니다.
+- `Private DNS zone`, `VNet link`, `wildcard A record`가 모두 비어 있지 않아야 합니다.
+- 기본 Cloud Shell에서 private endpoint에 바로 닿지 않는 것은 예상된 격리 동작입니다.
+- `Azure Portal`에서도 Environment networking이 internal로 보이고 app ingress가 external off여야 합니다.
 
 ## 트러블슈팅
 
@@ -502,7 +520,8 @@ az containerapp show \
 | `AuthorizationFailed`가 발생함 | `Container Apps Contributor` role assignment 직후라 RBAC propagation이 아직 끝나지 않음 | 1~5분 정도 기다린 뒤 같은 workflow를 다시 실행합니다. role을 더 넓히지 말고 기존 resource-group scope assignment가 전파될 시간을 먼저 줍니다. |
 | `ERROR: Failed to inspect Container App`이 발생함 | 기존 앱 조회 중 인증, 네트워크 또는 Azure CLI 오류가 발생해 리소스 존재 여부를 안전하게 판단할 수 없음 | 바로 새 앱을 만들거나 삭제 완료로 간주하지 마세요. 바로 앞에 출력된 Azure CLI 오류를 기준으로 subscription, RBAC, 네트워크 상태를 복구한 뒤 workflow를 다시 실행합니다. |
 | `ERROR: AZURE_CLIENT_ID is required.` 같은 missing Job environment variables 오류가 남 | Event Job에 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_CONTAINERAPPS_ENVIRONMENT`, `AZURE_SAMPLE_APP`가 빠졌음 | GitHub secret을 새로 만들지 말고 Module 04의 Job 환경 변수 정의를 다시 확인합니다. 필요한 경우 Event Job을 같은 값으로 다시 생성한 뒤 workflow를 재실행합니다. |
-| GitHub run은 배포를 끝냈지만 첫 HTTP 확인이 실패하거나 `HTTP verification failed after`로 끝남 | sample app revision은 만들어졌지만 temporary HTTP cold start로 첫 HTTPS 응답이 늦음 | 20~60초 정도 기다린 뒤 브라우저에서 URL을 새로고침하고, Cloud Shell `curl --fail --silent --show-error "https://$FQDN"`를 다시 실행합니다. FQDN이 정상이라면 코드 수정 없이 회복될 수 있습니다. |
+| GitHub run은 배포를 끝냈지만 `Verify the internal HTTPS endpoint from the runner` step이 `ERROR: Internal HTTP verification failed after`로 끝남 | internal ingress revision warm-up이 더 필요하거나 runner와 app가 같은 ACA Environment에 있지 않음 | 20~60초 정도 기다린 뒤 workflow를 다시 실행하고, `AZURE_CONTAINERAPPS_ENVIRONMENT`, Task 1의 internal Environment, app `externalIngress=false`, Private DNS 연결을 다시 확인합니다. |
+| 기본 Cloud Shell의 bounded `curl`이 실패함 | internal ingress app은 public endpoint가 아니므로 standard Cloud Shell에서 private endpoint로 바로 들어갈 수 없음 | 5단계의 control-plane 출력과 `Private DNS zone`, `VNet link`, `wildcard A record`를 확인했다면 이 실패는 정상 격리 결과로 취급합니다. browser 재시도나 external ingress 변경으로 우회하지 마세요. |
 | deployment workflow가 계속 queued 상태이며 이전 실습 run이 섞여 보임 | 같은 `aca-runner` label을 쓰는 `stale runner workflow`가 아직 queued/running 상태이거나 최신 YAML이 아닌 오래된 workflow가 남아 있음 | GitHub Actions에서 오래된 queued run을 취소하고, `.github/workflows/aca-runner-azure-deploy.yml`과 scale test workflow가 모두 최신 sample인지 확인합니다. 특히 배포 workflow는 single job + `runs-on: [aca-runner]`만 유지한 뒤 다시 실행합니다. |
 
 ---
