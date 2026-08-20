@@ -1,6 +1,6 @@
 # Azure Container Apps GitHub Actions Runner 워크숍
 
-> Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해 **약 105분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 참가자는 runner image 빌드, Event Job 배포, 병렬 workflow와 Log Analytics 검증, Managed Identity 기반 Azure 샘플 배포, 리소스 정리까지 한 흐름으로 완료합니다.
+> Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해 **약 120분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 참가자는 runner image 빌드, **VNet 통합 internal Environment**와 **Private DNS** 기반 Event Job 배포, 병렬 workflow와 Log Analytics 검증, Managed Identity 기반 internal ingress 샘플 배포, 리소스 정리까지 한 흐름으로 완료합니다.
 
 ---
 
@@ -38,15 +38,34 @@ Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에�
 flowchart LR
   user([참가자]) -->|workflow_dispatch| repo[GitHub Private Repository]
   repo -->|queued jobs| keda[KEDA github-runner scaler]
-  keda -->|0..5 executions| job[ACA Event Job]
-  job -->|ephemeral runner| repo
-  job -->|Managed Identity login| arm[Azure Resource Manager]
-  arm -->|Container Apps Contributor| sample[Sample Container App]
-  sample -->|HTTPS result| user
-  acr[(Azure Container Registry)] --> job
+
+  subgraph vnet[VNet]
+    dns[(Private DNS)]
+    subgraph env[ACA internal Environment]
+      job[ACA Event Job\nephemeral runner]
+      sample[internal ingress\nSample Container App]
+    end
+  end
+
+  keda -->|0..5 executions| job
+  job -->|runner registration| repo
+  job -->|same Environment HTTPS| sample
+  dns -->|name resolution| job
+  acr[(Azure Container Registry)] -->|image pull| job
   uami[User-Assigned Managed Identity] -->|AcrPull| acr
+  job -->|Managed Identity login| arm[Azure Resource Manager]
+  arm -->|Container Apps Contributor| sample
   job -. logs .-> law[(Log Analytics)]
+  user -. no direct public path .-> sample
 ```
+
+이 워크숍의 네트워크 계약은 다음과 같습니다.
+
+- Task 1에서 만든 ACA Environment의 `network type`은 internal이며 생성 후 바꿀 수 없습니다.
+- internal Environment는 inbound를 제한하지만 outbound 인터넷을 끄지 않습니다. 따라서 워크숍 runner와 KEDA는 public outbound로 GitHub API, ACR, Azure identity, ARM, Azure Monitor에 도달합니다.
+- sample app의 internal-ingress FQDN은 same Environment runner에서만 직접 검증합니다.
+- standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.
+- 이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, VNet-isolated Cloud Shell, NAT Gateway가 포함되지 않으며 모두 production extension입니다.
 
 이 워크숍의 코어 설정은 다음 값으로 고정합니다.
 
@@ -66,11 +85,11 @@ flowchart LR
 
 1. GitHub와 Azure 실습 준비를 Cloud Shell 기준으로 점검할 수 있다.
 2. PAT 격리, non-root 실행, 권한 제한이 적용된 self-hosted runner image를 이해하고 빌드할 수 있다.
-3. Azure Container Apps Event Job을 배포할 수 있다.
+3. VNet 통합 internal Environment와 Private DNS 기반 Azure Container Apps Event Job을 배포할 수 있다.
 4. KEDA `github-runner` scaler를 repository 범위로 구성할 수 있다.
 5. 네 개의 병렬 workflow Job으로 scale-out 동작을 검증할 수 있다.
 6. Log Analytics와 CLI로 로그를 확인하고 트러블슈팅할 수 있다.
-7. Module 06에서 Managed Identity 로그인으로 샘플 Container App을 배포하고 HTTPS 결과를 검증할 수 있다.
+7. Module 06에서 Managed Identity 로그인으로 internal ingress 샘플 Container App을 배포하고 same Environment runner 경로에서 HTTPS 결과를 검증할 수 있다.
 8. 실습 리소스를 정리하고 보안·제약 사항을 점검할 수 있다.
 
 ---
@@ -106,13 +125,13 @@ flowchart LR
 |---|------|------------|---:|
 | 00 | (현재 문서) | 전체 개요, 아키텍처, 목표, 비용, 이동 경로 | 5분 |
 | 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, Fine-grained PAT 실습과 운영용 GitHub App 권장 사항 | 15분 |
-| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID, Azure resource ID | 15분 |
+| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID | 25분 |
 | 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 10분 |
 | 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |
 | 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |
-| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 샘플 Container App과 HTTPS 검증 | 15분 |
+| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 internal ingress sample app과 runner-internal HTTPS verification | 20분 |
 | 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |
-|  | **워크숍 합계** |  | **105분** |
+|  | **워크숍 합계** |  | **120분** |
 
 ---
 
@@ -132,7 +151,10 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 - [ ] active execution이 `0 → N → 0`으로 돌아옵니다.
 - [ ] runner lifecycle marker가 CLI 또는 Log Analytics에 나타납니다.
 - [ ] self-hosted runner가 Managed Identity로 Azure Container App을 배포합니다.
-- [ ] sample Container App의 HTTPS endpoint를 GitHub Actions, Cloud Shell, 브라우저, Azure Portal에서 교차 확인합니다.
+- [ ] ACA Environment가 internal 상태입니다.
+- [ ] sample Container App이 `externalIngress=false` 상태입니다.
+- [ ] same Environment runner에서 runner-internal HTTP success와 HTTPS 검증이 확인됩니다.
+- [ ] standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.
 - [ ] GitHub에 permanent online ephemeral runner가 남지 않습니다.
 - [ ] Azure cleanup 후 조회 결과가 `ResourceGroupNotFound`에 도달합니다.
 - [ ] 안내에 따라 lab Fine-grained PAT와 GitHub lab artifact를 정리합니다.
@@ -144,21 +166,23 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 | 구간 | 내용 | 예상 시간 |
 |------|------|-----------|
 | 시작 | 개요 및 실습 범위 확인 | 5분 |
-| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 30분 |
+| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 40분 |
 | 2부 | runner image 빌드 + Event Job/KEDA 구성 | 25분 |
 | 3부 | 병렬 workflow 검증 + 로그 확인 | 20분 |
-| 4부 | Azure 샘플 배포 + HTTPS 확인 | 15분 |
+| 4부 | Azure 샘플 배포 + same Environment HTTPS 확인 | 20분 |
 | 마무리 | 보안·제약 정리 + 리소스 삭제 | 10분 |
-| 합계 | 전체 워크숍 | 105분 |
+| 합계 | 전체 워크숍 | 120분 |
 
-> 리소스 그룹 삭제 요청은 105분 일정에 포함되지만, ACA managed environment의
+> 리소스 그룹 삭제 요청은 120분 일정에 포함되지만, ACA managed environment의
 > 비동기 삭제 완료는 워크숍 종료 후까지 이어질 수 있습니다.
 
 > ✅ **검증된 범위와 남은 전제** — 체크인된 자동 검증은 README/문서 계약과 스크립트 인터페이스를 확인합니다.
-> 라이브 Azure/GitHub 실행에서 `koreacentral`, runner `2.336.0`, matrix 4개 Job,
-> 이미지 pull, KEDA `0 → 4 → 0` 확장, ephemeral runner 종료, Log Analytics 수집,
-> 리소스 그룹 삭제를 확인했고, Module 06에서는 managed identity 로그인, 샘플
-> Container App 배포, HTTPS 결과 확인을 검증했습니다. Fine-grained PAT의 organization 승인과 최소 권한 동작은 참가자의 GitHub enterprise/organization 정책에 따라 달라집니다.
+> 이 저장소는 `koreacentral`, runner `2.336.0`, matrix 4개 Job, 이미지 pull,
+> KEDA `0 → 4 → 0` 확장, ephemeral runner 종료, Log Analytics 수집,
+> 리소스 그룹 삭제 계약을 기준으로 문서와 스크립트를 유지합니다. same Environment
+> private-network 검증은 참가자 구독의 VNet, Private DNS, internal ingress 상태에
+> 따라 Module 06 절차를 직접 재실행해야 하며, 이 README는 별도의 라이브 Azure/GitHub
+> private-network rehearsal을 주장하지 않습니다. Fine-grained PAT의 organization 승인과 최소 권한 동작은 참가자의 GitHub enterprise/organization 정책에 따라 달라집니다.
 
 ---
 
@@ -170,7 +194,10 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 |--------|-----------|----------------|
 | ACA Consumption Event Job | Job execution 동안의 vCPU/메모리 사용 시간 | queued Job이 없을 때는 `min-executions=0`으로 active execution이 없습니다. |
 | Azure Container Registry Basic | 저장 용량 + build 실행 시간 | runner image 보관과 `az acr build` 사용량이 포함됩니다. |
+| Virtual Network + Private DNS | VNet, subnet, DNS zone/link 리소스 사용량 | internal Environment inbound 경로를 위해 필요하며, sample app FQDN은 Private DNS에 의존합니다. |
 | Log Analytics | 로그 수집량(ingestion) | 실습 로그 확인에 필요하며, 오래 보관할수록 추가 비용이 늘 수 있습니다. |
+
+> 이 워크숍 비용 표에는 **ACR Private Endpoint**, **Azure Firewall**, NAT Gateway, 사용자 지정 UDR/NSG 같은 production 확장 리소스가 포함되지 않습니다. 워크숍은 inbound만 internal로 제한하고 outbound는 public outbound로 유지합니다.
 
 ---
 
@@ -201,6 +228,8 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 | Job execution이 생성되지 않음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
 | execution timeout 발생 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |
 | `AuthorizationFailed` 또는 `HTTP verification failed after`가 배포 workflow에서 발생함 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |
+| standard Cloud Shell에서 sample app의 internal-ingress FQDN에 접근할 수 없음 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |
+| 사용자 지정 NSG/UDR/Firewall 뒤에 GitHub API·ACR·Azure Monitor 접근이 막힘 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |
 | CLI 또는 Log Analytics에서 runner 로그를 찾을 수 없음 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |
 | workflow의 Docker 단계가 실패함 | [docs/07-security-limitations-cleanup.md#트러블슈팅](docs/07-security-limitations-cleanup.md#트러블슈팅) |
 | runner가 GitHub에 남아 있음 | [docs/07-security-limitations-cleanup.md#트러블슈팅](docs/07-security-limitations-cleanup.md#트러블슈팅) |
@@ -213,6 +242,8 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 - [Running GitHub Actions Runners on Azure Container Apps with KEDA Autoscaling](https://techcommunity.microsoft.com/blog/azureinfrastructureblog/running-github-actions-runners-on-azure-container-apps-with-keda-autoscaling/4512980)
 - [Tutorial: Run GitHub Actions runners with Azure Container Apps jobs](https://learn.microsoft.com/azure/container-apps/tutorial-ci-cd-runners-jobs?pivots=container-apps-jobs-self-hosted-ci-cd-github-actions)
 - [Jobs in Azure Container Apps](https://learn.microsoft.com/azure/container-apps/jobs)
+- [Virtual network configuration in Azure Container Apps environment](https://learn.microsoft.com/azure/container-apps/custom-virtual-networks)
+- [Ingress in Azure Container Apps](https://learn.microsoft.com/azure/container-apps/ingress-overview)
 - [KEDA GitHub Runner scaler](https://keda.sh/docs/latest/scalers/github-runner/)
 - [Security hardening for GitHub Actions — hardening for self-hosted runners](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#hardening-for-self-hosted-runners)
 - [참고 문서 스타일: ms-aca-basic-workshop01](https://github.com/freeman9844/ms-aca-basic-workshop01)

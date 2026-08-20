@@ -120,6 +120,15 @@ exit 99
     absent = run_deploy_step("absent")
     if absent.returncode != 0 or "No existing Container App" not in absent.stdout:
         raise SystemExit("FAIL: ResourceNotFound must allow first deployment")
+    absent_calls = (temp / "az-calls.log").read_text(encoding="utf-8")
+    create_call = next(
+        (line for line in absent_calls.splitlines() if line.startswith("containerapp create ")),
+        "",
+    )
+    if "--ingress internal" not in create_call:
+        raise SystemExit("FAIL: containerapp create must use internal ingress")
+    if "--ingress external" in create_call:
+        raise SystemExit("FAIL: containerapp create must not use external ingress")
 
     (temp / "az-calls.log").unlink()
     existing = run_deploy_step("existing-delete")

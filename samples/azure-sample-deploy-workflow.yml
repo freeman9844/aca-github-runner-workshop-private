@@ -44,7 +44,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APP_SHOW_ERROR="$(mktemp)"
+          APP_SHOW_ERROR="${GITHUB_WORKSPACE:-$PWD}/.containerapp-show-error.log"
+          : > "$APP_SHOW_ERROR"
           trap 'rm -f "$APP_SHOW_ERROR"' EXIT
 
           container_app_exists() {
@@ -114,7 +115,7 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --environment "$AZURE_CONTAINERAPPS_ENVIRONMENT" \
             --image mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c \
-            --ingress external \
+            --ingress internal \
             --target-port 80 \
             --min-replicas 0 \
             --max-replicas 1 \
@@ -130,14 +131,14 @@ jobs:
           APP_URL="https://$FQDN"
           printf 'APP_URL=%s\n' "$APP_URL" >> "$GITHUB_ENV"
 
-      # 프로비저닝 후 ACA ingress가 준비될 때까지 시간이 걸릴 수 있습니다.
-      - name: Verify the deployed HTTPS endpoint
+      # 프로비저닝 후 internal ingress HTTPS가 runner에서 준비될 때까지 시간이 걸릴 수 있습니다.
+      - name: Verify the internal HTTPS endpoint from the runner
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 18); do
             if response="$(curl --fail --silent --show-error "$APP_URL")"; then
-              printf 'Verified %s\n' "$APP_URL"
+              printf 'Verified internal endpoint %s\n' "$APP_URL"
               printf '%s\n' "$response" | sed -n '1,12p'
               exit 0
             fi
@@ -145,11 +146,11 @@ jobs:
               "$attempt" >&2
             sleep 5
           done
-          printf 'ERROR: HTTP verification failed after 18 attempts: %s\n' \
+          printf 'ERROR: Internal HTTP verification failed after 18 attempts: %s\n' \
             "$APP_URL" >&2
           exit 1
 
-      # Azure Portal과 비교할 수 있도록 최종 resource 정보를 출력합니다.
+      # Azure Portal과 control-plane 조회를 비교할 수 있도록 최종 resource 정보를 출력합니다.
       - name: Show deployed Azure resource
         shell: bash
         run: |
@@ -157,5 +158,5 @@ jobs:
           az containerapp show \
             --name "$AZURE_SAMPLE_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "{name:name,provisioningState:properties.provisioningState,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
+            --query "{name:name,provisioningState:properties.provisioningState,externalIngress:properties.configuration.ingress.external,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
             --output table

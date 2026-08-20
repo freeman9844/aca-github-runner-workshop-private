@@ -6,9 +6,6 @@ WORKFLOW="$ROOT/samples/azure-sample-deploy-workflow.yml"
 DOC="$ROOT/docs/06-azure-sample-deployment.md"
 MODULE05_DOC="$ROOT/docs/05-parallel-scale-validation.md"
 GITHUB_WORKFLOWS_SCREENSHOT="$ROOT/docs/images/06-github-workflows-console.png"
-GITHUB_DEPLOYMENT_SCREENSHOT="$ROOT/docs/images/06-github-actions-deployment-success.png"
-AZURE_PORTAL_SCREENSHOT="$ROOT/docs/images/06-azure-portal-resource-group-result.png"
-APP_RESULT_SCREENSHOT="$ROOT/docs/images/06-container-app-hello-world-result.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -20,12 +17,6 @@ fail() {
 [[ -f "$MODULE05_DOC" ]] || fail "Module 05 missing"
 [[ -f "$GITHUB_WORKFLOWS_SCREENSHOT" ]] || fail "Module 06 GitHub workflows screenshot missing"
 [[ ! -x "$GITHUB_WORKFLOWS_SCREENSHOT" ]] || fail "Module 06 GitHub workflows screenshot must not be executable"
-[[ -f "$GITHUB_DEPLOYMENT_SCREENSHOT" ]] || fail "Module 06 deployment success screenshot missing"
-[[ ! -x "$GITHUB_DEPLOYMENT_SCREENSHOT" ]] || fail "Module 06 deployment success screenshot must not be executable"
-[[ -f "$AZURE_PORTAL_SCREENSHOT" ]] || fail "Module 06 Azure portal screenshot missing"
-[[ ! -x "$AZURE_PORTAL_SCREENSHOT" ]] || fail "Module 06 Azure portal screenshot must not be executable"
-[[ -f "$APP_RESULT_SCREENSHOT" ]] || fail "Module 06 app result screenshot missing"
-[[ ! -x "$APP_RESULT_SCREENSHOT" ]] || fail "Module 06 app result screenshot must not be executable"
 
 for heading in \
   '# 06. Azure 샘플 배포와 결과 확인' \
@@ -33,8 +24,8 @@ for heading in \
   '## 1. 배포 권한 확인과 Container Apps Contributor 부여' \
   '## 2. 샘플 workflow를 GitHub에 생성' \
   '## 3. GitHub Actions에서 배포 실행' \
-  '## 4. 배포 URL과 HTTP 결과 확인' \
-  '## 5. Cloud Shell과 Azure Portal에서 확인' \
+  '## 4. 같은 ACA Environment 내부에서 internal ingress 앱에 접근할 수 있는 이유' \
+  '## 5. 기본 Cloud Shell과 Azure Portal에서 확인' \
   '## 트러블슈팅'; do
   grep -F "$heading" "$DOC" >/dev/null ||
     fail "Module 06 missing heading $heading"
@@ -110,6 +101,19 @@ for text in \
   'https://$FQDN' \
   'Container App' \
   'Azure Portal' \
+  'Verify the internal HTTPS endpoint from the runner' \
+  'Verified internal endpoint' \
+  'externalIngress:properties.configuration.ingress.external' \
+  '--query "aRecords[0].ipv4Address"' \
+  'internal Environment' \
+  '기본 Cloud Shell' \
+  '같은 ACA Environment' \
+  'Private DNS zone' \
+  'VNet link' \
+  'wildcard A record' \
+  'externalIngress=false' \
+  'Application Gateway' \
+  'VM' \
   'az: command not found' \
   'az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors' \
   'AuthorizationFailed' \
@@ -117,10 +121,22 @@ for text in \
   'behavior of this command has been altered' \
   'does not exist. Specify a valid environment' \
   '`AcrPull`만 있고' \
-  'HTTP verification failed after' \
+  'ERROR: Internal HTTP verification failed after 18 attempts:' \
   'stale runner workflow'; do
   grep -F -- "$text" "$DOC" >/dev/null ||
     fail "Module 06 missing $text"
+done
+
+for unexpected in \
+  'images/06-github-actions-deployment-success.png' \
+  'images/06-azure-portal-resource-group-result.png' \
+  'images/06-container-app-hello-world-result.png' \
+  '브라우저에서 `APP_URL`' \
+  '브라우저에서는 sample page가 열리고' \
+  'GitHub Actions, 브라우저, Cloud Shell, Portal 네 곳에서 같은 앱 이름과 URL을 가리키면 검증 완료입니다.'; do
+  if grep -F -- "$unexpected" "$DOC" >/dev/null; then
+    fail "Module 06 must not reference legacy public-access verification: $unexpected"
+  fi
 done
 
 for assignment in \
@@ -190,24 +206,21 @@ if ! cmp -s "$WORKFLOW" <(
   fail "Module 06 collapsible workflow must match the reviewed sample exactly"
 fi
 
-step3_expected_line="$(grep -nF -m1 '`Show deployed Azure resource` step에는 새 `Container App` 이름, image, FQDN이 출력됩니다.' "$DOC" | cut -d: -f1)"
-deployment_screenshot_line="$(grep -nF -m1 '![GitHub Actions에서 Azure 샘플 Container App 배포가 성공한 화면](images/06-github-actions-deployment-success.png)' "$DOC" | cut -d: -f1)"
-step4_heading_line="$(grep -nF -m1 '## 4. 배포 URL과 HTTP 결과 확인' "$DOC" | cut -d: -f1)"
-step3_warning_line="$(awk -v start="$step3_heading_line" -v end="$step4_heading_line" \
-  'NR > start && NR < end && $0 == "⚠️ **주의**" { print NR; exit }' "$DOC")"
-[[ -n "$step3_expected_line" && -n "$deployment_screenshot_line" && -n "$step3_warning_line" ]] ||
-  fail "Module 06 missing Step 3 deployment screenshot placement markers"
-(( step3_expected_line < deployment_screenshot_line && deployment_screenshot_line < step3_warning_line )) ||
-  fail "Module 06 deployment screenshot must follow Step 3 expected output"
-
-step5_expected_line="$(grep -nF -m1 'GitHub Actions, 브라우저, Cloud Shell, Portal 네 곳에서 같은 앱 이름과 URL을 가리키면 검증 완료입니다.' "$DOC" | cut -d: -f1)"
-portal_screenshot_line="$(grep -nF -m1 '![Azure Portal에서 워크숍 Resource Group과 배포된 Container App을 확인한 화면](images/06-azure-portal-resource-group-result.png)' "$DOC" | cut -d: -f1)"
-app_result_screenshot_line="$(grep -nF -m1 '![브라우저에서 Azure Container Apps Hello World 결과를 확인한 화면](images/06-container-app-hello-world-result.png)' "$DOC" | cut -d: -f1)"
+step4_heading_line="$(grep -nF -m1 '## 4. 같은 ACA Environment 내부에서 internal ingress 앱에 접근할 수 있는 이유' "$DOC" | cut -d: -f1)"
+step5_heading_line="$(grep -nF -m1 '## 5. 기본 Cloud Shell과 Azure Portal에서 확인' "$DOC" | cut -d: -f1)"
+step5_expected_line="$(grep -nF -m1 '기본 Cloud Shell에서 sample app의 internal-ingress FQDN에 바로 닿지 않는 것은 예상된 격리 동작입니다.' "$DOC" | cut -d: -f1 || true)"
 troubleshooting_line="$(grep -nF -m1 '## 트러블슈팅' "$DOC" | cut -d: -f1)"
-[[ -n "$step5_expected_line" && -n "$portal_screenshot_line" && -n "$app_result_screenshot_line" && -n "$troubleshooting_line" ]] ||
-  fail "Module 06 missing Step 5 result screenshot placement markers"
-(( step5_expected_line < portal_screenshot_line && portal_screenshot_line < app_result_screenshot_line && app_result_screenshot_line < troubleshooting_line )) ||
-  fail "Module 06 Step 5 screenshots must show the portal before the browser result"
+[[ -n "$step4_heading_line" && -n "$step5_heading_line" && -n "$step5_expected_line" && -n "$troubleshooting_line" ]] ||
+  fail "Module 06 missing updated internal-ingress verification flow"
+(( step3_heading_line < step4_heading_line &&
+   step4_heading_line < step5_heading_line &&
+   step5_heading_line < step5_expected_line &&
+   step5_expected_line < troubleshooting_line )) ||
+  fail "Module 06 must explain same-environment access before Cloud Shell isolation checks"
+
+if grep -F -- '--query "arecords[0].ipv4Address"' "$DOC" >/dev/null; then
+  fail "Module 06 must not use lowercase arecords in the Private DNS query"
+fi
 
 grep -Fx '[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing Module 06 navigation link"
@@ -228,15 +241,13 @@ for text in \
   '# client secret 없이 runner managed identity로 Azure에 로그인합니다.' \
   '# 반복 실습도 동일한 상태에서 시작하도록 샘플 앱을 다시 생성합니다.' \
   '# 생성된 endpoint를 이후 workflow step과 공유합니다.' \
-  '# 프로비저닝 후 ACA ingress가 준비될 때까지 시간이 걸릴 수 있습니다.' \
-  '# Azure Portal과 비교할 수 있도록 최종 resource 정보를 출력합니다.' \
+  '# 프로비저닝 후 internal ingress HTTPS가 runner에서 준비될 때까지 시간이 걸릴 수 있습니다.' \
+  '# Azure Portal과 control-plane 조회를 비교할 수 있도록 최종 resource 정보를 출력합니다.' \
   'set -euo pipefail' \
   'az login --identity --client-id "$AZURE_CLIENT_ID"' \
   'az account set --subscription "$AZURE_SUBSCRIPTION_ID"' \
   'az containerapp create' \
   'az containerapp delete' \
-  'APP_SHOW_ERROR="$(mktemp)"' \
-  "trap 'rm -f \"\$APP_SHOW_ERROR\"' EXIT" \
   'container_app_exists()' \
   'ResourceNotFound|ContainerAppNotFound' \
   'ERROR: Failed to inspect Container App' \
@@ -249,17 +260,24 @@ for text in \
   '--environment "$AZURE_CONTAINERAPPS_ENVIRONMENT"' \
   '--resource-group "$AZURE_RESOURCE_GROUP"' \
   '--name "$AZURE_SAMPLE_APP"' \
-  '--ingress external' \
+  '--ingress internal' \
   '--target-port 80' \
   '--min-replicas 0' \
   '--max-replicas 1' \
   'APP_URL="https://$FQDN"' \
   '>> "$GITHUB_ENV"' \
   'curl --fail --silent --show-error "$APP_URL"' \
-  'HTTP verification failed after'; do
+  'Verify the internal HTTPS endpoint from the runner' \
+  'Verified internal endpoint' \
+  'ERROR: Internal HTTP verification failed after 18 attempts:' \
+  'externalIngress:properties.configuration.ingress.external'; do
   grep -F -- "$text" "$WORKFLOW" >/dev/null ||
     fail "workflow missing $text"
 done
+
+if grep -F -- '--ingress external' "$WORKFLOW" >/dev/null; then
+  fail "workflow must not use external ingress"
+fi
 
 [[ "$(grep -Fc 'runs-on:' "$WORKFLOW")" -eq 1 ]] ||
   fail "deployment workflow must contain exactly one job"
