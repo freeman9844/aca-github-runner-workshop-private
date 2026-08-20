@@ -120,7 +120,9 @@ Module 06을 Cloud Shell 재접속 후 이어가려면 위에서 출력한 `SUBS
 
 👁️ **설명**
 
-internal ACA environment는 environment 전용 infrastructure subnet이 필요합니다. 이 워크숍은 Workload profiles environment의 minimum 크기인 `/27` subnet을 사용합니다. `/27`은 Workload profiles minimum이며, 워크숍의 최대 다섯 개 실행과 샘플 앱 하나를 수용하기에 충분합니다. 다만 production capacity planning에서는 더 큰 subnet이 필요할 수 있습니다.
+internal ACA environment는 environment 전용 infrastructure subnet이 필요합니다. 이 subnet을 `Microsoft.App/environments`에 위임하면 ACA가 사용자 VNet 안에 environment infrastructure를 배치하고 관리할 수 있으며, Container App과 Job이 VNet 내부 IP 또는 Private Endpoint로 노출된 리소스를 public Internet 없이 private 경로로 호출할 수 있습니다. internal ingress도 이 VNet의 private IP를 통해 제공됩니다.
+
+subnet delegation 자체가 대상 리소스의 Private Endpoint, Private DNS, NSG, UDR 또는 firewall을 자동으로 구성하는 것은 아닙니다. 호출 대상에 맞는 private 연결과 이름 해석, 트래픽 제어는 별도로 구성해야 합니다. 이 워크숍은 Workload profiles environment의 minimum 크기인 `/27` subnet을 사용합니다. `/27`은 Workload profiles minimum이며, 워크숍의 최대 다섯 개 실행과 샘플 앱 하나를 수용하기에 충분합니다. 다만 production capacity planning에서는 더 큰 subnet이 필요할 수 있습니다.
 
 🟢 **실행**
 
