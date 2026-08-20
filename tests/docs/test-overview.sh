@@ -57,6 +57,8 @@ grep -F '| Lab repository | 참가자 소유 Private `aca-runner-lab` repository
 grep -F '| Fine-grained PAT 생성·승인 | lab repository만 선택한 Fine-grained PAT를 만들 수 있어야 하며, organization 정책이 요구하면 승인을 받아야 합니다. |' "$README" >/dev/null
 grep -F 'Enterprise Managed User 또는 organization 정책에 따라 Fine-grained PAT 승인이 필요할 수 있습니다.' "$README" >/dev/null
 grep -F 'Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해' "$README" >/dev/null
+grep -F 'base image에는 Docker CLI와 buildx가 포함되지만 ACA Jobs에는 Docker daemon과 socket이 없습니다.' "$README" >/dev/null
+grep -F 'runner는 `sudo`와 `docker` 그룹에서 제거되며 entrypoint는 root 소유의 읽기·실행 전용 파일로 보호됩니다.' "$README" >/dev/null
 grep -F 'Public workshop source는 GitHub CLI 로그인 없이 clone할 수 있습니다.' "$README" >/dev/null
 grep -F 'git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' "$README" >/dev/null
 grep -F 'cd ~/aca-github-runner-workshop' "$README" >/dev/null
@@ -67,15 +69,16 @@ grep -F '그 외 Module 01 단계와 Module 02~07은 순서대로 모두 진행�
 grep -F '| `aca-github-runner-workshop-private` | 워크숍 문서, runner source, samples, tests | 워크숍 운영자 | source clone, 문서 확인, runner image 빌드 |' "$README" >/dev/null
 grep -F '| `aca-runner-lab` | 참가자 소유 Private lab repository | 참가자(Module 01) | workflow queue, KEDA 감시, ephemeral runner 등록 |' "$README" >/dev/null
 grep -F 'Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.' "$README" >/dev/null
-grep -F '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, 검증된 GitHub 변수와 Fine-grained PAT | 15분 |' "$README" >/dev/null
+grep -F '워크숍은 Fine-grained PAT를 사용하지만 실제 운영 환경에서는 단기 installation token을 사용하는 GitHub App 방식을 권장합니다.' "$README" >/dev/null
+grep -F '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, Fine-grained PAT 실습과 운영용 GitHub App 권장 사항 | 15분 |' "$README" >/dev/null
 grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID, Azure resource ID | 15분 |' "$README" >/dev/null
-grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | ACR에 빌드된 runner image | 10분 |' "$README" >/dev/null
+grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 10분 |' "$README" >/dev/null
 grep -F '| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |' "$README" >/dev/null
 grep -F '| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |' "$README" >/dev/null
 grep -F '| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 샘플 Container App과 HTTPS 검증 | 15분 |' "$README" >/dev/null
 grep -F '| 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |' "$README" >/dev/null
 grep -F '저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID, Azure resource ID' "$README" >/dev/null
-grep -F 'ACR에 빌드된 runner image' "$README" >/dev/null
+grep -F 'PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image' "$README" >/dev/null
 grep -F 'repository-scoped ACA Event Job과 KEDA rule' "$README" >/dev/null
 grep -F 'matrix 4개 Job과 `0 → N → 0` 증거' "$README" >/dev/null
 grep -F 'Managed Identity 기반 샘플 Container App과 HTTPS 검증' "$README" >/dev/null
