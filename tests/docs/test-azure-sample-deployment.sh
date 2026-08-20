@@ -104,6 +104,7 @@ for text in \
   'Verify the internal HTTPS endpoint from the runner' \
   'Verified internal endpoint' \
   'externalIngress:properties.configuration.ingress.external' \
+  '--query "aRecords[0].ipv4Address"' \
   'internal Environment' \
   '기본 Cloud Shell' \
   '같은 ACA Environment' \
@@ -216,6 +217,10 @@ troubleshooting_line="$(grep -nF -m1 '## 트러블슈팅' "$DOC" | cut -d: -f1)"
    step5_heading_line < step5_expected_line &&
    step5_expected_line < troubleshooting_line )) ||
   fail "Module 06 must explain same-environment access before Cloud Shell isolation checks"
+
+if grep -F -- '--query "arecords[0].ipv4Address"' "$DOC" >/dev/null; then
+  fail "Module 06 must not use lowercase arecords in the Private DNS query"
+fi
 
 grep -Fx '[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)' "$MODULE05_DOC" >/dev/null ||
   fail "Module 05 missing Module 06 navigation link"

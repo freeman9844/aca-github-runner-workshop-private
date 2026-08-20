@@ -125,8 +125,8 @@ flowchart LR
 |---|------|------------|---:|
 | 00 | (현재 문서) | 전체 개요, 아키텍처, 목표, 비용, 이동 경로 | 5분 |
 | 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, Fine-grained PAT 실습과 운영용 GitHub App 권장 사항 | 15분 |
-| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID | 20분 |
-| 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 15분 |
+| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID | 25분 |
+| 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 10분 |
 | 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |
 | 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |
 | 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 internal ingress sample app과 runner-internal HTTPS verification | 20분 |
@@ -166,8 +166,8 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 | 구간 | 내용 | 예상 시간 |
 |------|------|-----------|
 | 시작 | 개요 및 실습 범위 확인 | 5분 |
-| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 35분 |
-| 2부 | runner image 빌드 + Event Job/KEDA 구성 | 30분 |
+| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 40분 |
+| 2부 | runner image 빌드 + Event Job/KEDA 구성 | 25분 |
 | 3부 | 병렬 workflow 검증 + 로그 확인 | 20분 |
 | 4부 | Azure 샘플 배포 + same Environment HTTPS 확인 | 20분 |
 | 마무리 | 보안·제약 정리 + 리소스 삭제 | 10분 |
@@ -245,5 +245,5 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 - [Virtual network configuration in Azure Container Apps environment](https://learn.microsoft.com/azure/container-apps/custom-virtual-networks)
 - [Ingress in Azure Container Apps](https://learn.microsoft.com/azure/container-apps/ingress-overview)
 - [KEDA GitHub Runner scaler](https://keda.sh/docs/latest/scalers/github-runner/)
-- [Security hardening for GitHub Actions — hardening for self-hosted runners](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-self-hosted-runners)
+- [Security hardening for GitHub Actions — hardening for self-hosted runners](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#hardening-for-self-hosted-runners)
 - [참고 문서 스타일: ms-aca-basic-workshop01](https://github.com/freeman9844/ms-aca-basic-workshop01)

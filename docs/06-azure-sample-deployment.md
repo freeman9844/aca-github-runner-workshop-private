@@ -473,7 +473,7 @@ WILDCARD_A_RECORD=$(az network private-dns record-set a show \
   --resource-group "$RG" \
   --zone-name "$PRIVATE_DNS_ZONE" \
   --name '*' \
-  --query "arecords[0].ipv4Address" \
+  --query "aRecords[0].ipv4Address" \
   --output tsv)
 
 printf 'environmentInternal=%s\ninfrastructureSubnetId=%s\nexternalIngress=%s\nfqdn=%s\nPrivate DNS zone=%s\nVNet link=%s\nwildcard A record=%s\n' \

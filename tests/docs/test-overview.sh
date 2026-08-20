@@ -89,9 +89,9 @@ grep -F '| `aca-runner-lab` | 참가자 소유 Private lab repository | 참가�
 grep -F 'Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.' "$README" >/dev/null
 grep -F '워크숍은 Fine-grained PAT를 사용하지만 실제 운영 환경에서는 단기 installation token을 사용하는 GitHub App 방식을 권장합니다.' "$README" >/dev/null
 grep -F '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, Fine-grained PAT 실습과 운영용 GitHub App 권장 사항 | 15분 |' "$README" >/dev/null
-grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID |' "$README" >/dev/null ||
-  { echo 'FAIL: README Module 02 row must describe the VNet/internal Environment foundation' >&2; exit 1; }
-grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 15분 |' "$README" >/dev/null
+grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID | 25분 |' "$README" >/dev/null ||
+  { echo 'FAIL: README Module 02 row must describe the VNet/internal Environment foundation with the updated duration' >&2; exit 1; }
+grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 10분 |' "$README" >/dev/null
 grep -F '| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |' "$README" >/dev/null
 grep -F '| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |' "$README" >/dev/null
 grep -F '| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 internal ingress sample app과 runner-internal HTTPS verification |' "$README" >/dev/null ||
@@ -130,10 +130,14 @@ for text in \
     { echo "FAIL: README missing completion or validation guidance: $text" >&2; exit 1; }
 done
 grep -F '|  | **워크숍 합계** |  | **120분** |' "$README" >/dev/null
-grep -F '| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 35분 |' "$README" >/dev/null
-grep -F '| 2부 | runner image 빌드 + Event Job/KEDA 구성 | 30분 |' "$README" >/dev/null
+grep -F '| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 40분 |' "$README" >/dev/null
+grep -F '| 2부 | runner image 빌드 + Event Job/KEDA 구성 | 25분 |' "$README" >/dev/null
+grep -F '| 3부 | 병렬 workflow 검증 + 로그 확인 | 20분 |' "$README" >/dev/null
 grep -F '| 4부 | Azure 샘플 배포 + same Environment HTTPS 확인 | 20분 |' "$README" >/dev/null
+grep -F '| 마무리 | 보안·제약 정리 + 리소스 삭제 | 10분 |' "$README" >/dev/null
 grep -F '| 합계 | 전체 워크숍 | 120분 |' "$README" >/dev/null
+grep -F 'https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#hardening-for-self-hosted-runners' "$README" >/dev/null ||
+  { echo 'FAIL: README must restore the working self-hosted runner hardening link' >&2; exit 1; }
 grep -F '자동 검증' "$README" >/dev/null
 grep -F '`koreacentral`' "$README" >/dev/null
 grep -F '`2.336.0`' "$README" >/dev/null
