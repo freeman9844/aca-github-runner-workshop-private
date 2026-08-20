@@ -1,6 +1,6 @@
 # 07. 보안·제약·정리
 
-> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 105분 필수 경로의 마지막 단계이며, Module 06에서 만든 deployment workflow까지 함께 정리합니다. 실습 구성을 그대로 운영에 올리지 않고, 어떤 지점을 production 확장으로 보완해야 하는지까지 연결해 설명합니다.
+> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 120분 필수 경로의 마지막 단계이며, Module 06에서 만든 deployment workflow까지 함께 정리합니다. 실습 구성을 그대로 운영에 올리지 않고, 어떤 지점을 production 확장으로 보완해야 하는지까지 연결해 설명합니다.
 
 ## 목표
 
@@ -63,13 +63,14 @@ az group list --query "[?starts_with(name, 'rg-acarunner-')].name" --output tabl
 |---|---|---|
 | ACA secret의 단일 Fine-grained PAT | separate credentials, Azure Key Vault 또는 external token broker | stronger credential isolation and centralized rotation |
 | registration token 방식 | GitHub JIT runner | reduced registration lifecycle exposure |
-| Public egress | VNet, firewall, restricted egress | control reachable destinations |
+| Workshop VNet + public outbound | UDR + Azure Firewall + private endpoints(예: ACR Private Endpoint) | internal Environment는 inbound만 private로 제한하며, production에서는 outbound destination을 더 엄격하게 제어할 수 있습니다. |
+| same-Environment internal ingress 검증 | private DNS forwarding, hub/spoke reachability, 중앙 egress 정책 | internal ingress 앱은 같은 Environment 경로부터 먼저 검증하고 이후 필요한 네트워크 확장을 설계합니다. |
 | Repository runner | organization runner group | controlled reuse across repositories |
 | Consumption profile | workload profiles when required | predictable dedicated capacity |
 
 📋 **예상 출력**
 
-- 참가자는 워크숍이 교육용 최소 구성이고, production에서는 separate credentials, Azure Key Vault, external token broker, VNet, organization runner group 같은 확장이 필요하다는 점을 설명할 수 있어야 합니다.
+- 참가자는 워크숍이 교육용 최소 구성이고, production에서는 separate credentials, Azure Key Vault, external token broker, UDR, Azure Firewall, ACR Private Endpoint, organization runner group 같은 확장이 필요하다는 점을 설명할 수 있어야 합니다.
 
 ## 2. 반드시 지킬 보안 규칙
 
@@ -107,6 +108,10 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 
 | 항목 | 현재 한계 | 운영 해석 |
 |------|-----------|-----------|
+| network type | ACA Environment의 `network type`은 생성 후 immutable | external/basic 환경을 internal로 전환하지 말고 새 Environment를 만듭니다. |
+| same-Environment internal ingress | internal ingress app은 같은 Environment runner에서만 직접 검증 | 다른 VNet, peered network, on-prem 경로는 별도 설계/검증이 필요합니다. |
+| standard Cloud Shell | `standard Cloud Shell`은 workshop VNet에 붙어 있지 않음 | Cloud Shell에서 private endpoint 실패는 정상이며, 이를 public path 회귀로 오해하지 않습니다. |
+| custom DNS forwarding | `Private DNS zone/link`만으로 workshop VNet 내부 이름 해석을 완료 | hub/spoke 또는 on-prem DNS를 붙이면 `custom DNS forwarding`을 별도로 설계해야 합니다. |
 | Docker-in-Docker | 지원하지 않음 | workflow에서 `docker build` 또는 Docker daemon 의존 단계를 넣지 않습니다. |
 | service containers | Docker daemon이 필요한 service container 미지원 | DB/service container가 필요한 테스트는 다른 실행 환경을 고려합니다. |
 | workspace 지속성 | execution 간 persistent workspace 없음 | 캐시나 산출물 재사용을 기본 가정으로 두지 않습니다. |
@@ -120,12 +125,15 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 
 - `Docker-in-Docker` 미지원은 실습 편의 문제가 아니라 플랫폼 제약입니다.
 - active execution이 0이어도 과거 execution history는 일부 recent records로 남을 수 있습니다.
+- workshop VNet은 inbound를 internal로 제한하지만 egress는 계속 public outbound입니다. 별도 NSG, UDR, Azure Firewall, ACR Private Endpoint는 production extension으로만 다룹니다.
 
 ## 4. Azure 리소스 정리 요청
 
 👁️ **설명**
 
 실습 비용을 멈추는 가장 확실한 방법은 리소스 그룹 전체를 삭제하는 것입니다. 이 워크숍의 모든 Azure 리소스는 `$RG` 아래에 있으므로 개별 삭제보다 RG 삭제를 우선합니다. Module 06에서 만든 sample `Container App`도 `$RG`에 포함되므로, 정리 단계에서는 별도 `az containerapp delete`보다 resource-group 삭제가 authoritative path입니다.
+
+리소스 그룹 삭제 경로에는 runner image가 있는 ACR, Job, managed identity, Log Analytics workspace뿐 아니라 workshop **VNet**, **delegated subnet**, **Private DNS zone/link**, Environment와 함께 정리되는 **internal load balancer resources**, 그리고 sample app까지 모두 포함됩니다. 즉 cleanup은 기존 RG 삭제 경로 하나로 수렴합니다.
 
 🟢 **실행**
 
@@ -170,9 +178,8 @@ az resource list \
 
 - 삭제 진행 중에는 `properties.provisioningState`가 `Deleting`으로 보일 수
   있습니다.
-- ACR, Job, identity, workspace가 먼저 사라지고 ACA managed environment가
-  마지막까지 남을 수 있습니다. **ACA managed environment 삭제는 오래 걸릴 수 있습니다.**
-  이 상태만으로 삭제 실패로 판단하거나 같은 이름의 리소스를 다시 만들지 마세요.
+- ACR, Job, identity, workspace, VNet, `Private DNS zone/link`, sample app가 먼저 사라지고 ACA managed environment가 마지막까지 남을 수 있습니다. **ACA managed environment 삭제는 오래 걸릴 수 있습니다.**
+- Environment 아래의 provider-managed **internal load balancer resources**도 managed environment 삭제 완료와 함께 정리되므로, 중간 상태만 보고 같은 이름을 다시 만들지 마세요.
 - 삭제가 완료되면 최종적으로 아래와 비슷한 결과를 기대합니다.
 
 ```text

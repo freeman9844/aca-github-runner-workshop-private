@@ -46,10 +46,22 @@ for troubleshooting_doc in \
     { echo "FAIL: $(basename "$troubleshooting_doc") must expose #트러블슈팅" >&2; exit 1; }
 done
 
-grep -F '약 105분' "$README" >/dev/null
+grep -F '약 120분' "$README" >/dev/null || { echo 'FAIL: README must advertise the 120-minute workshop duration' >&2; exit 1; }
 grep -F 'Private repository' "$README" >/dev/null
 grep -F 'Docker-in-Docker' "$README" >/dev/null
 grep -F '0 → N → 0' "$README" >/dev/null
+for text in \
+  'VNet 통합 internal Environment' \
+  'Private DNS' \
+  'same Environment' \
+  'internal ingress' \
+  'public outbound' \
+  'ACR Private Endpoint' \
+  'Azure Firewall' \
+  'network type'; do
+  grep -F -- "$text" "$README" >/dev/null ||
+    { echo "FAIL: README missing internal networking narrative: $text" >&2; exit 1; }
+done
 grep -F '| Azure Contributor | 실습용 Azure 리소스를 만들고 관리할 수 있어야 합니다. |' "$README" >/dev/null
 grep -F '| Azure RBAC 역할 할당 권한 | workshop Resource Group 또는 상위 범위에서 `Microsoft.Authorization/roleAssignments/write`가 필요합니다. ACR 범위의 `AcrPull`과 Resource Group 범위의 `Container Apps Contributor`를 모두 할당할 수 있어야 합니다. |' "$README" >/dev/null
 grep -F '| 워크숍 source 접근 | Public workshop source repository에 HTTPS로 접근할 수 있어야 합니다. |' "$README" >/dev/null
@@ -71,17 +83,19 @@ grep -F '| `aca-runner-lab` | 참가자 소유 Private lab repository | 참가�
 grep -F 'Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.' "$README" >/dev/null
 grep -F '워크숍은 Fine-grained PAT를 사용하지만 실제 운영 환경에서는 단기 installation token을 사용하는 GitHub App 방식을 권장합니다.' "$README" >/dev/null
 grep -F '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, Fine-grained PAT 실습과 운영용 GitHub App 권장 사항 | 15분 |' "$README" >/dev/null
-grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID, Azure resource ID | 15분 |' "$README" >/dev/null
-grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 10분 |' "$README" >/dev/null
+grep -F '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | VNet 통합 internal Environment, Private DNS, 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID |' "$README" >/dev/null ||
+  { echo 'FAIL: README Module 02 row must describe the VNet/internal Environment foundation' >&2; exit 1; }
+grep -F '| 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 15분 |' "$README" >/dev/null
 grep -F '| 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |' "$README" >/dev/null
 grep -F '| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |' "$README" >/dev/null
-grep -F '| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 샘플 Container App과 HTTPS 검증 | 15분 |' "$README" >/dev/null
+grep -F '| 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 internal ingress sample app과 runner-internal HTTPS verification |' "$README" >/dev/null ||
+  { echo 'FAIL: README Module 06 row must describe runner-internal HTTPS verification' >&2; exit 1; }
 grep -F '| 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | 보안 검토와 확인된 cleanup | 10분 |' "$README" >/dev/null
-grep -F '저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID, Azure resource ID' "$README" >/dev/null
+grep -F 'VNet 통합 internal Environment, Private DNS, 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID' "$README" >/dev/null
 grep -F 'PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image' "$README" >/dev/null
 grep -F 'repository-scoped ACA Event Job과 KEDA rule' "$README" >/dev/null
 grep -F 'matrix 4개 Job과 `0 → N → 0` 증거' "$README" >/dev/null
-grep -F 'Managed Identity 기반 샘플 Container App과 HTTPS 검증' "$README" >/dev/null
+grep -F 'Managed Identity 기반 internal ingress sample app과 runner-internal HTTPS verification' "$README" >/dev/null
 grep -F '보안 검토와 확인된 cleanup' "$README" >/dev/null
 grep -F 'Cloud Shell의 shell 변수는 새 세션에 유지되지 않습니다.' "$README" >/dev/null
 grep -F '원래 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID' "$README" >/dev/null
@@ -97,6 +111,10 @@ for text in \
   'runner lifecycle marker가 CLI 또는 Log Analytics에 나타납니다.' \
   'permanent online ephemeral runner가 남지 않습니다.' \
   'self-hosted runner가 Managed Identity로 Azure Container App을 배포합니다.' \
+  'ACA Environment가 internal 상태입니다.' \
+  'sample Container App이 `externalIngress=false` 상태입니다.' \
+  'same Environment runner에서 runner-internal HTTP success와 HTTPS 검증이 확인됩니다.' \
+  'standard Cloud Shell은 private endpoint에 직접 도달하지 못합니다.' \
   '`ResourceGroupNotFound`' \
   'lab Fine-grained PAT와 GitHub lab artifact' \
   '검증된 범위와 남은 전제' \
@@ -105,12 +123,12 @@ for text in \
   grep -F -- "$text" "$README" >/dev/null ||
     { echo "FAIL: README missing completion or validation guidance: $text" >&2; exit 1; }
 done
-grep -F '|  | **워크숍 합계** |  | **105분** |' "$README" >/dev/null
-grep -F '| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 30분 |' "$README" >/dev/null
-grep -F '| 4부 | Azure 샘플 배포 + HTTPS 확인 | 15분 |' "$README" >/dev/null
-grep -F '| 합계 | 전체 워크숍 | 105분 |' "$README" >/dev/null
+grep -F '|  | **워크숍 합계** |  | **120분** |' "$README" >/dev/null
+grep -F '| 1부 | GitHub 준비 + Azure 기반 리소스 준비 | 35분 |' "$README" >/dev/null
+grep -F '| 2부 | runner image 빌드 + Event Job/KEDA 구성 | 30분 |' "$README" >/dev/null
+grep -F '| 4부 | Azure 샘플 배포 + same Environment HTTPS 확인 | 20분 |' "$README" >/dev/null
+grep -F '| 합계 | 전체 워크숍 | 120분 |' "$README" >/dev/null
 grep -F '자동 검증' "$README" >/dev/null
-grep -F '라이브 Azure/GitHub 실행' "$README" >/dev/null
 grep -F '`koreacentral`' "$README" >/dev/null
 grep -F '`2.336.0`' "$README" >/dev/null
 grep -F 'matrix 4개 Job' "$README" >/dev/null
@@ -128,9 +146,25 @@ for text in \
   '| 동일 repository와 label을 감시하는 Event Job이 이미 있음 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |' \
   '| Event Job secret 또는 PAT 오류 | [docs/04-event-job-keda.md#트러블슈팅](docs/04-event-job-keda.md#트러블슈팅) |' \
   '| `AuthorizationFailed` 또는 `HTTP verification failed after`가 배포 workflow에서 발생함 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |' \
+  '| standard Cloud Shell에서 internal ingress 앱에 접근할 수 없음 | [docs/06-azure-sample-deployment.md#트러블슈팅](docs/06-azure-sample-deployment.md#트러블슈팅) |' \
   '| CLI 또는 Log Analytics에서 runner 로그를 찾을 수 없음 | [docs/05-parallel-scale-validation.md#트러블슈팅](docs/05-parallel-scale-validation.md#트러블슈팅) |'; do
   grep -F -- "$text" "$README" >/dev/null ||
     { echo "FAIL: README missing troubleshooting route: $text" >&2; exit 1; }
+done
+
+DOC04="$ROOT/docs/04-event-job-keda.md"
+for text in \
+  'internal Environment controls inbound access' \
+  'public outbound' \
+  'ACR Private Endpoint' \
+  'Azure Firewall' \
+  'GitHub API' \
+  'Azure Monitor' \
+  'NSG' \
+  'UDR' \
+  'forced tunneling'; do
+  grep -F -- "$text" "$DOC04" >/dev/null ||
+    { echo "FAIL: module 04 missing internal networking guidance: $text" >&2; exit 1; }
 done
 
 for obsolete in \
@@ -152,6 +186,22 @@ fi
 
 if grep -F '리허설 검증' "$README" >/dev/null; then
   echo 'FAIL: README still claims a dated rehearsal validation' >&2
+  exit 1
+fi
+
+if grep -F '약 105분' "$README" >/dev/null; then
+  echo 'FAIL: README still advertises the old 105-minute duration' >&2
+  exit 1
+fi
+
+if grep -F 'sample Container App의 HTTPS endpoint를 GitHub Actions, Cloud Shell, 브라우저, Azure Portal에서 교차 확인합니다.' \
+  "$README" >/dev/null; then
+  echo 'FAIL: README still claims the old four-way public HTTPS verification path' >&2
+  exit 1
+fi
+
+if grep -F '라이브 Azure/GitHub 실행' "$README" >/dev/null; then
+  echo 'FAIL: README still claims a live private-network rehearsal' >&2
   exit 1
 fi
 

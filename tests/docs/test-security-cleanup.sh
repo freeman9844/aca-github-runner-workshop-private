@@ -41,7 +41,7 @@ legend_line="$(grep -nF -m1 '## 태그 범례' "$DOC" | cut -d: -f1)"
   fail "module 07 recovery details must close before the tag legend"
 
 for text in \
-  '이 모듈은 105분 필수 경로의 마지막 단계이며, Module 06에서 만든 deployment workflow까지 함께 정리합니다.' \
+  '이 모듈은 120분 필수 경로의 마지막 단계이며, Module 06에서 만든 deployment workflow까지 함께 정리합니다.' \
   'SUFFIX="<your-saved-suffix>"' \
   'RG="rg-acarunner-$SUFFIX"' \
   "starts_with(name, 'rg-acarunner-')" \
@@ -50,6 +50,16 @@ for text in \
   'Azure Key Vault' \
   'VNet' \
   'egress' \
+  'public outbound' \
+  'ACR Private Endpoint' \
+  'Azure Firewall' \
+  'UDR' \
+  'network type' \
+  'same-Environment internal ingress' \
+  'standard Cloud Shell' \
+  'custom DNS forwarding' \
+  'Private DNS zone/link' \
+  'internal load balancer resources' \
   'organization' \
   'Docker-in-Docker' \
   'public repository' \
@@ -63,6 +73,7 @@ for text in \
   'az group show' \
   'properties.provisioningState' \
   'az resource list' \
+  'delegated subnet' \
   'ACA managed environment 삭제는 오래 걸릴 수 있습니다.' \
   'ResourceGroupNotFound' \
   "Resource group 'rg-acarunner-a1b2c3' could not be found." \
@@ -108,6 +119,8 @@ fi
 ! grep -F -- 'PAT 만료' "$DOC" >/dev/null || { echo "FAIL: module 07 still has PAT troubleshooting guidance" >&2; exit 1; }
 ! grep -F -- '## 8. 전체 워크숍 완료 확인' "$DOC" >/dev/null || { echo "FAIL: module 07 still has old completion section number" >&2; exit 1; }
 ! grep -nE 'rg-acarunner-[0-9a-f]{5}\b' "$DOC" >/dev/null || { echo "FAIL: module 07 regressed to a five-character suffix example" >&2; exit 1; }
+! grep -F '105분 필수 경로' "$DOC" >/dev/null || { echo "FAIL: module 07 still uses the old 105-minute cleanup framing" >&2; exit 1; }
+! grep -F '| Public egress | VNet, firewall, restricted egress | control reachable destinations |' "$DOC" >/dev/null || { echo "FAIL: module 07 still has the old public egress production row" >&2; exit 1; }
 
 grep -F '.superpowers/' "$IGNORE" >/dev/null
 grep -F 'docs/superpowers/' "$IGNORE" >/dev/null
