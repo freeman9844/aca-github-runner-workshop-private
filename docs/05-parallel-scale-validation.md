@@ -307,12 +307,52 @@ CLI 로그가 한 execution을 빠르게 보는 용도라면, Log Analytics는 �
 resource-specific `ContainerAppConsoleLogs`를 사용합니다.
 
 Log Analytics ingestion은 즉시 완료되지 않을 수 있습니다. execution 직후
-상세 query가 비어 있으면 먼저 최근 2시간의 로그 유입 여부와 실제
-`ContainerGroupName`을 집계합니다.
+상세 query가 비어 있으면 먼저 최대 10분 동안 30초 간격으로 실제 로그 유입을
+확인합니다. 실제 테스트에서도 마지막 로그가 Log Analytics에 나타나기까지
+약 6분이 걸릴 수 있었습니다.
 
 🟢 **실행**
 
 ```bash
+# 고정 sleep 대신 실제 로그가 들어왔는지 30초마다 확인하며 최대 10분까지 기다립니다.
+LOG_WAIT_TIMEOUT_SECONDS=600
+LOG_WAIT_INTERVAL_SECONDS=30
+LOG_WAIT_DEADLINE=$((SECONDS + LOG_WAIT_TIMEOUT_SECONDS))
+LOG_COUNT=0
+
+while (( SECONDS <= LOG_WAIT_DEADLINE )); do
+  LOG_COUNT=$(az monitor log-analytics query \
+    --workspace "$LOG_ID" \
+    --analytics-query "
+      ContainerAppConsoleLogs
+      | where TimeGenerated > ago(2h)
+      | summarize Count=count()
+    " \
+    --query "[0].Count" \
+    --output tsv)
+
+  if [[ "$LOG_COUNT" =~ ^[0-9]+$ ]] && (( LOG_COUNT > 0 )); then
+    printf 'Log Analytics ingestion ready: %s rows\n' "$LOG_COUNT"
+    break
+  fi
+
+  if (( SECONDS >= LOG_WAIT_DEADLINE )); then
+    break
+  fi
+
+  printf 'Log Analytics ingestion pending; %s초 후 다시 확인합니다.\n' \
+    "$LOG_WAIT_INTERVAL_SECONDS"
+  sleep "$LOG_WAIT_INTERVAL_SECONDS"
+done
+
+if [[ ! "$LOG_COUNT" =~ ^[0-9]+$ ]] || (( LOG_COUNT == 0 )); then
+  printf '%s\n' \
+    'ERROR: ContainerAppConsoleLogs가 10분 안에 수집되지 않았습니다.' \
+    'LOG_ID와 Module 02의 aca-runner-logs diagnostic setting을 확인하세요.' >&2
+  exit 1
+fi
+
+# 로그 유입이 확인되면 replica별 건수와 마지막 수집 시각을 출력합니다.
 az monitor log-analytics query \
   --workspace "$LOG_ID" \
   --analytics-query "
@@ -323,11 +363,16 @@ az monitor log-analytics query \
     | order by LastSeen desc
   " \
   --output table
+
+unset LOG_WAIT_TIMEOUT_SECONDS LOG_WAIT_INTERVAL_SECONDS LOG_WAIT_DEADLINE LOG_COUNT
 ```
 
 📋 **예상 출력**
 
 ```text
+Log Analytics ingestion pending; 30초 후 다시 확인합니다.
+Log Analytics ingestion ready: 8212 rows
+
 ContainerGroupName               Count    LastSeen                      TableName
 -------------------------------  -------  ----------------------------  -------------
 job-ghrunner-145945-xh6w5-phfkj  2058     2026-08-19T05:12:18.2470166Z  PrimaryResult
@@ -335,7 +380,7 @@ job-ghrunner-145945-bbqc9-m97mq  1867     2026-08-19T05:12:17.8271544Z  PrimaryR
 ```
 
 - replica suffix, `Count`, `LastSeen`은 실행과 수집 시점마다 달라집니다.
-- 결과가 비어 있으면 **5~10분** 기다린 뒤 같은 집계 query를 다시 실행합니다.
+- 로그가 이미 수집되었다면 `pending` 줄 없이 바로 `ready`와 집계 표가 출력됩니다.
 - `$EXECUTION` 뒤에 replica suffix가 추가된 실제 `ContainerGroupName`을 확인한
   다음 상세 로그를 조회합니다.
 
