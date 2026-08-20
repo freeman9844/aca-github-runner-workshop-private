@@ -6,6 +6,8 @@ IMAGE_DOC="$ROOT/docs/03-runner-image.md"
 JOB_DOC="$ROOT/docs/04-event-job-keda.md"
 RUNNER_DOCKERFILE="$ROOT/runner/Dockerfile"
 RUNNER_ENTRYPOINT="$ROOT/runner/entrypoint.sh"
+AZURE_PORTAL_JOB_SCREENSHOT="$ROOT/docs/images/04-azure-portal-container-app-job.png"
+GITHUB_RUNNERS_SCREENSHOT="$ROOT/docs/images/04-github-self-hosted-runners-empty.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -38,6 +40,8 @@ operational_github_app_pattern='GITHUB_APP_|github_app_jwt|/app/installations/|o
 [[ -f "$JOB_DOC" ]] || { echo "FAIL: module 04 missing" >&2; exit 1; }
 [[ -f "$RUNNER_DOCKERFILE" ]] || fail "runner Dockerfile missing"
 [[ -f "$RUNNER_ENTRYPOINT" ]] || fail "runner entrypoint missing"
+[[ -f "$AZURE_PORTAL_JOB_SCREENSHOT" ]] || fail "module 04 Azure portal Job screenshot missing"
+[[ -f "$GITHUB_RUNNERS_SCREENSHOT" ]] || fail "module 04 GitHub runners screenshot missing"
 
 assert_documented_file_matches "RUNNER_DOCKERFILE" "$RUNNER_DOCKERFILE"
 assert_documented_file_matches "RUNNER_ENTRYPOINT" "$RUNNER_ENTRYPOINT"
@@ -275,6 +279,18 @@ for text in \
   'triggerType:properties.configuration.triggerType' \
   'properties.configuration.eventTriggerConfig.scale.rules' \
   'az containerapp job execution list' \
+  '![Azure Portal에서 생성된 Container Apps Job 확인](images/04-azure-portal-container-app-job.png)' \
+  '![Workflow 실행 전 GitHub Self-hosted runners 화면](images/04-github-self-hosted-runners-empty.png)' \
+  'workflow가 queue되기 전에는 self-hosted runner가 0개인 화면이 정상입니다.' \
+  'image: acracarunner09fa08.azurecr.io/github-actions-runner:2.336.0' \
+  'secretRef: personal-access-token' \
+  'triggerParameter: personalAccessToken' \
+  'githubApiURL: https://api.github.com' \
+  'owner: freeman9844' \
+  'repos: aca-runner-lab' \
+  "targetWorkflowQueueLength: '1'" \
+  'triggerType: Event' \
+  '아무 행도 출력되지 않을 수 있습니다.' \
   '--trigger-type Event' \
   '--container-name github-actions-runner' \
   '--replica-timeout 900' \
