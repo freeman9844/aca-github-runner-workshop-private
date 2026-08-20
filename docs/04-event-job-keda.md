@@ -48,8 +48,10 @@ Task 1에서 만든 internal ACA Environment는 **inbound access**를 제어하�
 🟢 **실행**
 
 ```bash
+# 저장한 Azure 식별자를 입력해 기존 Environment, ACR, UAMI와 Job 이름을 복원합니다.
 read -rp "Saved SUFFIX: " SUFFIX
 read -rp "Saved ACR name: " ACR
+# suffix 기반 이름과 고정 image tag를 다시 구성합니다.
 LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
@@ -96,6 +98,7 @@ UAMI_CLIENT_ID=$(az identity show \
   --query clientId \
   --output tsv)
 
+# 복구한 Azure 변수를 현재 shell에 export하고 핵심 값을 출력해 확인합니다.
 export SUFFIX LOC RG LOG ENV ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
 printf 'JOB=%s ENV=%s ACR_SERVER=%s\n' "$JOB" "$ENV" "$ACR_SERVER"
 ```
@@ -117,9 +120,11 @@ Cloud Shell 세션이 재시작되면 GitHub 변수도 사라집니다. 모듈 0
 🟢 **실행**
 
 ```bash
+# KEDA가 감시할 GitHub owner와 private repository를 입력받습니다.
 read -rp "GitHub owner: " GITHUB_OWNER
 read -rp "Private repository name: " GITHUB_REPO
 
+# PAT를 화면에 다시 표시하지 않고 비어 있지 않은 값이 들어올 때까지 읽습니다.
 GITHUB_PAT=
 until [[ -n "$GITHUB_PAT" ]]; do
   read -rsp "Fine-grained PAT: " GITHUB_PAT
@@ -151,6 +156,7 @@ Job을 찾습니다.
 🟢 **실행**
 
 ```bash
+# 같은 repository와 label을 감시하는 기존 Event Job을 찾아 queue 경쟁을 예방합니다.
 az containerapp job list \
   --query "[?properties.configuration.eventTriggerConfig.scale.rules[?metadata.owner=='$GITHUB_OWNER' && metadata.repos=='$GITHUB_REPO' && metadata.labels=='aca-runner']].{Name:name,ResourceGroup:resourceGroup}" \
   --output table
@@ -188,6 +194,7 @@ Job 설정 오류를 복구할 때는 Resource Group 전체를 다시 만들지 
 🟢 **실행**
 
 ```bash
+# Event Job의 container, KEDA scaler, secret, identity와 resource 설정을 하나의 인자 배열로 구성합니다.
 JOB_CREATE_ARGS=(
   # Job 이름과 배포할 Resource Group, Container Apps Environment를 지정합니다.
   --name "$JOB"
@@ -262,6 +269,7 @@ JOB_CREATE_ARGS=(
   --output none
 )
 
+# 검토한 인자 배열로 Event Job을 만들고 성공 후 PAT가 담긴 임시 shell 값을 제거합니다.
 az containerapp job create "${JOB_CREATE_ARGS[@]}"
 unset JOB_CREATE_ARGS GITHUB_PAT
 ```
@@ -276,6 +284,7 @@ unset JOB_CREATE_ARGS GITHUB_PAT
 배포 직후 Job configuration과 초기 execution 상태를 같은 흐름에서 확인합니다. `job show`는 secret 값을 조회하지 않으므로 PAT가 다시 출력되지 않습니다.
 
 ```bash
+# 생성된 Job의 trigger, timeout, scale rule과 image가 의도한 값인지 확인합니다.
 az containerapp job show \
   --name "$JOB" \
   --resource-group "$RG" \
@@ -290,6 +299,7 @@ az containerapp job show \
   }" \
   --output yaml
 
+# workflow queue 전이므로 초기 execution이 없거나 0개인 정상 상태를 확인합니다.
 az containerapp job execution list \
   --name "$JOB" \
   --resource-group "$RG" \

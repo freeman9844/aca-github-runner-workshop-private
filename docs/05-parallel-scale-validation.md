@@ -24,10 +24,12 @@
 🟢 **실행**
 
 ```bash
+# 저장한 suffix에서 scale validation에 필요한 Resource Group, workspace와 Job 이름을 복원합니다.
 SUFFIX="<your-saved-suffix>"
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
+# Log Analytics customer ID를 다시 조회하고 복구한 값을 출력합니다.
 LOG_ID=$(az monitor log-analytics workspace show \
   --resource-group "$RG" \
   --workspace-name "$LOG" \
@@ -73,6 +75,7 @@ organization 정책이 승인 절차를 요구하면 workflow를 실행하기 �
 🟢 **실행**
 
 ```bash
+# reviewed scale-test workflow를 Cloud Shell에서 확인한 뒤 GitHub 웹 UI에 복사합니다.
 cd ~/aca-github-runner-workshop
 sed -n '1,200p' samples/parallel-runner-workflow.yml
 ```
@@ -171,6 +174,7 @@ jobs:
 🟢 **실행**
 
 ```bash
+# workflow 실행 전 최근 이력과 Running execution이 0개인 baseline을 확인합니다.
 az containerapp job execution list \
   --name "$JOB" \
   --resource-group "$RG" \
@@ -217,6 +221,7 @@ KEDA polling 간격은 30초이고, runner가 시작되는 데도 약간의 시�
 처음 30~90초 동안 아래 명령을 몇 번 반복합니다.
 
 ```bash
+# scale-out 구간의 상태 변화를 보기 위해 Running execution만 시간순으로 반복 조회합니다.
 az containerapp job execution list \
   --name "$JOB" \
   --resource-group "$RG" \
@@ -251,16 +256,19 @@ job-ghrunner-145945-xh6w5  Running   2026-08-19T05:10:51+00:00
 🟢 **실행**
 
 ```bash
+# 가장 최근 execution 이름을 조회해 뒤의 CLI·Log Analytics 필터 기준으로 저장합니다.
 EXECUTION=$(az containerapp job execution list \
   --name "$JOB" \
   --resource-group "$RG" \
   --query "sort_by([], &properties.startTime)[-1].name" \
   --output tsv)
 
+# execution을 찾지 못하면 잘못된 이름으로 로그를 조회하지 않고 명확히 중단합니다.
 if [[ -z "$EXECUTION" ]]; then
   printf 'ERROR: Container Apps Job execution이 없습니다.\n' >&2
   printf 'GitHub workflow가 queued라면 runs-on이 [aca-runner]인지 확인하고 최신 sample로 교체한 뒤 다시 실행하세요.\n' >&2
 else
+  # 선택한 execution의 runner container stdout·stderr를 최근 100줄까지 확인합니다.
   az containerapp job logs show \
     --name "$JOB" \
     --resource-group "$RG" \
@@ -387,6 +395,7 @@ job-ghrunner-145945-bbqc9-m97mq  1867     2026-08-19T05:12:17.8271544Z  PrimaryR
 🟢 **실행**
 
 ```bash
+# 최신 execution prefix로 같은 replica들의 상세 console log를 시간순으로 조회합니다.
 az monitor log-analytics query \
   --workspace "$LOG_ID" \
   --analytics-query "
@@ -440,6 +449,7 @@ scale-out 검증의 마지막은 scale-in입니다. queued job 처리가 끝난 
 아래 명령을 다시 반복해 `Running` 행이 사라질 때까지 확인합니다.
 
 ```bash
+# workflow 종료 후 Running execution이 다시 0개로 scale-in 되었는지 확인합니다.
 az containerapp job execution list \
   --name "$JOB" \
   --resource-group "$RG" \
