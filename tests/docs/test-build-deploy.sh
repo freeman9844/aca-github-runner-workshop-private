@@ -73,16 +73,23 @@ done
 assert_collapsed_recovery() {
   local doc="$1"
   local module="$2"
+  local expected_details_count
   local details_open_line summary_line close_line first_step_line
   local summary_next_line details_prev_line
   local -a actual_headings expected_headings
 
+  if [[ "$module" == "module 03" ]]; then
+    expected_details_count=3
+  else
+    expected_details_count=1
+  fi
+
   grep -Fx '## 0. 세션 재연결 시 변수 복구 (선택)' "$doc" >/dev/null ||
     fail "$module missing optional Step 0 recovery heading"
-  [[ "$(grep -Fc '<details>' "$doc")" -eq 1 ]] ||
-    fail "$module must contain exactly one details block"
-  [[ "$(grep -Fc '</details>' "$doc")" -eq 1 ]] ||
-    fail "$module must close exactly one details block"
+  [[ "$(grep -Fc '<details>' "$doc")" -eq "$expected_details_count" ]] ||
+    fail "$module must contain exactly $expected_details_count details blocks"
+  [[ "$(grep -Fc '</details>' "$doc")" -eq "$expected_details_count" ]] ||
+    fail "$module must close exactly $expected_details_count details blocks"
   grep -Fx '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$doc" >/dev/null ||
     fail "$module missing recovery disclosure summary"
 
@@ -137,6 +144,46 @@ assert_collapsed_recovery() {
 
 assert_collapsed_recovery "$IMAGE_DOC" "module 03"
 assert_collapsed_recovery "$JOB_DOC" "module 04"
+
+assert_runner_source_disclosures() {
+  local docker_summary='<summary><code>runner/Dockerfile</code> 실제 파일 내용 보기</summary>'
+  local entrypoint_summary='<summary><code>runner/entrypoint.sh</code> 실제 파일 내용 보기</summary>'
+  local docker_summary_line docker_open_line docker_begin_line docker_end_line docker_close_line
+  local entrypoint_summary_line entrypoint_open_line entrypoint_begin_line entrypoint_end_line entrypoint_close_line
+  local step2_line
+
+  grep -Fx "$docker_summary" "$IMAGE_DOC" >/dev/null ||
+    fail "module 03 missing collapsed Dockerfile summary"
+  grep -Fx "$entrypoint_summary" "$IMAGE_DOC" >/dev/null ||
+    fail "module 03 missing collapsed entrypoint summary"
+
+  docker_summary_line="$(grep -nF -m1 "$docker_summary" "$IMAGE_DOC" | cut -d: -f1)"
+  docker_open_line="$(awk -v summary="$docker_summary_line" 'NR < summary && $0 == "<details>" { line=NR } END { print line }' "$IMAGE_DOC")"
+  docker_begin_line="$(grep -nF -m1 '<!-- BEGIN RUNNER_DOCKERFILE -->' "$IMAGE_DOC" | cut -d: -f1)"
+  docker_end_line="$(grep -nF -m1 '<!-- END RUNNER_DOCKERFILE -->' "$IMAGE_DOC" | cut -d: -f1)"
+  docker_close_line="$(awk -v summary="$docker_summary_line" 'NR > summary && $0 == "</details>" { print NR; exit }' "$IMAGE_DOC")"
+
+  entrypoint_summary_line="$(grep -nF -m1 "$entrypoint_summary" "$IMAGE_DOC" | cut -d: -f1)"
+  entrypoint_open_line="$(awk -v summary="$entrypoint_summary_line" 'NR < summary && $0 == "<details>" { line=NR } END { print line }' "$IMAGE_DOC")"
+  entrypoint_begin_line="$(grep -nF -m1 '<!-- BEGIN RUNNER_ENTRYPOINT -->' "$IMAGE_DOC" | cut -d: -f1)"
+  entrypoint_end_line="$(grep -nF -m1 '<!-- END RUNNER_ENTRYPOINT -->' "$IMAGE_DOC" | cut -d: -f1)"
+  entrypoint_close_line="$(awk -v summary="$entrypoint_summary_line" 'NR > summary && $0 == "</details>" { print NR; exit }' "$IMAGE_DOC")"
+  step2_line="$(grep -nF -m1 '## 2. 로컬 정적 검사 먼저 실행' "$IMAGE_DOC" | cut -d: -f1)"
+
+  (( docker_open_line < docker_summary_line &&
+     docker_summary_line < docker_begin_line &&
+     docker_begin_line < docker_end_line &&
+     docker_end_line < docker_close_line &&
+     docker_close_line < entrypoint_open_line &&
+     entrypoint_open_line < entrypoint_summary_line &&
+     entrypoint_summary_line < entrypoint_begin_line &&
+     entrypoint_begin_line < entrypoint_end_line &&
+     entrypoint_end_line < entrypoint_close_line &&
+     entrypoint_close_line < step2_line )) ||
+    fail "module 03 runner source blocks must be collapsed inside Step 1"
+}
+
+assert_runner_source_disclosures
 
 for doc in "$IMAGE_DOC" "$JOB_DOC"; do
   for text in \

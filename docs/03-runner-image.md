@@ -105,7 +105,8 @@ SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 `runner/entrypoint.sh`입니다. 각 파일의 주석을 따라 이미지 구성, PAT 격리,
 일회성 runner 등록과 cleanup 흐름을 확인합니다.
 
-### `runner/Dockerfile`
+<details>
+<summary><code>runner/Dockerfile</code> 실제 파일 내용 보기</summary>
 
 <!-- BEGIN RUNNER_DOCKERFILE -->
 ```dockerfile
@@ -165,7 +166,10 @@ ENTRYPOINT ["/home/runner/entrypoint.sh"]
 ```
 <!-- END RUNNER_DOCKERFILE -->
 
-### `runner/entrypoint.sh`
+</details>
+
+<details>
+<summary><code>runner/entrypoint.sh</code> 실제 파일 내용 보기</summary>
 
 <!-- BEGIN RUNNER_ENTRYPOINT -->
 ```bash
@@ -300,6 +304,8 @@ printf 'Runner process exited with status %s\n' "$runner_status"
 exit "$runner_status"
 ```
 <!-- END RUNNER_ENTRYPOINT -->
+
+</details>
 
 entrypoint는 workflow runner를 시작하기 전에 PAT를 registration token과
 removal token으로 교환한 뒤 PAT와 API helper를 즉시 제거합니다. workflow

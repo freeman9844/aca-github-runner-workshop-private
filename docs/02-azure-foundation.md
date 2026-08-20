@@ -438,7 +438,9 @@ Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로 �
 - Managed Identity
 - Log Analytics workspace
 
-리소스 목록은 생성 순서와 필터 상태에 따라 달라질 수 있으므로, 화면 예시 대신 각 리소스 이름과 형식을 직접 확인하세요.
+![Module 02에서 생성한 Azure 리소스 목록](images/02-azure-portal-internal-environment-resources.png)
+
+화면의 suffix와 리소스 이름은 예시이며 참가자마다 달라집니다. 리소스 정렬 순서와 필터 상태도 다를 수 있으므로, 자신의 `$RG`에서 위 여섯 가지 리소스 유형과 이름 형식을 확인하세요.
 
 ## 트러블슈팅
 
