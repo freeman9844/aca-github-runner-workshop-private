@@ -28,6 +28,7 @@ cd ~/aca-github-runner-workshop
 | `aca-runner-lab` | 참가자 소유 Private lab repository | 참가자(Module 01) | workflow queue, KEDA 감시, ephemeral runner 등록 |
 
 Fine-grained PAT는 워크숍 소스 저장소가 아니라 `aca-runner-lab`에만 scope합니다.
+워크숍은 Fine-grained PAT를 사용하지만 실제 운영 환경에서는 단기 installation token을 사용하는 GitHub App 방식을 권장합니다. 이 구분은 [Module 01](docs/01-prerequisites-github.md)에서 자세히 설명합니다.
 
 ---
 
@@ -64,7 +65,7 @@ flowchart LR
 이 워크숍을 완료하면 다음을 할 수 있습니다.
 
 1. GitHub와 Azure 실습 준비를 Cloud Shell 기준으로 점검할 수 있다.
-2. self-hosted runner image를 이해하고 빌드할 수 있다.
+2. PAT 격리, non-root 실행, 권한 제한이 적용된 self-hosted runner image를 이해하고 빌드할 수 있다.
 3. Azure Container Apps Event Job을 배포할 수 있다.
 4. KEDA `github-runner` scaler를 repository 범위로 구성할 수 있다.
 5. 네 개의 병렬 workflow Job으로 scale-out 동작을 검증할 수 있다.
@@ -92,7 +93,8 @@ flowchart LR
 
 > ⚠️ **주의**
 > - 이 실습은 **Private repository에서만** 진행합니다. Public repository에 self-hosted runner를 연결하면 신뢰하지 않는 코드가 실행될 수 있습니다.
-> - Azure Container Apps Jobs는 **Docker-in-Docker**를 지원하지 않습니다. 따라서 workflow에서 `docker build`, Docker daemon, Docker service container 의존 단계를 사용하지 않습니다.
+> - base image에는 Docker CLI와 buildx가 포함되지만 ACA Jobs에는 Docker daemon과 socket이 없습니다. 따라서 **Docker-in-Docker**, `docker build`, Docker service container 의존 단계는 동작하지 않습니다.
+> - runner는 `sudo`와 `docker` 그룹에서 제거되며 entrypoint는 root 소유의 읽기·실행 전용 파일로 보호됩니다. PAT는 workflow가 시작되기 전에 단기 registration/removal token으로 교환한 뒤 제거합니다.
 
 ---
 
@@ -103,9 +105,9 @@ flowchart LR
 | # | 모듈 | 한 줄 설명 | 시간 |
 |---|------|------------|---:|
 | 00 | (현재 문서) | 전체 개요, 아키텍처, 목표, 비용, 이동 경로 | 5분 |
-| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, 검증된 GitHub 변수와 Fine-grained PAT | 15분 |
+| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | private lab repository, Fine-grained PAT 실습과 운영용 GitHub App 권장 사항 | 15분 |
 | 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | 저장한 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID, Azure resource ID | 15분 |
-| 03 | [Runner image 빌드](docs/03-runner-image.md) | ACR에 빌드된 runner image | 10분 |
+| 03 | [Runner image 빌드](docs/03-runner-image.md) | PAT 격리와 권한 제한을 적용해 ACR에 빌드한 runner image | 10분 |
 | 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | repository-scoped ACA Event Job과 KEDA rule | 15분 |
 | 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job과 `0 → N → 0` 증거 | 20분 |
 | 06 | [Azure 샘플 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 샘플 Container App과 HTTPS 검증 | 15분 |
