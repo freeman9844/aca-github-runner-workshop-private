@@ -12,8 +12,8 @@ bash tests/docs/test-prerequisites-foundation.sh
 bash tests/docs/test-build-deploy.sh
 bash tests/docs/test-scale-validation.sh
 bash tests/docs/test-azure-sample-deployment.sh
-bash tests/docs/test-execution-comments.sh
 bash tests/docs/test-security-cleanup.sh
+bash tests/docs/test-execution-comments.sh
 
 core_workshop_paths=(
   README.md
