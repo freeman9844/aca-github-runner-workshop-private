@@ -298,21 +298,34 @@ az containerapp job execution list \
 
 📋 **예상 출력**
 
-`az containerapp job show` 결과에는 최소한 아래 성격이 보여야 합니다.
+`az containerapp job show` 결과는 다음과 같은 형식으로 출력됩니다.
 
 ```yaml
-triggerType: Event
-replicaTimeout: 900
-minExecutions: 0
+image: acracarunner09fa08.azurecr.io/github-actions-runner:2.336.0
 maxExecutions: 5
+minExecutions: 0
 pollingInterval: 30
-image: <registry>.azurecr.io/github-actions-runner:2.336.0
+replicaTimeout: 900
 rules:
-  - name: github-runner
-    type: github-runner
+- auth:
+  - secretRef: personal-access-token
+    triggerParameter: personalAccessToken
+  metadata:
+    githubApiURL: https://api.github.com
+    labels: aca-runner
+    noDefaultLabels: 'true'
+    owner: freeman9844
+    repos: aca-runner-lab
+    runnerScope: repo
+    targetWorkflowQueueLength: '1'
+  name: github-runner
+  type: github-runner
+triggerType: Event
 ```
 
-`az containerapp job execution list`는 workflow를 아직 queue에 넣지 않았다면 표 헤더만 나오거나 행이 0개일 수 있습니다. **배포 직후 active execution이 없는 것이 정상**입니다.
+`image`의 ACR 이름과 `metadata.owner`, `metadata.repos`는 참가자가 만든 리소스와 GitHub 입력값에 따라 달라집니다. 나머지 값은 위 예시와 일치해야 합니다.
+
+`az containerapp job execution list`는 workflow를 아직 queue에 넣지 않았다면 실제 테스트처럼 아무 행도 출력되지 않을 수 있습니다. **배포 직후 active execution이 없는 것이 정상**입니다.
 
 참고로 Azure Portal 관리 콘솔에서 해당 Resource Group의 **Overview**를 열면 `job-ghrunner-<suffix>` 리소스가 **Container App Job** 유형으로 생성된 것을 확인할 수 있습니다.
 
@@ -322,7 +335,9 @@ rules:
 
 👁️ **설명**
 
-GitHub 저장소의 **Settings → Actions → Runners**를 열어보면, workflow를 아직 queue에 넣기 전에는 permanently online runner가 없어도 정상입니다. 이 워크숍의 runner는 Event Job이 queued workflow를 감지했을 때만 잠깐 생성되고, job이 끝나면 ephemeral runner도 사라집니다.
+GitHub 저장소의 **Settings → Actions → Runners**를 열어봅니다. workflow가 queue되기 전에는 self-hosted runner가 0개인 화면이 정상입니다. 이 워크숍의 runner는 Event Job이 queued workflow를 감지했을 때만 잠깐 생성되고, job이 끝나면 ephemeral runner도 사라집니다.
+
+![Workflow 실행 전 GitHub Self-hosted runners 화면](images/04-github-self-hosted-runners-empty.png)
 
 ⚠️ **주의**
 
