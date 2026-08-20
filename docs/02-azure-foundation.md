@@ -271,9 +271,21 @@ az network private-dns record-set a show \
 - `ENV_ID`가 ACA environment의 전체 resource ID로 저장됩니다.
 - `ENV_DEFAULT_DOMAIN`은 Private DNS zone 이름으로 재사용됩니다.
 - `ENV_STATIC_IP`는 wildcard A record가 가리키는 internal IP입니다.
-- 첫 번째 검증 JSON에는 `properties.vnetConfiguration.internal`에서 유도된 `internal: true`, `properties.vnetConfiguration.infrastructureSubnetId` 값, `properties.defaultDomain`, `properties.staticIp`가 함께 보여야 합니다.
-- 두 번째 검증 결과는 `ENV_STATIC_IP`와 같은 IPv4 하나를 출력해야 합니다.
 - diagnostic setting은 `aca-runner-logs` 이름으로 생성되고 `"categoryGroup":"allLogs"`가 포함됩니다.
+
+실제 실행에서는 다음과 같은 형식으로 두 명령의 결과가 연속 출력됩니다.
+
+```text
+{
+  "defaultDomain": "mangocoast-bfd3b7a6.koreacentral.azurecontainerapps.io",
+  "infrastructureSubnetId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-acarunner-09fa08/providers/Microsoft.Network/virtualNetworks/vnet-acarunner-09fa08/subnets/snet-aca-infra",
+  "internal": true,
+  "staticIp": "10.20.0.13"
+}
+10.20.0.13
+```
+
+`defaultDomain`, subscription ID, resource 이름의 suffix, `staticIp`는 참가자의 environment마다 달라집니다. 다만 `internal`은 `true`여야 하고, JSON의 `staticIp`와 마지막 줄의 wildcard DNS IPv4 값은 서로 같아야 합니다.
 
 ## 5. ACR 만들기와 ARM authentication 활성화
 
@@ -323,8 +335,19 @@ az acr config authentication-as-arm show \
 📋 **예상 출력**
 
 - `ACR_SERVER`는 `<registry>.azurecr.io` 형식입니다.
-- ACR JSON에는 `"adminUserEnabled": false`가 보여야 합니다.
-- ARM authentication 조회 결과는 `enabled`여야 합니다.
+
+실제 실행에서는 다음과 같은 형식으로 두 명령의 결과가 연속 출력됩니다.
+
+```text
+{
+  "adminUserEnabled": false,
+  "loginServer": "acracarunner09fa08.azurecr.io"
+}
+Command group 'acr config authentication-as-arm' is in preview and under development. Reference and support levels: https://aka.ms/CLI_refstatus
+enabled
+```
+
+`loginServer`의 ACR 이름은 참가자마다 달라집니다. `adminUserEnabled`는 `false`, ARM authentication 조회의 마지막 결과는 `enabled`여야 합니다. 중간의 preview 안내는 오류가 아니며 Azure CLI 버전에 따라 표시되지 않을 수도 있습니다.
 
 ## 6. UAMI 만들기와 `AcrPull` RBAC 연결
 
