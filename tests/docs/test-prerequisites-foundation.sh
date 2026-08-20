@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PREREQ="$ROOT/docs/01-prerequisites-github.md"
 FOUNDATION="$ROOT/docs/02-azure-foundation.md"
 PAT_SETTINGS_SCREENSHOT="$ROOT/docs/images/01-github-fine-grained-pat-settings.png"
+PORTAL_RESOURCES_SCREENSHOT="$ROOT/docs/images/02-azure-portal-internal-environment-resources.png"
 CLOUD_SHELL_SCREENSHOTS=(
   "$ROOT/docs/images/01-cloudshell-step1-welcome.png"
   "$ROOT/docs/images/01-cloudshell-step2-getting-started.png"
@@ -37,6 +38,8 @@ grep_forbidden_pat_stdout_prints() {
 [[ -f "$FOUNDATION" ]] || { echo "FAIL: module 02 missing" >&2; exit 1; }
 [[ -f "$PAT_SETTINGS_SCREENSHOT" ]] ||
   fail "module 01 GitHub PAT settings screenshot missing"
+[[ -f "$PORTAL_RESOURCES_SCREENSHOT" ]] ||
+  fail "module 02 Azure portal resources screenshot missing"
 PREREQ_TEXT="$(<"$PREREQ")"
 FOUNDATION_TEXT="$(<"$FOUNDATION")"
 for screenshot in "${CLOUD_SHELL_SCREENSHOTS[@]}"; do
@@ -187,6 +190,8 @@ for text in \
   'Private DNS zone' \
   'Managed Identity' \
   'Log Analytics workspace' \
+  '![Module 02에서 생성한 Azure 리소스 목록](images/02-azure-portal-internal-environment-resources.png)' \
+  '화면의 suffix와 리소스 이름은 예시이며 참가자마다 달라집니다.' \
   'LOC=koreacentral' \
   'SUFFIX="$(openssl rand -hex 3)"' \
   'VNET="vnet-acarunner-$SUFFIX"' \
