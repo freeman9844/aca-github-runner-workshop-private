@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Validate required inputs before making any GitHub API request.
+# GitHub API를 호출하기 전에 필수 입력을 검사하여 누락된 secret이나 repository URL로 요청하지 않게 합니다.
 required_variables=(
   GITHUB_PAT
   GH_URL
@@ -14,7 +14,7 @@ for variable_name in "${required_variables[@]}"; do
   fi
 done
 
-# Accept only a canonical GitHub repository URL before deriving API endpoints.
+# 허용된 GitHub repository URL 형식만 받아 owner와 repository 이름을 안전하게 추출합니다.
 if [[ "$GH_URL" =~ ^https://github\.com/([^/?#]+)/([^/?#]+)$ ]]; then
   github_owner="${BASH_REMATCH[1]}"
   github_repo="${BASH_REMATCH[2]}"
@@ -30,13 +30,13 @@ RUNNER_NAME="${RUNNER_NAME_PREFIX}-$(hostname)-${RANDOM}"
 REMOVAL_TOKEN_API_URL="${REGISTRATION_TOKEN_API_URL%/registration-token}/remove-token"
 CLEANED_UP=0
 
-# Keep the PAT only long enough to prepare short-lived runner tokens.
+# PAT는 단기 registration/removal token을 준비하는 동안에만 wrapper 내부에 유지합니다.
 github_pat="$GITHUB_PAT"
 unset GITHUB_PAT
 runner_pid=""
 removal_token=""
 
-# Exchange the PAT for a short-lived runner registration or removal token.
+# PAT를 GitHub API에 전달해 일회성 runner 등록 또는 제거에 사용할 단기 token을 발급받습니다.
 github_api_token() {
   local url="$1"
   local response
@@ -56,7 +56,7 @@ github_api_token() {
     '.token | select(type == "string" and length > 0)' <<<"$response"
 }
 
-# Deregister the ephemeral runner when the container exits.
+# container 종료 시 미리 발급한 removal token으로 ephemeral runner 등록 정보를 정리합니다.
 cleanup() {
   local cleanup_status=0
 
@@ -80,7 +80,7 @@ cleanup() {
   return 0
 }
 
-# Forward termination signals to the runner process and preserve exit semantics.
+# 종료 signal을 runner process에 전달하고 Container Apps에 원래 종료 상태를 보존합니다.
 forward_signal() {
   local signal_name="$1"
   local exit_status="$2"
@@ -96,7 +96,7 @@ trap cleanup EXIT
 trap 'forward_signal INT 130' INT
 trap 'forward_signal TERM 143' TERM
 
-# Configure a uniquely named, single-use runner with only the custom label.
+# 기본 label을 제외하고 custom label만 가진 고유 이름의 일회성 runner를 등록합니다.
 printf 'Requesting registration token\n'
 registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
 printf 'Requesting removal token\n'
@@ -117,7 +117,7 @@ unset -f github_api_token
 unset registration_token
 printf 'Runner configured: %s\n' "$RUNNER_NAME"
 
-# Run one workflow job and return the runner process status to Container Apps.
+# workflow job 하나를 실행한 뒤 runner 종료 상태를 Container Apps Job 결과로 반환합니다.
 set +e
 ./run.sh &
 runner_pid=$!

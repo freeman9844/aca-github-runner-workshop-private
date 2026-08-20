@@ -4,7 +4,7 @@ ARG AZURE_CLI_VERSION=2.89.1-1~noble
 
 USER root
 
-# Install the tools required by the runner and Azure deployment workflow.
+# GitHub API 호출·JSON 처리와 Azure 배포에 필요한 도구 및 고정 버전 Azure CLI를 설치합니다.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       ca-certificates \
@@ -36,18 +36,18 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the registration wrapper without granting write access at runtime.
+# workflow가 등록·정리 로직을 바꾸지 못하도록 entrypoint를 root 소유의 읽기·실행 전용 파일로 배치합니다.
 COPY --chown=root:root entrypoint.sh /home/runner/entrypoint.sh
 RUN chmod 0555 /home/runner/entrypoint.sh
 
-# Run the container as the non-root runner user.
+# sudo와 docker 그룹 권한을 제거한 non-root runner 사용자로 이후 명령과 workflow를 실행합니다.
 USER runner
 
-# Install and verify the Container Apps extension while building the image.
+# Container Apps extension을 고정 버전으로 설치하고 기본 명령 로딩까지 build 시점에 검증합니다.
 RUN az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null
 WORKDIR /home/runner
 
-# Register the ephemeral runner before starting the workflow process.
+# container 시작 시 entrypoint가 일회성 runner 등록을 마친 후 workflow 수신을 시작합니다.
 ENTRYPOINT ["/home/runner/entrypoint.sh"]
