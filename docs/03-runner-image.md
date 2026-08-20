@@ -35,8 +35,11 @@ Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 모듈 02에서 �
 세션이 그대로라면 건너뛰어도 되지만, 재접속했다면 아래 블록을 그대로 다시 실행합니다.
 
 ```bash
+# 저장해 둔 suffix와 실제 ACR 이름을 입력해 기존 workshop 리소스 이름을 복원합니다.
 read -rp "Saved SUFFIX: " SUFFIX
 read -rp "Saved ACR name: " ACR
+
+# suffix에서 파생되는 공통 이름과 고정 runner image tag를 다시 구성합니다.
 LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
@@ -45,6 +48,7 @@ UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
 
+# workspace, Environment, ACR, subscription과 Resource Group ID를 Azure에서 다시 조회합니다.
 LOG_ID=$(az monitor log-analytics workspace show \
   --resource-group "$RG" \
   --workspace-name "$LOG" \
@@ -67,6 +71,8 @@ RG_ID=$(az group show \
   --name "$RG" \
   --query id \
   --output tsv)
+
+# UAMI의 resource, principal, client ID를 각각 Job 연결·RBAC·Azure login 용도로 복원합니다.
 UAMI_RID=$(az identity show \
   --resource-group "$RG" \
   --name "$UAMI" \
@@ -83,7 +89,10 @@ UAMI_CLIENT_ID=$(az identity show \
   --query clientId \
   --output tsv)
 
+# 다음 명령과 모듈이 같은 값을 사용하도록 복구한 변수를 현재 shell에 export합니다.
 export SUFFIX LOC RG LOG ENV ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
+
+# 복구한 suffix, 실제 ACR 이름과 image tag를 출력해 session 상태를 확인합니다.
 printf 'SUFFIX=%s ACR=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$IMAGE"
 ```
 
@@ -325,6 +334,7 @@ TDD 흐름상 배포 문서를 쓰기 전에 현재 runner artifact가 기대한
 🟢 **실행**
 
 ```bash
+# source directory에서 entrypoint 문법, runner 동작과 문서 artifact 일치를 순서대로 검사합니다.
 cd ~/aca-github-runner-workshop
 bash -n runner/entrypoint.sh
 bash tests/runner/test-entrypoint.sh
@@ -346,6 +356,7 @@ Cloud Shell에는 Docker daemon이 없어도 됩니다. `az acr build`는 소스
 🟢 **실행**
 
 ```bash
+# ACR Tasks가 Docker daemon 없이 runner image를 cloud build하고 고정 tag로 저장합니다.
 az acr build \
   --resource-group "$RG" \
   --registry "$ACR" \
@@ -363,6 +374,7 @@ az acr build \
 빌드가 끝나면 태그와 보안 설정을 같은 흐름에서 바로 확인합니다.
 
 ```bash
+# build 결과 tag가 존재하는지 확인한 뒤 ACR의 관리자 계정 비활성화와 ARM 인증을 검증합니다.
 az acr repository show-tags \
   --name "$ACR" \
   --repository github-actions-runner \

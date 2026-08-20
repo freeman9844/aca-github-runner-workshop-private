@@ -69,9 +69,12 @@ Cloud Shell을 열면 여러 구독이 보일 수 있습니다. 실습 리소스
 🟢 **실행**
 
 ```bash
+# 사용 가능한 Azure subscription을 확인하고 workshop 리소스를 만들 대상을 선택합니다.
 az account list --query "[].{Name:name,SubscriptionId:id,State:state}" -o table
+# 이후 모든 Azure CLI 명령이 선택한 subscription을 사용하도록 active context를 바꿉니다.
 read -rp "Azure subscription ID: " SUBSCRIPTION_ID
 az account set --subscription "$SUBSCRIPTION_ID"
+# 잘못된 subscription에 배포하지 않도록 최종 active context를 확인합니다.
 az account show --query "{Name:name,SubscriptionId:id,State:state}" -o table
 ```
 
@@ -97,7 +100,9 @@ extension이 이미 설치된 Cloud Shell에서도 워크숍 기준 버전 `0.3.
 🟢 **실행**
 
 ```bash
+# ACA 명령 형식을 workshop 기준에 맞추기 위해 containerapp extension 버전을 고정합니다.
 az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
+# VNet, ACA, ACR, Log Analytics와 diagnostic setting 생성에 필요한 provider를 등록합니다.
 az provider register -n Microsoft.Network --wait
 az provider register -n Microsoft.App --wait
 az provider register -n Microsoft.ContainerService --wait
@@ -147,7 +152,9 @@ GitHub 웹 UI에서 새 저장소를 만들고 아래 값을 사용합니다.
 🟢 **실행**
 
 ```bash
+# public workshop source를 이후 모듈이 기대하는 Cloud Shell 고정 경로에 clone합니다.
 git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
+# 상대 경로 기반 문서·runner·sample 명령이 동작하도록 clone directory로 이동합니다.
 cd ~/aca-github-runner-workshop
 ls
 ```
@@ -223,9 +230,11 @@ organization을 선택하세요.
 🟢 **실행**
 
 ```bash
+# GitHub API 대상 owner와 private lab repository 이름을 shell-local 변수로 입력받습니다.
 read -rp "GitHub owner: " GITHUB_OWNER
 read -rp "Private repository name: " GITHUB_REPO
 
+# PAT를 다시 출력하지 않고 비어 있지 않은 값이 들어올 때까지 안전하게 입력받습니다.
 GITHUB_PAT=
 until [[ -n "$GITHUB_PAT" ]]; do
   read -rsp "Fine-grained PAT: " GITHUB_PAT
@@ -234,6 +243,7 @@ until [[ -n "$GITHUB_PAT" ]]; do
     printf 'ERROR: Fine-grained PAT cannot be empty. Try again.\n' >&2
 done
 
+# secret 값 대신 설정 여부만 표시해 GitHub 입력 세 가지가 준비됐는지 확인합니다.
 printf 'GITHUB_OWNER=%s\nGITHUB_REPO=%s\nGITHUB_PAT=%s\n' \
   "$GITHUB_OWNER" \
   "$GITHUB_REPO" \
@@ -266,9 +276,11 @@ module 04에서 재사용할 수 있도록 현재 Cloud Shell 세션에 그대�
 🟢 **실행**
 
 ```bash
+# PAT를 command line 인수에 직접 노출하지 않도록 임시 Authorization header를 만듭니다.
 printf -v PAT_AUTH_HEADER '%s: %s %s' \
   'Authorization' 'Bearer' "$GITHUB_PAT"
 
+# 선택한 repository에 접근할 수 있는지 metadata API로 먼저 확인합니다.
 curl --fail --silent --show-error \
   --header 'Accept: application/vnd.github+json' \
   --header "$PAT_AUTH_HEADER" \
@@ -277,6 +289,7 @@ curl --fail --silent --show-error \
   jq --exit-status '.private == true' >/dev/null
 printf 'Repository access: OK\n'
 
+# queued workflow를 읽는 데 필요한 Actions read 권한을 확인합니다.
 curl --fail --silent --show-error \
   --header 'Accept: application/vnd.github+json' \
   --header "$PAT_AUTH_HEADER" \
@@ -285,6 +298,7 @@ curl --fail --silent --show-error \
   jq --exit-status '.total_count >= 0' >/dev/null
 printf 'Actions read: OK\n'
 
+# ephemeral runner token을 발급할 administration 권한을 실제 POST 요청으로 확인합니다.
 curl --fail --silent --show-error --request POST \
   --header 'Accept: application/vnd.github+json' \
   --header "$PAT_AUTH_HEADER" \
@@ -293,6 +307,7 @@ curl --fail --silent --show-error --request POST \
   jq --exit-status '.token | type == "string" and length > 0' >/dev/null
 printf 'Runner administration: OK\n'
 
+# 검증이 끝나면 PAT가 포함된 임시 header 변수를 즉시 제거합니다.
 unset PAT_AUTH_HEADER
 ```
 
