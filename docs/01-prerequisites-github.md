@@ -167,6 +167,13 @@ Public workshop source clone과 lab Fine-grained PAT는 서로 다른 흐름입�
 Fine-grained personal access token (PAT)을 사용해 GitHub App 설치 없이
 repository-scoped 인증을 구성합니다.
 
+> **운영 환경 권장**
+>
+> 이 워크숍은 설정 단계를 줄이고 GitHub App 설치가 제한된 계정도 실습할 수
+> 있도록 Fine-grained PAT를 사용합니다. 실제 운영 환경에서는 사용자 계정에
+> 종속된 PAT보다 설치 범위와 권한을 명확히 제한할 수 있고 단기 installation
+> token을 사용하는 **GitHub App 방식이 권장됩니다**.
+
 GitHub에서 **Settings → Developer settings → Personal access tokens →
 Fine-grained tokens → Generate new token**으로 이동합니다.
 
