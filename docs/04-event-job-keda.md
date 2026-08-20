@@ -60,6 +60,7 @@ UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
 
+# Job 생성에 필요한 workspace, Environment, ACR, subscription과 identity ID를 다시 조회합니다.
 LOG_ID=$(az monitor log-analytics workspace show \
   --resource-group "$RG" \
   --workspace-name "$LOG" \
