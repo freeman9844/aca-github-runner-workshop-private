@@ -142,18 +142,20 @@ RUN apt-get update \
       > /etc/apt/sources.list.d/azure-cli.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends azure-cli="$AZURE_CLI_VERSION" \
+    && gpasswd --delete runner sudo \
+    && gpasswd --delete runner docker \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the registration wrapper without granting write access at runtime.
-COPY --chown=runner:runner entrypoint.sh /home/runner/entrypoint.sh
+COPY --chown=root:root entrypoint.sh /home/runner/entrypoint.sh
 RUN chmod 0555 /home/runner/entrypoint.sh
 
 # Run the container as the non-root runner user.
 USER runner
 
 # Install and verify the Container Apps extension while building the image.
-RUN az extension add --name containerapp --version 0.3.55 --only-show-errors
+RUN az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null
 WORKDIR /home/runner
@@ -199,10 +201,11 @@ RUNNER_NAME="${RUNNER_NAME_PREFIX}-$(hostname)-${RANDOM}"
 REMOVAL_TOKEN_API_URL="${REGISTRATION_TOKEN_API_URL%/registration-token}/remove-token"
 CLEANED_UP=0
 
-# Keep the PAT inside this wrapper process so workflow steps cannot inherit it.
+# Keep the PAT only long enough to prepare short-lived runner tokens.
 github_pat="$GITHUB_PAT"
 unset GITHUB_PAT
 runner_pid=""
+removal_token=""
 
 # Exchange the PAT for a short-lived runner registration or removal token.
 github_api_token() {
@@ -226,7 +229,7 @@ github_api_token() {
 
 # Deregister the ephemeral runner when the container exits.
 cleanup() {
-  local cleanup_status=0 removal_token=""
+  local cleanup_status=0
 
   if [[ "$CLEANED_UP" == "1" ]]; then
     return 0
@@ -238,12 +241,8 @@ cleanup() {
   fi
 
   set +e
-  removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL")"
+  ./config.sh remove --token "$removal_token"
   cleanup_status=$?
-  if [[ "$cleanup_status" == "0" ]]; then
-    ./config.sh remove --token "$removal_token"
-    cleanup_status=$?
-  fi
   set -e
 
   if [[ "$cleanup_status" != "0" ]]; then
@@ -271,6 +270,10 @@ trap 'forward_signal TERM 143' TERM
 # Configure a uniquely named, single-use runner with only the custom label.
 printf 'Requesting registration token\n'
 registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
+printf 'Requesting removal token\n'
+removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL")"
+unset github_pat
+unset -f github_api_token
 
 ./config.sh \
   --url "$GH_URL" \
@@ -282,6 +285,7 @@ registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
   --ephemeral \
   --disableupdate
 
+unset registration_token
 printf 'Runner configured: %s\n' "$RUNNER_NAME"
 
 # Run one workflow job and return the runner process status to Container Apps.
@@ -296,6 +300,11 @@ printf 'Runner process exited with status %s\n' "$runner_status"
 exit "$runner_status"
 ```
 <!-- END RUNNER_ENTRYPOINT -->
+
+entrypoint는 workflow runner를 시작하기 전에 PAT를 registration token과
+removal token으로 교환한 뒤 PAT와 API helper를 즉시 제거합니다. workflow
+프로세스에는 PAT나 두 token을 환경 변수로 전달하지 않으며, cleanup에는
+미리 발급한 단기 removal token만 사용합니다.
 
 ⚠️ **주의**
 
@@ -379,8 +388,8 @@ az acr show \
 | Azure CLI pinning | image 안의 Azure CLI `2.89.1`과 Container Apps extension `0.3.55`를 함께 고정해 workflow 명령 동작이 build 시점마다 달라지지 않게 합니다. |
 | `--disableupdate` | ephemeral runner가 시작될 때마다 self-update를 시도하면 실행 시간이 늘고 재현성이 떨어집니다. 워크숍은 검증된 tag를 새로 빌드해 배포하는 방식을 사용합니다. |
 | ACR cloud build | Cloud Shell 로컬 Docker에 의존하지 않고 Azure 쪽에서 build/push를 끝내므로 참가자 환경 편차가 작습니다. |
-| non-root 실행 | `USER runner`로 내려가 GitHub runner 프로세스를 최소 권한으로 실행합니다. |
-| Docker 미포함 | ACA Jobs는 Docker daemon과 Docker-in-Docker를 지원하지 않습니다. 따라서 이 워크숍의 runner는 Docker build용이 아니라 일반 workflow job 실행용입니다. |
+| non-root 실행 | base image의 `sudo`와 `docker` 그룹에서 `runner`를 제거한 뒤 `USER runner`로 실행합니다. workflow는 container 내부 root 권한으로 상승할 수 없으며 entrypoint도 `root:root`, `0555`로 보호됩니다. |
+| Docker CLI 포함, daemon 미포함 | base image에는 Docker CLI와 buildx가 포함되지만 ACA Jobs에는 Docker daemon이나 socket이 없습니다. 따라서 Docker build와 Docker-in-Docker는 동작하지 않으며 이 runner는 일반 workflow job 실행용입니다. |
 
 ## 트러블슈팅
 

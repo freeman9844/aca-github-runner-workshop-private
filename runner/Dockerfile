@@ -31,18 +31,20 @@ RUN apt-get update \
       > /etc/apt/sources.list.d/azure-cli.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends azure-cli="$AZURE_CLI_VERSION" \
+    && gpasswd --delete runner sudo \
+    && gpasswd --delete runner docker \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the registration wrapper without granting write access at runtime.
-COPY --chown=runner:runner entrypoint.sh /home/runner/entrypoint.sh
+COPY --chown=root:root entrypoint.sh /home/runner/entrypoint.sh
 RUN chmod 0555 /home/runner/entrypoint.sh
 
 # Run the container as the non-root runner user.
 USER runner
 
 # Install and verify the Container Apps extension while building the image.
-RUN az extension add --name containerapp --version 0.3.55 --only-show-errors
+RUN az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null
 WORKDIR /home/runner

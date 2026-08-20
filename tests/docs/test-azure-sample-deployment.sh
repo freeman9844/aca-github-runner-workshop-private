@@ -111,7 +111,7 @@ for text in \
   'Container App' \
   'Azure Portal' \
   'az: command not found' \
-  'az extension add --name containerapp --version 0.3.55 --only-show-errors' \
+  'az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors' \
   'AuthorizationFailed' \
   'No existing Container App named' \
   'behavior of this command has been altered' \
