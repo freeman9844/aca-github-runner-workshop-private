@@ -402,11 +402,21 @@ GitHub repository에서 **Actions → ACA Runner Azure Sample Deploy → Run wor
 
 📋 **예상 출력**
 
+다음 화면처럼 **Run workflow**에서 기본 브랜치를 선택해 수동 실행합니다.
+
+![GitHub Actions에서 Azure Sample Deploy workflow 수동 실행](images/06-github-run-workflow-dispatch.png)
+
 - 전체 workflow가 `Success`로 끝나야 합니다.
 - `Sign in with the runner managed identity` step은 subscription table을 출력하고, 추가 secret 없이 로그인해야 합니다.
 - `Deploy the sample Container App` step은 기존 앱이 있으면 삭제를 확인한 뒤 동일한 pinned image를 `--ingress internal`로 다시 만듭니다.
 - `Verify the internal HTTPS endpoint from the runner` step에는 `Verified internal endpoint https://...`가 보이며, 실패 시 끝부분에 `ERROR: Internal HTTP verification failed after 18 attempts: ...` 메시지가 남습니다.
 - `Show deployed Azure resource` step에는 새 `Container App` 이름, `externalIngress=false`, image, FQDN이 출력됩니다.
+
+성공한 run을 열면 다음과 같이 HTTPS 응답 본문과 배포된 Azure 리소스 표를 함께 확인할 수 있습니다.
+
+![성공한 Azure Sample Deploy workflow의 HTTPS 및 Azure 리소스 검증 결과](images/06-github-deployment-success-details.png)
+
+run 번호, suffix, FQDN, 실행 시간은 참가자와 실행 시점마다 달라집니다. workflow 상태가 성공이고 검증 step의 의미가 위 설명과 일치하는지 확인하세요.
 
 ⚠️ **주의**
 
