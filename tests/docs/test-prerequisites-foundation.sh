@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PREREQ="$ROOT/docs/01-prerequisites-github.md"
 FOUNDATION="$ROOT/docs/02-azure-foundation.md"
-PORTAL_SCREENSHOT="$ROOT/docs/images/02-azure-portal-resource-group-resources.png"
 PAT_SETTINGS_SCREENSHOT="$ROOT/docs/images/01-github-fine-grained-pat-settings.png"
 CLOUD_SHELL_SCREENSHOTS=(
   "$ROOT/docs/images/01-cloudshell-step1-welcome.png"
@@ -36,8 +35,6 @@ grep_forbidden_pat_stdout_prints() {
 
 [[ -f "$PREREQ" ]] || { echo "FAIL: module 01 missing" >&2; exit 1; }
 [[ -f "$FOUNDATION" ]] || { echo "FAIL: module 02 missing" >&2; exit 1; }
-[[ -f "$PORTAL_SCREENSHOT" ]] ||
-  fail "module 02 Azure portal screenshot missing"
 [[ -f "$PAT_SETTINGS_SCREENSHOT" ]] ||
   fail "module 01 GitHub PAT settings screenshot missing"
 PREREQ_TEXT="$(<"$PREREQ")"
@@ -113,11 +110,13 @@ for text in \
   'until [[ -n "$GITHUB_PAT" ]]' \
   'ERROR: Fine-grained PAT cannot be empty. Try again.' \
   'az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors' \
+  'az provider register -n Microsoft.Network --wait' \
   'az provider register -n Microsoft.App --wait' \
+  'az provider register -n Microsoft.ContainerService --wait' \
   'az provider register -n Microsoft.ContainerRegistry --wait' \
   'az provider register -n Microsoft.OperationalInsights --wait' \
   'az provider register -n Microsoft.Insights --wait' \
-  '다섯 명령 모두 오류 없이 종료됩니다.'; do
+  '일곱 명령 모두 오류 없이 종료됩니다.'; do
   grep -F -- "$text" "$PREREQ" >/dev/null || { echo "FAIL: module 01 missing $text" >&2; exit 1; }
 done
 
@@ -184,23 +183,52 @@ for text in \
   'Resources' \
   'Azure Container Registry' \
   'Container Apps Environment' \
+  'Virtual Network' \
+  'Private DNS zone' \
   'Managed Identity' \
   'Log Analytics workspace' \
-  '![Azure Portal 리소스 그룹 Overview에서 Module 02 생성 리소스를 확인하는 화면](images/02-azure-portal-resource-group-resources.png)' \
   'LOC=koreacentral' \
   'SUFFIX="$(openssl rand -hex 3)"' \
+  'VNET="vnet-acarunner-$SUFFIX"' \
+  'INFRA_SUBNET="snet-aca-infra"' \
+  'DNS_LINK="link-acarunner-$SUFFIX"' \
   'ACR="acracarunner$SUFFIX"' \
+  'VNET_ID=$(az network vnet show' \
+  'SUBNET_ID=$(az network vnet subnet show' \
   'az containerapp env create' \
+  '--infrastructure-subnet-resource-id "$SUBNET_ID"' \
+  '--internal-only true' \
   '--logs-destination azure-monitor' \
+  'ENV_DEFAULT_DOMAIN=$(az containerapp env show' \
+  'ENV_STATIC_IP=$(az containerapp env show' \
+  'az network vnet create' \
+  '--address-prefixes 10.20.0.0/16' \
+  'az network vnet subnet create' \
+  '--address-prefixes 10.20.0.0/27' \
+  'az network vnet subnet update' \
+  '--delegations Microsoft.App/environments' \
+  '`/27`은 Workload profiles minimum' \
+  '최대 다섯 개 실행과 샘플 앱 하나' \
+  'az network private-dns zone create' \
+  'az network private-dns link vnet create' \
+  '--registration-enabled false' \
+  'az network private-dns record-set a add-record' \
+  '--record-set-name "*"' \
+  '--ipv4-address "$ENV_STATIC_IP"' \
   'az monitor diagnostic-settings create' \
   '"categoryGroup":"allLogs"' \
+  'properties.vnetConfiguration.internal' \
+  'properties.vnetConfiguration.infrastructureSubnetId' \
+  'properties.defaultDomain' \
+  'properties.staticIp' \
+  'az network private-dns record-set a show' \
   'az acr create' \
   '--admin-enabled false' \
   'az acr config authentication-as-arm update' \
   '`MissingSubscriptionRegistration`' \
   '`Microsoft.ContainerRegistry` provider가 등록되지 않음' \
   '뒤의 ACR `resource not found` 오류는 첫 실패에 따른 연쇄 오류' \
-  'provider 등록이 완료되면 4단계 전체를 처음부터 다시 실행합니다.' \
+  'provider 등록이 완료되면 5단계 전체를 처음부터 다시 실행합니다.' \
   'az identity create' \
   'SUBSCRIPTION_ID=$(az account show' \
   'RG_ID=$(az group show' \
@@ -217,6 +245,13 @@ for text in \
   '이 시점부터 `ACR`은 더 이상 `SUFFIX`에서 유도되지 않습니다.' \
   '이전에 적어 둔 `ACR` 값은 이 새 값으로 교체하세요.' \
   '다음 모듈 재접속과 Module 06 복구에 대비해 `SUFFIX`, 실제 `ACR` 이름, 원래 `SUBSCRIPTION_ID`를 각각 별도 값으로 저장해 둔다.' \
+  '기본 네트워크로 만든 기존 ACA environment는 internal VNet environment로 변환할 수 없습니다.' \
+  '새 workshop suffix로 environment를 다시 만들어야 합니다.' \
+  '`Microsoft.Network` 또는 `Microsoft.ContainerService` provider가 등록되지 않음' \
+  '`Microsoft.App/environments` subnet delegation이 없음' \
+  '`/27`보다 작은 subnet은 Workload profiles environment에 사용할 수 없음' \
+  'Private DNS zone과 VNet link가 없으면' \
+  'custom DNS를 사용 중이라면' \
   '이미 앞 단계의 RG, workspace, environment를 만들었다면 전체 `SUFFIX`를 바꾸지 마세요.' \
   '리소스 이름을 모두 새 suffix로 통일하려면 기존 실습 리소스를 정리하고 모듈 02의 1단계부터 다시 시작합니다.' \
   'SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3'; do
@@ -254,6 +289,10 @@ troubleshooting_line="$(
 )"
 (( portal_reference_line < troubleshooting_line )) ||
   fail "module 02 portal reference must appear before troubleshooting"
+
+if grep -F '02-azure-portal-resource-group-resources.png' "$FOUNDATION" >/dev/null; then
+  fail "module 02 must remove the outdated portal screenshot reference"
+fi
 
 if grep -Fx '## 6. 검증' "$FOUNDATION" >/dev/null; then
   fail "module 02 still has a standalone validation section"

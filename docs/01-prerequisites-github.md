@@ -85,16 +85,22 @@ az account show --query "{Name:name,SubscriptionId:id,State:state}" -o table
 👁️ **설명**
 
 이 워크숍은 Azure Container Apps Job, Azure Container Registry, Azure Monitor,
-Log Analytics를 사용합니다. Cloud Shell에서 필요한 extension과 resource
-provider를 먼저 준비합니다. `--upgrade`를 함께 지정해야 이전 버전의
-`containerapp` extension이 이미 설치된 Cloud Shell에서도 워크숍 기준
-버전 `0.3.55`로 실제 교체됩니다.
+Log Analytics뿐 아니라 internal ACA environment를 위한 Virtual Network,
+delegated subnet, Private DNS를 함께 사용합니다. 따라서 Cloud Shell에서
+필요한 extension과 resource provider를 먼저 준비합니다.
+`Microsoft.Network`는 VNet, subnet, Private DNS를 위해 필요하고,
+`Microsoft.ContainerService`는 ACA custom VNet infrastructure provisioning에
+필요합니다. `--upgrade`를 함께 지정해야 이전 버전의 `containerapp`
+extension이 이미 설치된 Cloud Shell에서도 워크숍 기준 버전 `0.3.55`로
+실제 교체됩니다.
 
 🟢 **실행**
 
 ```bash
 az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
+az provider register -n Microsoft.Network --wait
 az provider register -n Microsoft.App --wait
+az provider register -n Microsoft.ContainerService --wait
 az provider register -n Microsoft.ContainerRegistry --wait
 az provider register -n Microsoft.OperationalInsights --wait
 az provider register -n Microsoft.Insights --wait
@@ -102,7 +108,7 @@ az provider register -n Microsoft.Insights --wait
 
 📋 **예상 출력**
 
-- 다섯 명령 모두 오류 없이 종료됩니다.
+- 일곱 명령 모두 오류 없이 종료됩니다.
 - `--wait`를 사용했으므로 provider 상태가 `Registered`가 될 때까지 반환하지 않습니다.
 
 ## 3. GitHub에서 실습용 `Private repository` 만들기

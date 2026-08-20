@@ -1,16 +1,17 @@
 # 02. Azure 기반 리소스 준비
 
-> Azure Cloud Shell Bash에서 리소스 그룹, Log Analytics workspace, Azure Container Apps environment, Azure Monitor diagnostic settings, Azure Container Registry, User-Assigned Managed Identity를 만들고 least-privilege RBAC를 연결합니다.
+> Azure Cloud Shell Bash에서 리소스 그룹, Log Analytics workspace, Virtual Network, internal Azure Container Apps environment, Private DNS, Azure Monitor diagnostic settings, Azure Container Registry, User-Assigned Managed Identity를 만들고 least-privilege RBAC를 연결합니다.
 
 ## 목표
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
 - `koreacentral`에 실습용 리소스 그룹과 공통 이름 변수를 만든다.
-- Log Analytics와 ACA environment를 Azure Monitor 로그 대상으로 연결한다.
+- internal ACA environment용 Virtual Network와 delegated subnet을 만든다.
+- Log Analytics와 internal ACA environment를 Azure Monitor 로그 대상으로 연결하고 Private DNS를 구성한다.
 - ACR을 관리자 계정 없이 만들고 ARM authentication을 활성화한다.
 - UAMI를 만들고 ACR 범위에 `AcrPull`, Resource Group 범위에 `Container Apps Contributor` 역할을 부여한다.
-- 다음 모듈에서 사용할 `SUBSCRIPTION_ID`, `RG_ID`, `LOG_ID`, `LOG_RID`, `ENV_ID`, `ACR_SERVER`, `ACR_ID`, `UAMI_RID`, `UAMI_PID`, `UAMI_CLIENT_ID`를 확보한다.
+- 다음 모듈에서 사용할 `SUBSCRIPTION_ID`, `RG_ID`, `LOG_ID`, `LOG_RID`, `VNET_ID`, `SUBNET_ID`, `ENV_ID`, `ENV_DEFAULT_DOMAIN`, `ENV_STATIC_IP`, `ACR_SERVER`, `ACR_ID`, `UAMI_RID`, `UAMI_PID`, `UAMI_CLIENT_ID`를 확보한다.
 - 다음 모듈 재접속과 Module 06 복구에 대비해 `SUFFIX`, 실제 `ACR` 이름, 원래 `SUBSCRIPTION_ID`를 각각 별도 값으로 저장해 둔다.
 
 ## 태그 범례
@@ -26,7 +27,9 @@
 
 👁️ **설명**
 
-각 참가자가 충돌 없이 리소스를 만들 수 있도록 6자리 소문자 16진수 `SUFFIX`를 붙입니다. `ACR` 이름은 전역 고유해야 하므로 이 블록을 그대로 사용하세요. `RG`, `LOG`, `ENV`, `UAMI`, `JOB`은 항상 `SUFFIX`에서 그대로 유도되지만, `ACR`은 이름 충돌 복구가 일어나면 `SUFFIX`와 별개의 값으로 바뀔 수 있는 **독립적인 실습 값**입니다. 따라서 `SUFFIX`뿐 아니라 실제 `ACR` 이름도 반드시 별도로 적어 두세요.
+각 참가자가 충돌 없이 리소스를 만들 수 있도록 6자리 소문자 16진수 `SUFFIX`를 붙입니다. `ACR` 이름은 전역 고유해야 하므로 이 블록을 그대로 사용하세요. `RG`, `LOG`, `ENV`, `VNET`, `DNS_LINK`, `UAMI`, `JOB`은 항상 `SUFFIX`에서 그대로 유도되지만, `ACR`은 이름 충돌 복구가 일어나면 `SUFFIX`와 별개의 값으로 바뀔 수 있는 **독립적인 실습 값**입니다. 따라서 `SUFFIX`뿐 아니라 실제 `ACR` 이름도 반드시 별도로 적어 두세요.
+
+`INFRA_SUBNET`은 workshop에서 고정으로 사용하는 delegated subnet 이름입니다. ACA environment를 만든 뒤에는 network type과 subnet size를 바꿀 수 없으므로, 처음부터 internal VNet environment 기준 이름과 크기를 그대로 사용합니다.
 
 🟢 **실행**
 
@@ -36,6 +39,9 @@ LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
+VNET="vnet-acarunner-$SUFFIX"
+INFRA_SUBNET="snet-aca-infra"
+DNS_LINK="link-acarunner-$SUFFIX"
 ACR="acracarunner$SUFFIX"
 UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
@@ -99,11 +105,62 @@ printf '다음 값을 저장하세요: SUFFIX=%s ACR=%s SUBSCRIPTION_ID=%s\n' \
 
 Module 06을 Cloud Shell 재접속 후 이어가려면 위에서 출력한 `SUBSCRIPTION_ID`를 `SUFFIX`, 실제 `ACR` 이름과 함께 저장해 둡니다.
 
-## 3. ACA environment와 Azure Monitor 로그 연결
+## 3. VNet과 delegated subnet 만들기
 
 👁️ **설명**
 
-이 워크숍은 Log Analytics Shared Key를 쓰지 않고, ACA environment 자체를 Azure Monitor에 연결한 뒤 resource-based diagnostic setting으로 로그를 보냅니다. 앞 단계에서 구한 `SUBSCRIPTION_ID`와 `RG_ID`는 다음 모듈과 workflow가 사용할 Azure deployment context의 기준점입니다.
+internal ACA environment는 environment 전용 infrastructure subnet이 필요합니다. 이 워크숍은 Workload profiles environment의 minimum 크기인 `/27` subnet을 사용합니다. `/27`은 Workload profiles minimum이며, 워크숍의 최대 다섯 개 실행과 샘플 앱 하나를 수용하기에 충분합니다. 다만 production capacity planning에서는 더 큰 subnet이 필요할 수 있습니다.
+
+🟢 **실행**
+
+```bash
+az network vnet create \
+  --resource-group "$RG" \
+  --name "$VNET" \
+  --location "$LOC" \
+  --address-prefixes 10.20.0.0/16 \
+  --output none
+
+az network vnet subnet create \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$INFRA_SUBNET" \
+  --address-prefixes 10.20.0.0/27 \
+  --output none
+
+az network vnet subnet update \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$INFRA_SUBNET" \
+  --delegations Microsoft.App/environments \
+  --output none
+
+VNET_ID=$(az network vnet show \
+  --resource-group "$RG" \
+  --name "$VNET" \
+  --query id \
+  --output tsv)
+SUBNET_ID=$(az network vnet subnet show \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$INFRA_SUBNET" \
+  --query id \
+  --output tsv)
+```
+
+📋 **예상 출력**
+
+- 명령은 출력 없이 끝나고, `VNET_ID`와 `SUBNET_ID`가 셸 변수에 저장됩니다.
+- `SUBNET_ID`는 `/subscriptions/.../resourceGroups/.../providers/Microsoft.Network/virtualNetworks/.../subnets/snet-aca-infra` 형식입니다.
+- `az network vnet subnet show --resource-group "$RG" --vnet-name "$VNET" --name "$INFRA_SUBNET" --query delegations[].serviceName --output tsv` 결과에 `Microsoft.App/environments`가 보여야 합니다.
+
+## 4. internal ACA environment와 Private DNS 만들기
+
+👁️ **설명**
+
+이 워크숍은 Log Analytics Shared Key를 쓰지 않고, ACA environment 자체를 Azure Monitor에 연결한 뒤 resource-based diagnostic setting으로 로그를 보냅니다. 또한 internal environment는 public ingress 이름을 바로 해석할 수 없으므로 `properties.defaultDomain`과 `properties.staticIp`를 읽어 Private DNS wildcard A record를 함께 구성해야 합니다.
+
+기본 네트워크로 만든 기존 ACA environment는 internal VNet environment로 변환할 수 없습니다. 새 workshop suffix로 environment를 다시 만들어야 합니다.
 
 🟢 **실행**
 
@@ -112,6 +169,8 @@ az containerapp env create \
   --resource-group "$RG" \
   --name "$ENV" \
   --location "$LOC" \
+  --infrastructure-subnet-resource-id "$SUBNET_ID" \
+  --internal-only true \
   --logs-destination azure-monitor \
   --output none
 
@@ -120,6 +179,42 @@ ENV_ID=$(az containerapp env show \
   --name "$ENV" \
   --query id \
   --output tsv)
+ENV_DEFAULT_DOMAIN=$(az containerapp env show \
+  --resource-group "$RG" \
+  --name "$ENV" \
+  --query properties.defaultDomain \
+  --output tsv)
+ENV_STATIC_IP=$(az containerapp env show \
+  --resource-group "$RG" \
+  --name "$ENV" \
+  --query properties.staticIp \
+  --output tsv)
+
+az network private-dns zone create \
+  --resource-group "$RG" \
+  --name "$ENV_DEFAULT_DOMAIN" \
+  --output none
+
+VNET_ID=$(az network vnet show \
+  --resource-group "$RG" \
+  --name "$VNET" \
+  --query id \
+  --output tsv)
+
+az network private-dns link vnet create \
+  --resource-group "$RG" \
+  --name "$DNS_LINK" \
+  --zone-name "$ENV_DEFAULT_DOMAIN" \
+  --virtual-network "$VNET_ID" \
+  --registration-enabled false \
+  --output none
+
+az network private-dns record-set a add-record \
+  --resource-group "$RG" \
+  --zone-name "$ENV_DEFAULT_DOMAIN" \
+  --record-set-name "*" \
+  --ipv4-address "$ENV_STATIC_IP" \
+  --output none
 
 az monitor diagnostic-settings create \
   --name aca-runner-logs \
@@ -129,12 +224,33 @@ az monitor diagnostic-settings create \
   --output none
 ```
 
+다음 CLI 검증으로 environment의 internal flag, infrastructure subnet, domain, static IP, wildcard DNS record를 확인합니다.
+
+```bash
+az containerapp env show \
+  --resource-group "$RG" \
+  --name "$ENV" \
+  --query "{internal:properties.vnetConfiguration.internal,infrastructureSubnetId:properties.vnetConfiguration.infrastructureSubnetId,defaultDomain:properties.defaultDomain,staticIp:properties.staticIp}" \
+  --output json
+
+az network private-dns record-set a show \
+  --resource-group "$RG" \
+  --zone-name "$ENV_DEFAULT_DOMAIN" \
+  --name "*" \
+  --query "aRecords[].ipv4Address" \
+  --output tsv
+```
+
 📋 **예상 출력**
 
 - `ENV_ID`가 ACA environment의 전체 resource ID로 저장됩니다.
+- `ENV_DEFAULT_DOMAIN`은 Private DNS zone 이름으로 재사용됩니다.
+- `ENV_STATIC_IP`는 wildcard A record가 가리키는 internal IP입니다.
+- 첫 번째 검증 JSON에는 `properties.vnetConfiguration.internal`에서 유도된 `internal: true`, `properties.vnetConfiguration.infrastructureSubnetId` 값, `properties.defaultDomain`, `properties.staticIp`가 함께 보여야 합니다.
+- 두 번째 검증 결과는 `ENV_STATIC_IP`와 같은 IPv4 하나를 출력해야 합니다.
 - diagnostic setting은 `aca-runner-logs` 이름으로 생성되고 `"categoryGroup":"allLogs"`가 포함됩니다.
 
-## 4. ACR 만들기와 ARM authentication 활성화
+## 5. ACR 만들기와 ARM authentication 활성화
 
 👁️ **설명**
 
@@ -180,7 +296,7 @@ az acr config authentication-as-arm show \
 - ACR JSON에는 `"adminUserEnabled": false`가 보여야 합니다.
 - ARM authentication 조회 결과는 `enabled`여야 합니다.
 
-## 5. UAMI 만들기와 `AcrPull` RBAC 연결
+## 6. UAMI 만들기와 `AcrPull` RBAC 연결
 
 👁️ **설명**
 
@@ -253,32 +369,32 @@ RBAC 전파에는 몇 분이 걸릴 수 있습니다. 다음 모듈에서 image 
 
 👁️ **설명**
 
-이 단계는 **선택 참고**입니다. 워크숍의 필수 명령은 Cloud Shell에서
-완료되며, Azure 관리 포털에서는 생성 결과를 시각적으로 확인할 수 있습니다.
+이 단계는 **선택 참고**입니다. 워크숍의 필수 명령은 Cloud Shell에서 완료되며, Azure 관리 포털에서는 생성 결과를 시각적으로 확인할 수 있습니다.
 
-Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로
-이동하면 Module 02에서 만든 다음 리소스를 한 화면에서 확인할 수 있습니다.
+Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로 이동하면 Module 02에서 만든 다음 리소스를 확인할 수 있습니다.
 
 - Azure Container Registry
 - Container Apps Environment
+- Virtual Network
+- Private DNS zone
 - Managed Identity
 - Log Analytics workspace
 
-화면의 suffix와 리소스 이름은 예시이며 참가자의 `$RG`와 실제 생성 이름은
-다를 수 있습니다.
-
-> **참고 화면:** Azure Portal의 리소스 그룹 Overview에서 Module 02가 만든
-> 리소스를 확인하는 예시입니다.
-
-![Azure Portal 리소스 그룹 Overview에서 Module 02 생성 리소스를 확인하는 화면](images/02-azure-portal-resource-group-resources.png)
+리소스 목록은 생성 순서와 필터 상태에 따라 달라질 수 있으므로, 화면 예시 대신 각 리소스 이름과 형식을 직접 확인하세요.
 
 ## 트러블슈팅
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
+| `az containerapp env create`가 provider 등록 오류를 반환함 | `Microsoft.Network` 또는 `Microsoft.ContainerService` provider가 등록되지 않음 | [모듈 01](01-prerequisites-github.md)의 provider 등록 명령을 다시 실행하고 `--wait`가 끝날 때까지 기다린 뒤 4단계 전체를 처음부터 다시 실행합니다. |
+| `az containerapp env create`가 subnet 관련 오류를 반환함 | `Microsoft.App/environments` subnet delegation이 없음 | 3단계의 `az network vnet subnet update`를 다시 실행한 뒤 `az network vnet subnet show --resource-group "$RG" --vnet-name "$VNET" --name "$INFRA_SUBNET" --query delegations[].serviceName -o tsv`로 delegation을 확인하고 4단계를 다시 실행합니다. |
+| `az containerapp env create`가 address space 또는 capacity 오류를 반환함 | `/27`보다 작은 subnet은 Workload profiles environment에 사용할 수 없음 | subnet을 `/27` 이상으로 다시 만들고, 이미 잘못된 network foundation으로 environment를 만들었다면 새 workshop suffix로 1단계부터 다시 시작합니다. |
+| 앱 FQDN이 VNet 내부에서 해석되지 않음 | Private DNS zone과 VNet link가 없으면 internal environment 기본 도메인을 해석할 수 없음 | 4단계의 `az network private-dns zone create`, `az network private-dns link vnet create`, `az network private-dns record-set a add-record`를 다시 확인하고 `az network private-dns record-set a show` 검증을 재실행합니다. |
+| custom DNS를 사용하는 네트워크에서 이름 해석이 실패함 | custom DNS를 사용 중이라면 ACA environment 기본 도메인을 Azure DNS로 forward하지 않음 | custom DNS를 사용 중이라면 `ENV_DEFAULT_DOMAIN` zone에 대한 질의를 Azure 제공 DNS `168.63.129.16`으로 forwarding한 뒤 다시 확인합니다. |
+| 기본 네트워크로 만든 기존 ACA environment를 재사용하려고 함 | 기본 네트워크로 만든 기존 ACA environment는 internal VNet environment로 변환할 수 없습니다. | 새 workshop suffix로 environment를 다시 만들어야 합니다. 기존 environment를 internal로 바꾸려 하지 말고 1단계부터 새 이름으로 다시 진행합니다. |
 | `az acr create`가 이름 중복 오류를 반환함 | `ACR` 이름은 전역 고유인데 이미 다른 구독에서 사용 중 | 아래 복구 절차에 따라 ACR 이름만 바꾸고, 바뀐 실제 `ACR` 이름을 새로 저장한 뒤 다시 시도합니다. |
-| `az acr create`가 `MissingSubscriptionRegistration`을 반환함 | 현재 구독에 `Microsoft.ContainerRegistry` provider가 등록되지 않음 | [모듈 01](01-prerequisites-github.md)의 provider 등록 명령을 다시 실행합니다. 뒤의 ACR `resource not found` 오류는 첫 실패에 따른 연쇄 오류이므로 무시하고, provider 등록이 완료되면 4단계 전체를 처음부터 다시 실행합니다. |
-| ACA environment 또는 workspace 생성이 provider 오류로 실패함 | `Microsoft.App`, `Microsoft.OperationalInsights`, `Microsoft.Insights` 등록이 끝나지 않음 | [모듈 01](01-prerequisites-github.md)의 provider 등록 명령을 다시 실행하고 `--wait`가 끝날 때까지 기다립니다. |
+| `az acr create`가 `MissingSubscriptionRegistration`을 반환함 | 현재 구독에 `Microsoft.ContainerRegistry` provider가 등록되지 않음 | [모듈 01](01-prerequisites-github.md)의 provider 등록 명령을 다시 실행합니다. 뒤의 ACR `resource not found` 오류는 첫 실패에 따른 연쇄 오류이므로 무시하고, provider 등록이 완료되면 5단계 전체를 처음부터 다시 실행합니다. |
+| ACA environment 또는 workspace 생성이 provider 오류로 실패함 | `Microsoft.App`, `Microsoft.Network`, `Microsoft.ContainerService`, `Microsoft.OperationalInsights`, `Microsoft.Insights` 등록이 끝나지 않음 | [모듈 01](01-prerequisites-github.md)의 provider 등록 명령을 다시 실행하고 `--wait`가 끝날 때까지 기다립니다. |
 | `az monitor diagnostic-settings create`가 권한 오류를 반환함 | 현재 구독/리소스 그룹에서 diagnostic setting을 만들 권한이 없음 | Contributor 이상 권한인지 확인하고, 잘못된 구독에 배포했다면 `az account show`로 현재 구독을 다시 확인합니다. |
 | role assignment는 성공했는데 image pull이 아직 실패함 | RBAC propagation 지연 | 몇 분 기다린 뒤 `az role assignment list --assignee "$UAMI_PID" --scope "$ACR_ID" --query "[].roleDefinitionName" -o tsv`로 `AcrPull`을 확인하고 다음 모듈을 재시도합니다. |
 
