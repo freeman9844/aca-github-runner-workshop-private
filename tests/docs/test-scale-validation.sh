@@ -95,11 +95,17 @@ for text in \
   '--container github-actions-runner' \
   'ContainerAppConsoleLogs' \
   'TimeGenerated > ago(2h)' \
+  'LOG_WAIT_TIMEOUT_SECONDS=600' \
+  'LOG_WAIT_INTERVAL_SECONDS=30' \
+  'LOG_WAIT_DEADLINE=$((SECONDS + LOG_WAIT_TIMEOUT_SECONDS))' \
+  '--query "[0].Count"' \
+  'Log Analytics ingestion pending' \
+  'ERROR: ContainerAppConsoleLogs가 10분 안에 수집되지 않았습니다.' \
+  'LOG_ID와 Module 02의 aca-runner-logs diagnostic setting을 확인하세요.' \
   'summarize Count=count(), LastSeen=max(TimeGenerated)' \
   'job-ghrunner-145945-xh6w5-phfkj  2058' \
   'PrimaryResult' \
   'ContainerGroupName startswith' \
-  '5~10분' \
   'job-ghrunner-$SUFFIX-' \
   '다른 Event Job이 같은 repository와 `aca-runner` label' \
   'Runner configured' \
