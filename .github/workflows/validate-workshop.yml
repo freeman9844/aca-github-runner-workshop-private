@@ -26,4 +26,13 @@ jobs:
 
       - name: Build runner image
         shell: bash
-        run: docker build --tag workshop-runner-validation ./runner
+        run: |
+          docker build --tag workshop-runner-validation ./runner
+          docker run --rm --entrypoint bash workshop-runner-validation -c '
+            set -euo pipefail
+            ! id -nG | grep -Eq "(^| )(sudo|docker)( |$)"
+            ! sudo -n true >/dev/null 2>&1
+            test "$(stat -c %U:%G /home/runner/entrypoint.sh)" = "root:root"
+            test ! -w /home/runner/entrypoint.sh
+            test "$(az extension show --name containerapp --query version --output tsv)" = "0.3.55"
+          '

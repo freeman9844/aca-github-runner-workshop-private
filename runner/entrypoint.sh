@@ -30,10 +30,11 @@ RUNNER_NAME="${RUNNER_NAME_PREFIX}-$(hostname)-${RANDOM}"
 REMOVAL_TOKEN_API_URL="${REGISTRATION_TOKEN_API_URL%/registration-token}/remove-token"
 CLEANED_UP=0
 
-# Keep the PAT inside this wrapper process so workflow steps cannot inherit it.
+# Keep the PAT only long enough to prepare short-lived runner tokens.
 github_pat="$GITHUB_PAT"
 unset GITHUB_PAT
 runner_pid=""
+removal_token=""
 
 # Exchange the PAT for a short-lived runner registration or removal token.
 github_api_token() {
@@ -57,7 +58,7 @@ github_api_token() {
 
 # Deregister the ephemeral runner when the container exits.
 cleanup() {
-  local cleanup_status=0 removal_token=""
+  local cleanup_status=0
 
   if [[ "$CLEANED_UP" == "1" ]]; then
     return 0
@@ -69,12 +70,8 @@ cleanup() {
   fi
 
   set +e
-  removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL")"
+  ./config.sh remove --token "$removal_token"
   cleanup_status=$?
-  if [[ "$cleanup_status" == "0" ]]; then
-    ./config.sh remove --token "$removal_token"
-    cleanup_status=$?
-  fi
   set -e
 
   if [[ "$cleanup_status" != "0" ]]; then
@@ -102,6 +99,10 @@ trap 'forward_signal TERM 143' TERM
 # Configure a uniquely named, single-use runner with only the custom label.
 printf 'Requesting registration token\n'
 registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
+printf 'Requesting removal token\n'
+removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL")"
+unset github_pat
+unset -f github_api_token
 
 ./config.sh \
   --url "$GH_URL" \
@@ -113,6 +114,7 @@ registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
   --ephemeral \
   --disableupdate
 
+unset registration_token
 printf 'Runner configured: %s\n' "$RUNNER_NAME"
 
 # Run one workflow job and return the runner process status to Container Apps.

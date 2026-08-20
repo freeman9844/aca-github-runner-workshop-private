@@ -86,12 +86,14 @@ az account show --query "{Name:name,SubscriptionId:id,State:state}" -o table
 
 이 워크숍은 Azure Container Apps Job, Azure Container Registry, Azure Monitor,
 Log Analytics를 사용합니다. Cloud Shell에서 필요한 extension과 resource
-provider를 먼저 준비합니다.
+provider를 먼저 준비합니다. `--upgrade`를 함께 지정해야 이전 버전의
+`containerapp` extension이 이미 설치된 Cloud Shell에서도 워크숍 기준
+버전 `0.3.55`로 실제 교체됩니다.
 
 🟢 **실행**
 
 ```bash
-az extension add --name containerapp --version 0.3.55 --only-show-errors
+az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
 az provider register -n Microsoft.App --wait
 az provider register -n Microsoft.ContainerRegistry --wait
 az provider register -n Microsoft.OperationalInsights --wait

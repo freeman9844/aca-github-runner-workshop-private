@@ -50,7 +50,7 @@ for comment in \
 done
 
 for comment in \
-  '# Keep the PAT inside this wrapper process so workflow steps cannot inherit it.' \
+  '# Keep the PAT only long enough to prepare short-lived runner tokens.' \
   '# Deregister the ephemeral runner when the container exits.'; do
   grep -F -- "$comment" "$RUNNER_ENTRYPOINT" >/dev/null ||
     fail "runner entrypoint missing explanatory comment: $comment"
@@ -186,13 +186,16 @@ for text in \
   'read -rp "Saved SUFFIX: " SUFFIX' \
   'read -rp "Saved ACR name: " ACR' \
   'SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0' \
-  'az extension add --name containerapp --version 0.3.55 --only-show-errors' \
+  'az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors' \
   'az version' \
   'az containerapp --help' \
   'GITHUB_PAT' \
   'unset'; do
   grep -F -- "$text" "$IMAGE_DOC" >/dev/null || { echo "FAIL: module 03 missing $text" >&2; exit 1; }
 done
+
+grep -F '| Docker CLI 포함, daemon 미포함 |' "$IMAGE_DOC" >/dev/null ||
+  fail "module 03 must distinguish the Docker CLI from the unavailable daemon"
 
 if grep -E "$operational_github_app_pattern" "$IMAGE_DOC" >/dev/null; then
   echo "FAIL: module 03 still describes GitHub App bootstrap" >&2

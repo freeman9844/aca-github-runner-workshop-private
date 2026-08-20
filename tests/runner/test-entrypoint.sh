@@ -177,6 +177,13 @@ grep -F 'curl endpoint=registration-token auth_type=pat' \
 grep -F 'curl endpoint=remove-token auth_type=pat' \
   "$MOCK_CALLS/events.log" >/dev/null ||
   fail "removal token request missing"
+mapfile -t token_events <"$MOCK_CALLS/events.log"
+[[ "${token_events[0]}" == "curl endpoint=registration-token auth_type=pat" ]] ||
+  fail "registration token must be requested first"
+[[ "${token_events[1]}" == "curl endpoint=remove-token auth_type=pat" ]] ||
+  fail "removal token must be requested before the runner starts"
+[[ "${token_events[2]}" == "run" ]] ||
+  fail "runner started before both GitHub tokens were prepared"
 grep -F -- "remove --token remove-token-value" "$MOCK_CALLS/config.log" >/dev/null || fail "cleanup missing"
 [[ -f "$MOCK_CALLS/run.log" ]] || fail "runner process was not started"
 [[ "$output" != *"pat-secret-value"* ]] || fail "PAT leaked to output"
@@ -230,17 +237,18 @@ grep -F -- "remove --token remove-token-value" "$MOCK_CALLS/config.log" >/dev/nu
 rm -rf "$FIXTURE" "$ROOT/tests/runner/aca-runner-entrypoint-test.log"
 
 make_fixture
-export MOCK_RUN_EXIT=17
 export MOCK_REMOVE_FAIL=1
 set +e
 output="$(run_entrypoint 2>&1)"
 status=$?
 set -e
-[[ "$status" == "17" ]] ||
-  fail "cleanup failure replaced the runner exit status"
-[[ "$output" == *"Runner cleanup failed with status 22"* ]] ||
-  fail "cleanup failure was not reported"
-unset MOCK_RUN_EXIT MOCK_REMOVE_FAIL
+[[ "$status" == "22" ]] ||
+  fail "removal-token failure must stop the runner before workflow execution"
+[[ "$output" == *"mock remove-token failure"* ]] ||
+  fail "removal-token failure was not reported"
+[[ ! -f "$MOCK_CALLS/run.log" ]] ||
+  fail "runner started without a removal token"
+unset MOCK_REMOVE_FAIL
 rm -rf "$FIXTURE"
 
 make_fixture

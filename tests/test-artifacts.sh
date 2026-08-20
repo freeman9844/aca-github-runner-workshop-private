@@ -25,7 +25,9 @@ for text in \
   'packages.microsoft.com/keys/microsoft.asc' \
   'packages.microsoft.com/repos/azure-cli/' \
   'apt-get install -y --no-install-recommends azure-cli="$AZURE_CLI_VERSION"' \
-  'az extension add --name containerapp --version 0.3.55 --only-show-errors'; do
+  'gpasswd --delete runner sudo' \
+  'COPY --chown=root:root entrypoint.sh /home/runner/entrypoint.sh' \
+  'az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors'; do
   grep -F -- "$text" "$DOCKERFILE" >/dev/null ||
     { echo "FAIL: runner image missing Azure deployment tool: $text" >&2; exit 1; }
 done
@@ -64,6 +66,10 @@ grep -F 'bash tests/validate-workshop.sh' "$CI_WORKFLOW" >/dev/null
 grep -F 'python3 -m pip install --disable-pip-version-check --quiet PyYAML==6.0.2' "$CI_WORKFLOW" >/dev/null
 grep -F 'python3 tests/test-workflow-yaml.py' "$CI_WORKFLOW" >/dev/null
 grep -F 'docker build --tag workshop-runner-validation ./runner' "$CI_WORKFLOW" >/dev/null
+grep -F 'set -euo pipefail' "$CI_WORKFLOW" >/dev/null
+grep -F '! sudo -n true >/dev/null 2>&1' "$CI_WORKFLOW" >/dev/null
+grep -F 'az extension show --name containerapp --query version --output tsv' \
+  "$CI_WORKFLOW" >/dev/null
 
 if grep -E '(^|[[:space:]])docker([[:space:]]|$)|services:' "$WORKFLOW" >/dev/null; then
   echo "FAIL: workflow must not depend on Docker" >&2

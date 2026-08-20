@@ -112,7 +112,7 @@ for text in \
   'cd ~/aca-github-runner-workshop' \
   'until [[ -n "$GITHUB_PAT" ]]' \
   'ERROR: Fine-grained PAT cannot be empty. Try again.' \
-  'az extension add --name containerapp --version 0.3.55 --only-show-errors' \
+  'az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors' \
   'az provider register -n Microsoft.App --wait' \
   'az provider register -n Microsoft.ContainerRegistry --wait' \
   'az provider register -n Microsoft.OperationalInsights --wait' \
