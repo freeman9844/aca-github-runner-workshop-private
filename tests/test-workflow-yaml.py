@@ -3,7 +3,7 @@
 from pathlib import Path
 import os
 import subprocess
-import shutil
+import tempfile
 
 import yaml
 
@@ -39,11 +39,8 @@ with (ROOT / "samples/azure-sample-deploy-workflow.yml").open(
 
 deploy_script = deploy_workflow["jobs"]["deploy-sample"]["steps"][2]["run"]
 
-temp = ROOT / ".test-scratch" / "workflow-yaml"
-shutil.rmtree(temp, ignore_errors=True)
-temp.mkdir(parents=True)
-
-try:
+with tempfile.TemporaryDirectory() as temp_dir:
+    temp = Path(temp_dir)
     bin_dir = temp / "bin"
     bin_dir.mkdir()
     mock_az = bin_dir / "az"
@@ -137,7 +134,5 @@ exit 99
     existing = run_deploy_step("existing-delete")
     if existing.returncode != 0 or "Confirmed existing Container App deletion" not in existing.stdout:
         raise SystemExit("FAIL: existing app deletion was not confirmed")
-finally:
-    shutil.rmtree(temp, ignore_errors=True)
 
 print("PASS: workflow YAML syntax and deploy behavior")
