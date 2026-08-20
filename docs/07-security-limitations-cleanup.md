@@ -25,6 +25,7 @@
 🟢 **실행**
 
 ```bash
+# 저장한 suffix에서 cleanup 대상 Resource Group 이름만 복원하고 삭제 대상을 확인합니다.
 SUFFIX="<your-saved-suffix>"
 RG="rg-acarunner-$SUFFIX"
 
@@ -141,6 +142,7 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 🟢 **실행**
 
 ```bash
+# workshop Resource Group의 비동기 삭제를 요청하고 요청이 접수된 이름을 기록합니다.
 az group delete \
   --name "$RG" \
   --yes \
@@ -166,11 +168,13 @@ printf '리소스 그룹 삭제 요청됨: %s\n' "$RG"
 🟢 **실행**
 
 ```bash
+# ResourceGroupNotFound가 반환되는지 조회해 Resource Group 삭제 완료를 확인합니다.
 az group show \
   --name "$RG" \
   --query "{name:name,state:properties.provisioningState}" \
   --output table
 
+# 같은 이름과 연관된 Azure resource가 남지 않았는지 최종 목록으로 교차 확인합니다.
 az resource list \
   --resource-group "$RG" \
   --query "[].{name:name,type:type}" \

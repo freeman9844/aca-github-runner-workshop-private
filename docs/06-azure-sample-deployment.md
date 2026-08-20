@@ -24,15 +24,19 @@
 🟢 **실행**
 
 ```bash
+# 저장한 suffix와 원래 subscription을 입력해 기존 sample deployment 대상을 복원합니다.
 read -rp "Saved SUFFIX: " SUFFIX
 read -rp "Saved subscription ID: " SUBSCRIPTION_ID
 
+# sample app, Environment와 UAMI 이름을 suffix에서 다시 구성합니다.
 RG="rg-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
 UAMI="id-acarunner-$SUFFIX"
 SAMPLE_APP="hello-aca-$SUFFIX"
 
+# identity 조회 전에 Azure CLI context를 원래 workshop subscription으로 되돌립니다.
 az account set --subscription "$SUBSCRIPTION_ID"
+# workflow의 Azure login에 사용할 UAMI client ID를 조회하고 복구 값을 확인합니다.
 UAMI_CLIENT_ID=$(az identity show \
   --resource-group "$RG" \
   --name "$UAMI" \
@@ -82,6 +86,7 @@ printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_I
 복구한 값이 현재 실습 대상과 맞는지 다시 출력해 확인합니다.
 
 ```bash
+# 현재 session의 sample app 이름과 UAMI principal·Resource Group ID를 조회합니다.
 SAMPLE_APP="hello-aca-$SUFFIX"
 UAMI_PID=$(az identity show \
   --resource-group "$RG" \
@@ -97,12 +102,14 @@ ENV_STATE=$(az containerapp env show \
   --name "$ENV" \
   --query properties.provisioningState \
   --output tsv)
+# internal Environment가 존재하는지 확인하고 현재 Container Apps Contributor 할당을 조회합니다.
 CONTAINER_APPS_ROLE=$(az role assignment list \
   --assignee "$UAMI_PID" \
   --scope "$RG_ID" \
   --query "[?roleDefinitionName=='Container Apps Contributor' && scope=='$RG_ID'].roleDefinitionName | [0]" \
   --output tsv)
 
+# deployment context와 현재 role 상태를 출력해 권한 부여 필요 여부를 결정합니다.
 printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_ID=%s\n' \
   "$RG" "$ENV" "$UAMI" "$SAMPLE_APP" "$UAMI_CLIENT_ID" "$SUBSCRIPTION_ID"
 printf 'ENV_STATE=%s\nCONTAINER_APPS_ROLE=%s\n' \
@@ -131,6 +138,7 @@ printf 'ENV_STATE=%s\nCONTAINER_APPS_ROLE=%s\n' \
 🟢 **실행**
 
 ```bash
+# 역할이 없을 때만 Resource Group 범위의 Container Apps Contributor를 생성합니다.
 if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]; then
   az role assignment create \
     --assignee-object-id "$UAMI_PID" \
@@ -143,6 +151,7 @@ else
   printf 'Container Apps Contributor 역할이 이미 할당되어 있습니다.\n'
 fi
 
+# RBAC 조회 결과가 보일 때까지 조건 기반으로 반복 확인합니다.
 for role_attempt in $(seq 1 30); do
   CONTAINER_APPS_ROLE=$(az role assignment list \
     --assignee "$UAMI_PID" \
@@ -159,11 +168,13 @@ for role_attempt in $(seq 1 30); do
   sleep 10
 done
 
+# 제한 횟수 안에 역할이 보이지 않으면 다음 deployment를 시작하지 않고 중단합니다.
 if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]; then
   printf 'ERROR: Container Apps Contributor was not visible after 30 checks.\n' >&2
   exit 1
 fi
 
+# 최종 role 값을 출력해 workflow 실행 전 권한 준비를 확인합니다.
 printf 'CONTAINER_APPS_ROLE=%s\n' "${CONTAINER_APPS_ROLE:-MISSING}"
 ```
 
@@ -185,6 +196,7 @@ printf 'CONTAINER_APPS_ROLE=%s\n' "${CONTAINER_APPS_ROLE:-MISSING}"
 먼저 Cloud Shell에서 reviewed sample을 그대로 출력합니다.
 
 ```bash
+# reviewed deployment workflow를 확인한 뒤 GitHub 웹 UI에 같은 내용을 저장합니다.
 cd ~/aca-github-runner-workshop
 sed -n '1,220p' samples/azure-sample-deploy-workflow.yml
 ```
@@ -450,6 +462,7 @@ internal ingress는 public browser나 기본 Cloud Shell 성공을 목표로 하
 Cloud Shell에서 Environment, app, Private DNS를 다시 조회합니다.
 
 ```bash
+# Environment, subnet, app ingress와 Private DNS 상태를 Azure에서 다시 조회합니다.
 ENV_INTERNAL=$(az containerapp env show \
   --name "$ENV" \
   --resource-group "$RG" \
@@ -486,6 +499,7 @@ WILDCARD_A_RECORD=$(az network private-dns record-set a show \
   --query "aRecords[0].ipv4Address" \
   --output tsv)
 
+# network·DNS 결과를 한 번에 출력해 internal ingress 계약을 비교합니다.
 printf 'environmentInternal=%s\ninfrastructureSubnetId=%s\nexternalIngress=%s\nfqdn=%s\nPrivate DNS zone=%s\nVNet link=%s\nwildcard A record=%s\n' \
   "$ENV_INTERNAL" \
   "$INFRASTRUCTURE_SUBNET_ID" \
@@ -495,6 +509,7 @@ printf 'environmentInternal=%s\ninfrastructureSubnetId=%s\nexternalIngress=%s\nf
   "$VNET_LINK" \
   "$WILDCARD_A_RECORD"
 
+# standard Cloud Shell에서 internal FQDN 접근이 실패하는 예상 격리 동작을 확인합니다.
 if curl --fail --silent --show-error --connect-timeout 5 --max-time 10 "https://$FQDN"; then
   printf 'WARNING: 기본 Cloud Shell에서 internal endpoint 응답이 왔습니다. 현재 Shell이 별도 VNet 연결인지 확인하세요.\n'
 else
