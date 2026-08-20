@@ -34,8 +34,12 @@
 🟢 **실행**
 
 ```bash
+# 참가자마다 충돌하지 않는 6자리 suffix를 만들고 모든 실습 리소스 이름의 기준으로 사용합니다.
 SUFFIX="$(openssl rand -hex 3)"
 LOC=koreacentral
+
+# 뒤 모듈이 같은 리소스를 찾을 수 있도록 suffix에서 일관된 이름을 파생합니다.
+# ACR은 전역 고유 이름 충돌 시 별도로 바꿀 수 있으므로 SUFFIX와 독립된 값으로 관리합니다.
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
@@ -46,6 +50,8 @@ ACR="acracarunner$SUFFIX"
 UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
+
+# 재접속 시 복원해야 할 핵심 이름이 올바르게 만들어졌는지 먼저 확인합니다.
 printf 'SUFFIX=%s RG=%s ACR=%s\n' "$SUFFIX" "$RG" "$ACR"
 ```
 
@@ -68,20 +74,24 @@ Log Analytics는 runner 등록/실행/정리 로그를 한곳에서 확인하는
 🟢 **실행**
 
 ```bash
+# 모든 Azure 리소스를 같은 위치와 수명 주기로 관리할 실습용 Resource Group을 만듭니다.
 az group create --name "$RG" --location "$LOC" --output none
 
+# 현재 구독과 Resource Group의 전체 ID를 저장해 이후 조회와 RBAC scope에 재사용합니다.
 SUBSCRIPTION_ID=$(az account show --query id --output tsv)
 RG_ID=$(az group show \
   --name "$RG" \
   --query id \
   --output tsv)
 
+# ACA environment의 시스템 로그를 수집할 Log Analytics workspace를 만듭니다.
 az monitor log-analytics workspace create \
   --resource-group "$RG" \
   --workspace-name "$LOG" \
   --location "$LOC" \
   --output none
 
+# customer ID는 workspace 식별에, resource ID는 diagnostic setting 연결에 사용합니다.
 LOG_ID=$(az monitor log-analytics workspace show \
   --resource-group "$RG" \
   --workspace-name "$LOG" \
@@ -93,6 +103,7 @@ LOG_RID=$(az monitor log-analytics workspace show \
   --query id \
   --output tsv)
 
+# 다음 Cloud Shell 세션에서도 같은 workshop 리소스를 복원할 수 있도록 세 값을 기록합니다.
 printf '다음 값을 저장하세요: SUFFIX=%s ACR=%s SUBSCRIPTION_ID=%s\n' \
   "$SUFFIX" "$ACR" "$SUBSCRIPTION_ID"
 ```
@@ -114,6 +125,7 @@ internal ACA environment는 environment 전용 infrastructure subnet이 필요�
 🟢 **실행**
 
 ```bash
+# internal ACA environment가 사용할 전용 주소 공간을 가진 VNet을 만듭니다.
 az network vnet create \
   --resource-group "$RG" \
   --name "$VNET" \
@@ -121,6 +133,7 @@ az network vnet create \
   --address-prefixes 10.20.0.0/16 \
   --output none
 
+# ACA infrastructure 전용 subnet을 Workload profiles 최소 크기인 /27로 분리합니다.
 az network vnet subnet create \
   --resource-group "$RG" \
   --vnet-name "$VNET" \
@@ -128,6 +141,7 @@ az network vnet subnet create \
   --address-prefixes 10.20.0.0/27 \
   --output none
 
+# ACA environment가 subnet을 관리할 수 있도록 Microsoft.App/environments에 위임합니다.
 az network vnet subnet update \
   --resource-group "$RG" \
   --vnet-name "$VNET" \
@@ -135,6 +149,7 @@ az network vnet subnet update \
   --delegations Microsoft.App/environments \
   --output none
 
+# 생성된 network resource ID를 저장해 environment 생성과 DNS VNet link에 전달합니다.
 VNET_ID=$(az network vnet show \
   --resource-group "$RG" \
   --name "$VNET" \
@@ -165,6 +180,8 @@ SUBNET_ID=$(az network vnet subnet show \
 🟢 **실행**
 
 ```bash
+# delegated subnet을 연결하고 public ingress를 차단한 internal ACA environment를 만듭니다.
+# 로그는 Shared Key 대신 Azure Monitor diagnostic setting으로 보낼 수 있게 구성합니다.
 az containerapp env create \
   --resource-group "$RG" \
   --name "$ENV" \
@@ -174,6 +191,7 @@ az containerapp env create \
   --logs-destination azure-monitor \
   --output none
 
+# environment resource ID와 internal DNS 구성에 필요한 기본 도메인·고정 IP를 조회합니다.
 ENV_ID=$(az containerapp env show \
   --resource-group "$RG" \
   --name "$ENV" \
@@ -190,17 +208,20 @@ ENV_STATIC_IP=$(az containerapp env show \
   --query properties.staticIp \
   --output tsv)
 
+# internal app FQDN을 VNet 안에서 해석할 Private DNS zone을 environment 기본 도메인으로 만듭니다.
 az network private-dns zone create \
   --resource-group "$RG" \
   --name "$ENV_DEFAULT_DOMAIN" \
   --output none
 
+# Private DNS link가 사용할 VNet의 전체 resource ID를 현재 Azure 상태에서 다시 확인합니다.
 VNET_ID=$(az network vnet show \
   --resource-group "$RG" \
   --name "$VNET" \
   --query id \
   --output tsv)
 
+# 자동 DNS 등록은 끄고, 이 workshop에서 직접 관리하는 Private DNS zone을 VNet에 연결합니다.
 az network private-dns link vnet create \
   --resource-group "$RG" \
   --name "$DNS_LINK" \
@@ -209,6 +230,7 @@ az network private-dns link vnet create \
   --registration-enabled false \
   --output none
 
+# 모든 Container App 하위 도메인이 environment internal IP를 가리키도록 wildcard A record를 추가합니다.
 az network private-dns record-set a add-record \
   --resource-group "$RG" \
   --zone-name "$ENV_DEFAULT_DOMAIN" \
@@ -216,6 +238,7 @@ az network private-dns record-set a add-record \
   --ipv4-address "$ENV_STATIC_IP" \
   --output none
 
+# ACA environment의 모든 로그 범주를 앞서 만든 Log Analytics workspace로 전송합니다.
 az monitor diagnostic-settings create \
   --name aca-runner-logs \
   --resource "$ENV_ID" \
@@ -227,12 +250,14 @@ az monitor diagnostic-settings create \
 다음 CLI 검증으로 environment의 internal flag, infrastructure subnet, domain, static IP, wildcard DNS record를 확인합니다.
 
 ```bash
+# environment가 internal mode와 올바른 delegated subnet으로 생성되었는지 핵심 속성을 한 번에 확인합니다.
 az containerapp env show \
   --resource-group "$RG" \
   --name "$ENV" \
   --query "{internal:properties.vnetConfiguration.internal,infrastructureSubnetId:properties.vnetConfiguration.infrastructureSubnetId,defaultDomain:properties.defaultDomain,staticIp:properties.staticIp}" \
   --output json
 
+# wildcard DNS record가 environment의 실제 static IP를 반환하는지 확인합니다.
 az network private-dns record-set a show \
   --resource-group "$RG" \
   --zone-name "$ENV_DEFAULT_DOMAIN" \
@@ -259,6 +284,7 @@ runner image는 ACR에 저장하고, Job은 관리자 계정이 아니라 UAMI +
 🟢 **실행**
 
 ```bash
+# runner image를 저장할 ACR을 만들되 장기 관리자 자격 증명은 생성하지 않습니다.
 az acr create \
   --resource-group "$RG" \
   --name "$ACR" \
@@ -267,11 +293,13 @@ az acr create \
   --admin-enabled false \
   --output none
 
+# ACA의 managed identity가 ARM 토큰으로 ACR 인증을 수행할 수 있게 활성화합니다.
 az acr config authentication-as-arm update \
   --registry "$ACR" \
   --status enabled \
   --output none
 
+# image 주소 구성과 최소 범위 RBAC 할당에 사용할 ACR endpoint와 resource ID를 저장합니다.
 ACR_SERVER=$(az acr show --name "$ACR" --query loginServer --output tsv)
 ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
 ```
@@ -279,11 +307,13 @@ ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
 ACR의 관리자 계정과 ARM authentication 상태를 확인합니다.
 
 ```bash
+# ACR login server와 관리자 계정 비활성화 상태를 확인합니다.
 az acr show \
   --name "$ACR" \
   --query "{loginServer:loginServer,adminUserEnabled:adminUserEnabled}" \
   --output json
 
+# managed identity 기반 image pull에 필요한 ARM authentication이 활성화되었는지 확인합니다.
 az acr config authentication-as-arm show \
   --registry "$ACR" \
   --query status \
@@ -305,11 +335,13 @@ Azure Container Apps Job은 이 UAMI를 통해 ACR 이미지를 pull하고, 이�
 🟢 **실행**
 
 ```bash
+# runner Job과 workflow가 함께 사용할 User-Assigned Managed Identity를 만듭니다.
 az identity create \
   --resource-group "$RG" \
   --name "$UAMI" \
   --output none
 
+# resource ID는 Job 연결, principal ID는 RBAC, client ID는 Azure login 식별에 각각 사용합니다.
 UAMI_RID=$(az identity show \
   --resource-group "$RG" \
   --name "$UAMI" \
@@ -332,6 +364,7 @@ UAMI_CLIENT_ID=$(az identity show \
 Contributor만으로는 Azure RBAC 역할을 할당할 수 없습니다. 아래 `az role assignment create`를 실행하려면 ACR 범위 이상에서 `Microsoft.Authorization/roleAssignments/write`가 필요합니다. 일반적으로 `Role Based Access Control Administrator`, `User Access Administrator`, `Owner` 중 하나가 해당합니다.
 
 ```bash
+# image pull에 필요한 AcrPull만 ACR resource 범위로 제한해 부여합니다.
 az role assignment create \
   --assignee-object-id "$UAMI_PID" \
   --assignee-principal-type ServicePrincipal \
@@ -339,6 +372,7 @@ az role assignment create \
   --scope "$ACR_ID" \
   --output none
 
+# workflow의 샘플 Container App 관리를 위해 Resource Group 범위 권한을 부여합니다.
 az role assignment create \
   --assignee-object-id "$UAMI_PID" \
   --assignee-principal-type ServicePrincipal \
@@ -346,6 +380,7 @@ az role assignment create \
   --scope "$RG_ID" \
   --output none
 
+# 두 역할이 의도한 각 scope에 ServicePrincipal 대상으로 할당되었는지 함께 확인합니다.
 az role assignment list \
   --assignee "$UAMI_PID" \
   --query "[?scope=='$ACR_ID' || scope=='$RG_ID'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \
@@ -404,6 +439,7 @@ Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로 �
 ACR 이름만 새 전역 고유 값으로 변경한 뒤 `az acr create`부터 다시 실행합니다.
 
 ```bash
+# 기존 Azure 리소스는 유지하고 충돌한 ACR 이름만 더 긴 무작위 suffix로 교체합니다.
 ACR="acracarunner$(openssl rand -hex 4)"
 printf 'ACR=%s\n' "$ACR"
 ```
