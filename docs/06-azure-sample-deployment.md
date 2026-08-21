@@ -1,16 +1,16 @@
-# 06. Azure 샘플 배포와 결과 확인
+# 06. Private Blob 배포와 결과 확인
 
-> 필수 모듈입니다. Azure Cloud Shell Bash, GitHub 웹 UI, Azure Portal을 함께 사용해 trusted single-job workflow로 샘플 Container App을 배포하고, 같은 ACA Environment 내부의 runner에서만 internal ingress HTTPS가 성공함을 검증합니다. `private repository`와 `trusted workflow authors` 경계를 유지한 채, 기존 ACA runner trusted-workflow boundary 안에서만 Azure 배포 검증을 추가합니다.
+> 필수 모듈입니다. Azure Cloud Shell Bash, GitHub 웹 UI, Azure Portal을 함께 사용해 trusted single-job workflow로 private Blob artifact를 업로드·다운로드하고, managed identity와 Private Endpoint 경로가 실제로 사용됐는지 검증합니다. `private repository`와 `trusted workflow authors` 경계를 유지한 채 runner Job의 public outbound와 Blob data-plane private path를 분리해 증명합니다.
 
 ## 목표
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
-- `samples/azure-sample-deploy-workflow.yml`을 Cloud Shell에서 확인한 뒤 GitHub 웹 UI로 workflow를 만든다.
-- `UAMI_CLIENT_ID`와 `SUBSCRIPTION_ID`가 식별자이며, runner 환경에서는 각각 `AZURE_CLIENT_ID`와 `AZURE_SUBSCRIPTION_ID`로 전달된다는 점을 설명할 수 있다.
-- GitHub Actions에서 managed identity login, internal ingress sample deployment, runner-internal HTTPS success를 확인한다.
-- 기본 Cloud Shell과 Azure Portal에서 internal Environment, `externalIngress=false`, Private DNS 격리를 교차 확인한다.
-- managed identity login, RBAC assignment 확인과 권한 전파 지연, internal HTTP warm-up failure 시 안전한 복구 경로를 적용한다.
+- `samples/azure-sample-deploy-workflow.yml`을 Cloud Shell에서 검토한 뒤 GitHub 웹 UI에 workflow를 만든다.
+- Event Job이 전달한 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR`가 어떤 의미인지 설명할 수 있다.
+- GitHub Actions에서 managed identity login, private DNS 확인, `az storage blob upload`, `az storage blob download`, `sha256sum` 검증 흐름을 확인한다.
+- `privatelink.blob.core.windows.net`과 configured CIDR을 기준으로 private IP 증거를 해석한다.
+- Cloud Shell과 Azure Portal에서 Storage network rules, Private Endpoint approval, DNS A record, role assignment를 control-plane으로 교차 확인한다.
 
 ## 0. 세션 재연결 시 변수 복구 (선택)
 
@@ -19,46 +19,77 @@
 
 👁️ **설명**
 
-같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼다면 **원래 저장해 둔 SUFFIX와 subscription ID**를 다시 입력해 Module 02~04에서 사용한 변수명 그대로 Event Job 환경과 이 모듈의 샘플 앱 이름을 복구하세요. Cloud Shell이 다른 subscription을 기본값으로 잡고 돌아올 수 있으므로, Azure resource query 전에 workshop subscription context를 먼저 되돌려야 합니다. 새 suffix를 만들면 기존 trusted runner와 다른 리소스를 보게 됩니다.
+같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼다면 Module 02~04에서 저장해 둔 `SUFFIX`, 실제 `ACR` 이름, 원래 subscription ID를 다시 입력해 private Blob 검증에 필요한 Azure 식별자를 복구합니다. 여기서 다루는 값은 식별자이며 secret이 아닙니다. 실제 Azure 인증은 이후 GitHub Actions runner 안에서 managed identity로만 수행합니다.
 
 🟢 **실행**
 
 ```bash
-# 저장한 suffix와 원래 subscription을 입력해 기존 sample deployment 대상을 복원합니다.
+# 저장한 suffix, 실제 ACR 이름, 원래 workshop subscription ID를 다시 입력합니다.
 read -rp "Saved SUFFIX: " SUFFIX
+read -rp "Saved ACR name: " ACR
 read -rp "Saved subscription ID: " SUBSCRIPTION_ID
 
-# sample app, Environment와 UAMI 이름을 suffix에서 다시 구성합니다.
+# suffix 기반 이름과 private Blob foundation 값을 다시 구성합니다.
+LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
+VNET="vnet-acarunner-$SUFFIX"
+PE_SUBNET="snet-private-endpoints"
+STORAGE="stacarunner$SUFFIX"
+STORAGE_CONTAINER="runner-artifacts"
+STORAGE_PE="pe-blob-$SUFFIX"
+STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
+STORAGE_DNS_LINK="link-blob-$SUFFIX"
+PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 UAMI="id-acarunner-$SUFFIX"
-SAMPLE_APP="hello-aca-$SUFFIX"
 
-# identity 조회 전에 Azure CLI context를 원래 workshop subscription으로 되돌립니다.
+# Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+read -rp "Saved Storage account name if changed (press Enter to keep ${STORAGE}): " SAVED_STORAGE
+if [[ -n "$SAVED_STORAGE" ]]; then
+  STORAGE="$SAVED_STORAGE"
+fi
+unset SAVED_STORAGE
+
+# Azure CLI context를 원래 workshop subscription으로 되돌린 뒤 식별자를 조회합니다.
 az account set --subscription "$SUBSCRIPTION_ID"
-# workflow의 Azure login에 사용할 UAMI client ID를 조회하고 복구 값을 확인합니다.
+STORAGE_ID=$(az storage account show \
+  --resource-group "$RG" \
+  --name "$STORAGE" \
+  --query id \
+  --output tsv)
+UAMI_PID=$(az identity show \
+  --resource-group "$RG" \
+  --name "$UAMI" \
+  --query principalId \
+  --output tsv)
 UAMI_CLIENT_ID=$(az identity show \
   --resource-group "$RG" \
   --name "$UAMI" \
   --query clientId \
   --output tsv)
+PE_SUBNET_ID=$(az network vnet subnet show \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$PE_SUBNET" \
+  --query id \
+  --output tsv)
 
-printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_ID=%s\n' \
-  "$RG" "$ENV" "$UAMI" "$SAMPLE_APP" "$UAMI_CLIENT_ID" "$SUBSCRIPTION_ID"
+export SUFFIX LOC RG ENV VNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK PRIVATE_ENDPOINT_CIDR ACR UAMI SUBSCRIPTION_ID STORAGE_ID UAMI_PID UAMI_CLIENT_ID PE_SUBNET_ID
+printf 'RG=%s\nENV=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID=%s\nPRIVATE_ENDPOINT_CIDR=%s\n' \
+  "$RG" "$ENV" "$STORAGE" "$STORAGE_CONTAINER" "$UAMI" "$UAMI_CLIENT_ID" "$PRIVATE_ENDPOINT_CIDR"
 ```
 
 📋 **예상 출력**
 
-- `RG`, `ENV`, `UAMI`, `SAMPLE_APP`은 원래 실습에서 만든 이름으로 다시 채워집니다.
-- `SUBSCRIPTION_ID`는 현재 Cloud Shell 기본값이 아니라, **원래 저장해 둔 workshop subscription ID** 그대로 유지됩니다.
-- `UAMI_CLIENT_ID`, `SUBSCRIPTION_ID`는 Module 02~04와 같은 Cloud Shell 변수명입니다.
-- `az identity show`가 실패하면 SUFFIX 오타, 저장한 subscription ID 오타, 또는 Module 02/04 리소스 이름 기록 오류를 먼저 확인합니다.
+- `STORAGE`, `STORAGE_CONTAINER`, `UAMI_CLIENT_ID`, `PRIVATE_ENDPOINT_CIDR`가 비어 있지 않아야 합니다.
+- `STORAGE`가 Module 02에서 실제로 만든 Storage account 이름과 같아야 합니다. 이름 충돌 복구를 했다면 저장해 둔 실제 값이 출력되어야 합니다.
+- `SUBSCRIPTION_ID`는 현재 Cloud Shell 기본값이 아니라 원래 workshop subscription ID여야 합니다.
 
 ⚠️ **주의**
 
-- 여기서 복구하는 값은 식별자이며 secret이 아닙니다. 그래도 화면 공유 중이라면 불필요한 노출을 줄이기 위해 현재 탭만 사용하세요.
-- 이후 `az containerapp show` 같은 Azure resource query도 모두 방금 복구한 `SUBSCRIPTION_ID` context를 기준으로 실행해야 합니다.
-- Cloud Shell에 새로운 repository write credential이나 Azure client secret을 추가하지 마세요.
+- 새 suffix를 만들지 마세요. 기존 Event Job이 전달하는 `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR` 계약과 달라집니다.
+- Cloud Shell이나 GitHub secret에 Storage key, SAS, client secret을 추가하지 마세요. 이 모듈의 Blob data 명령은 모두 `--auth-mode login`만 사용합니다.
+- 이후 control-plane 조회도 모두 방금 복구한 `SUBSCRIPTION_ID` context를 기준으로 실행합니다.
 
 </details>
 
@@ -71,162 +102,105 @@ printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_I
 | 📋 **예상 출력** | 실행 결과와 비교할 기준 출력 |
 | ⚠️ **주의** | 보안, 권한, 복구 관련 안내 |
 
-## 1. 배포 권한 확인과 Container Apps Contributor 부여
+## 1. Storage data-plane 권한과 private endpoint 상태 확인
 
 👁️ **설명**
 
-이 모듈은 Module 04의 Event Job과 user-assigned managed identity를 그대로 재사용합니다. Cloud Shell의 공통 값은 Module 02~04와 동일하게 `UAMI_CLIENT_ID`, `SUBSCRIPTION_ID`, `RG`, `ENV`를 사용하고, 이 모듈에서만 조회할 샘플 앱 이름은 `SAMPLE_APP`으로 둡니다. Module 04에서 Event Job을 만들 때 대응 값들은 runner 환경 변수 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_CONTAINERAPPS_ENVIRONMENT`, `AZURE_SAMPLE_APP`으로 전달되었습니다. Azure에 실제로 인증하는 credentials는 runner에 연결된 managed identity뿐이므로 GitHub secret이나 Cloud Shell 환경 변수에 client secret을 추가하지 않습니다.
+Module 04의 Event Job은 이미 runner에 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR`를 전달합니다. 이 모듈은 그 입력을 그대로 사용해 Blob data-plane proof만 수행합니다. 따라서 여기서 확인할 핵심은 세 가지입니다.
 
-샘플 배포를 위해 runner managed identity에는 workshop resource group 범위의 `Container Apps Contributor`가 필요합니다. 이 role은 샘플 `Container App` 생성·조회·삭제에 충분하며, **Container Apps Job 권한은 포함하지 않습니다.** Event Job 생성/수정 권한을 넓히지 않는 이유는 기존 trusted runner 경계를 유지하기 위해서입니다.
-
-또한 이 모듈은 `private repository`에서만 진행하고, `.github/workflows/aca-runner-azure-deploy.yml`을 저장할 사람은 `trusted workflow authors`로 제한해야 합니다. repository write는 GitHub 브라우저 세션에서만 수행하고, Cloud Shell에는 추가 git push credential을 두지 않습니다.
+1. runner UAMI가 Storage account 범위의 `Storage Blob Data Contributor`를 가지고 있는지,
+2. Storage public access가 막혀 있고 shared-key access가 꺼져 있는지,
+3. Blob Private Endpoint와 `privatelink.blob.core.windows.net`이 준비되어 있는지입니다.
 
 🟢 **실행**
 
-복구한 값이 현재 실습 대상과 맞는지 다시 출력해 확인합니다.
-
 ```bash
-# 현재 session의 sample app 이름과 UAMI principal·Resource Group ID를 조회합니다.
-SAMPLE_APP="hello-aca-$SUFFIX"
-UAMI_PID=$(az identity show \
+# Storage network rule, shared-key 차단, Private Endpoint 상태를 control-plane에서 미리 확인합니다.
+az storage account show \
   --resource-group "$RG" \
-  --name "$UAMI" \
-  --query principalId \
-  --output tsv)
-RG_ID=$(az group show \
-  --name "$RG" \
-  --query id \
-  --output tsv)
-ENV_STATE=$(az containerapp env show \
+  --name "$STORAGE" \
+  --query "{name:name,defaultAction:networkRuleSet.defaultAction,publicNetworkAccess:publicNetworkAccess,allowBlobPublicAccess:allowBlobPublicAccess,allowSharedKeyAccess:allowSharedKeyAccess}" \
+  --output table
+
+# Blob Private Endpoint 연결 상태와 private IP를 조회합니다.
+az storage account show \
   --resource-group "$RG" \
-  --name "$ENV" \
-  --query properties.provisioningState \
-  --output tsv)
-# internal Environment가 존재하는지 확인하고 현재 Container Apps Contributor 할당을 조회합니다.
-CONTAINER_APPS_ROLE=$(az role assignment list \
-  --assignee "$UAMI_PID" \
-  --scope "$RG_ID" \
-  --query "[?roleDefinitionName=='Container Apps Contributor' && scope=='$RG_ID'].roleDefinitionName | [0]" \
+  --name "$STORAGE" \
+  --query "privateEndpointConnections[].{name:name,status:properties.privateLinkServiceConnectionState.status}" \
+  --output table
+PRIVATE_IP=$(az network private-dns record-set a show \
+  --resource-group "$RG" \
+  --zone-name "$STORAGE_DNS_ZONE" \
+  --name "$STORAGE" \
+  --query "aRecords[0].ipv4Address" \
   --output tsv)
 
-# deployment context와 현재 role 상태를 출력해 권한 부여 필요 여부를 결정합니다.
-printf 'RG=%s\nENV=%s\nUAMI=%s\nSAMPLE_APP=%s\nUAMI_CLIENT_ID=%s\nSUBSCRIPTION_ID=%s\n' \
-  "$RG" "$ENV" "$UAMI" "$SAMPLE_APP" "$UAMI_CLIENT_ID" "$SUBSCRIPTION_ID"
-printf 'ENV_STATE=%s\nCONTAINER_APPS_ROLE=%s\n' \
-  "$ENV_STATE" "${CONTAINER_APPS_ROLE:-MISSING}"
+# runner UAMI가 Storage Blob Data Contributor를 정확히 Storage account scope에서 갖는지 확인합니다.
+az role assignment list \
+  --assignee "$UAMI_PID" \
+  --scope "$STORAGE_ID" \
+  --query "[?roleDefinitionName=='Storage Blob Data Contributor'].{role:roleDefinitionName,scope:scope}" \
+  --output table
+
+printf 'Expected private IP from DNS zone: %s\n' "$PRIVATE_IP"
+printf 'Workflow inputs: AZURE_STORAGE_ACCOUNT=%s AZURE_STORAGE_CONTAINER=%s AZURE_PRIVATE_ENDPOINT_CIDR=%s\n' \
+  "$STORAGE" "$STORAGE_CONTAINER" "$PRIVATE_ENDPOINT_CIDR"
 ```
 
 📋 **예상 출력**
 
-- 모든 값이 비어 있지 않아야 합니다.
-- `UAMI_CLIENT_ID`와 `SUBSCRIPTION_ID`는 표시되어도 되는 식별자지만, PAT나 client secret 같은 credentials는 출력하지 않습니다.
-- `ENV_STATE=Succeeded`가 보여야 실제 ACA Environment가 현재 subscription/RG에 존재하는 것입니다.
-- `CONTAINER_APPS_ROLE=Container Apps Contributor`가 보이면 runner UAMI가 샘플 Container App을 배포할 준비가 된 상태입니다.
-- `CONTAINER_APPS_ROLE=MISSING`이면 아래 권한 부여 절차를 실행해야 합니다.
-- 이후 GitHub Actions에서 사용하는 Azure 로그인 명령은 `az login --identity --client-id` 한 줄뿐이어야 합니다.
-
-### Container Apps Contributor 권한 부여
-
-👁️ **설명**
-
-`CONTAINER_APPS_ROLE=MISSING`일 때만 아래 블록이 Module 02와 동일하게 runner UAMI에 workshop resource group 범위의 `Container Apps Contributor`를 할당합니다. 이미 역할이 있으면 새 역할을 만들지 않고 현재 상태만 출력합니다.
+- `defaultAction`은 `Deny`여야 합니다.
+- `allowBlobPublicAccess`는 `False`, `allowSharedKeyAccess`는 `False`여야 합니다.
+- Private Endpoint connection 상태는 `Approved`여야 합니다.
+- role assignment 표에는 `Storage Blob Data Contributor`가 정확히 `$STORAGE_ID` scope로 표시되어야 합니다.
+- `Expected private IP from DNS zone:` 값은 이후 workflow에서 보고하는 private IP와 같아야 합니다.
 
 ⚠️ **주의**
 
-`az role assignment create`에는 `Microsoft.Authorization/roleAssignments/write` 권한이 필요합니다. `AuthorizationFailed`가 발생하면 `Role Based Access Control Administrator`, `User Access Administrator`, `Owner` 중 하나를 가진 계정으로 역할을 할당해야 합니다. 권한 범위를 넓히지 말고 workshop resource group의 `Container Apps Contributor`만 복구하세요.
+- 여기서 role이 보이지 않으면 Task 2 foundation이 incomplete한 상태입니다. 범위를 넓히지 말고 Module 02의 Storage scope role assignment 절차를 다시 확인하세요.
+- `defaultAction=Deny`와 `allowSharedKeyAccess=False`는 data-plane을 private endpoint + managed identity 경로로 고정하기 위한 조건입니다.
 
-🟢 **실행**
-
-```bash
-# 역할이 없을 때만 Resource Group 범위의 Container Apps Contributor를 생성합니다.
-if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]; then
-  az role assignment create \
-    --assignee-object-id "$UAMI_PID" \
-    --assignee-principal-type ServicePrincipal \
-    --role "Container Apps Contributor" \
-    --scope "$RG_ID" \
-    --output none
-  printf '역할 할당 요청 완료. Azure control plane 조회에 표시될 때까지 확인합니다.\n'
-else
-  printf 'Container Apps Contributor 역할이 이미 할당되어 있습니다.\n'
-fi
-
-# RBAC 조회 결과가 보일 때까지 조건 기반으로 반복 확인합니다.
-for role_attempt in $(seq 1 30); do
-  CONTAINER_APPS_ROLE=$(az role assignment list \
-    --assignee "$UAMI_PID" \
-    --scope "$RG_ID" \
-    --query "[?roleDefinitionName=='Container Apps Contributor' && scope=='$RG_ID'].roleDefinitionName | [0]" \
-    --output tsv)
-
-  if [[ "$CONTAINER_APPS_ROLE" == "Container Apps Contributor" ]]; then
-    break
-  fi
-
-  printf 'Waiting for Container Apps Contributor assignment visibility (attempt %s/30).\n' \
-    "$role_attempt" >&2
-  sleep 10
-done
-
-# 제한 횟수 안에 역할이 보이지 않으면 다음 deployment를 시작하지 않고 중단합니다.
-if [[ "$CONTAINER_APPS_ROLE" != "Container Apps Contributor" ]]; then
-  printf 'ERROR: Container Apps Contributor was not visible after 30 checks.\n' >&2
-  exit 1
-fi
-
-# 최종 role 값을 출력해 workflow 실행 전 권한 준비를 확인합니다.
-printf 'CONTAINER_APPS_ROLE=%s\n' "${CONTAINER_APPS_ROLE:-MISSING}"
-```
-
-📋 **예상 출력**
-
-- 기존 역할이 있으면 `Container Apps Contributor 역할이 이미 할당되어 있습니다.`가 출력됩니다.
-- 새 역할을 할당했다면 역할 assignment가 Azure control plane 조회에 표시될 때까지 최대 5분 동안 자동으로 재조회합니다.
-- 이 조회는 role assignment 존재 여부를 확인하며 실제 managed identity 권한 전파 완료를 보장하지 않습니다.
-- 최종적으로 `CONTAINER_APPS_ROLE=Container Apps Contributor`가 확인되면 2단계로 이동합니다. 이후 workflow에서 `AuthorizationFailed`가 발생하면 역할 범위를 넓히지 말고 1~5분 기다린 뒤 다시 실행합니다.
-
-## 2. 샘플 workflow를 GitHub에 생성
+## 2. Private Blob workflow를 GitHub에 생성
 
 👁️ **설명**
 
-이 단계는 배포용 sample을 그대로 읽고 GitHub 웹 UI에 반영하는 단계입니다. 브라우저 기반 workflow 생성으로 repository-write activity를 분리하면, Module 04에서 만든 runner secret/PAT 흐름을 Azure queue 감시와 runner bootstrap 용도로만 유지할 수 있습니다.
+이 단계는 reviewed sample을 그대로 GitHub 기본 브랜치 workflow로 반영하는 단계입니다. repository write는 GitHub 브라우저 세션에서만 수행하고, Cloud Shell에는 추가 git push credential을 두지 않습니다. 저장 경로는 반드시 `.github/workflows/aca-runner-private-blob.yml`이어야 하며, 이 파일을 수정할 사람은 `trusted workflow authors`로 제한해야 합니다.
 
 🟢 **실행**
 
-먼저 Cloud Shell에서 reviewed sample을 그대로 출력합니다.
+먼저 Cloud Shell에서 checked-in sample을 그대로 출력합니다.
 
 ```bash
-# reviewed deployment workflow를 확인한 뒤 GitHub 웹 UI에 같은 내용을 저장합니다.
 cd ~/aca-github-runner-workshop
 sed -n '1,220p' samples/azure-sample-deploy-workflow.yml
 ```
 
 이제 GitHub 웹 UI에서 아래 순서로 진행합니다.
 
-1. `.github/workflows/aca-runner-azure-deploy.yml`이 없으면 **Add file → Create new file**을 선택합니다.
-2. 이미 있으면 파일을 연 뒤 **Edit this file**을 선택합니다.
-3. 두 경우 모두 기존 내용을 일부만 수정하지 말고, 방금 Cloud Shell에 출력한 `samples/azure-sample-deploy-workflow.yml` 전체 내용으로 교체합니다.
-4. 아래 `aca-runner-azure-deploy.yml` 전체 내용을 펼쳐 다시 확인한 뒤 기본 브랜치에 commit합니다.
+1. `.github/workflows/aca-runner-private-blob.yml`이 없으면 **Add file → Create new file**를 선택합니다.
+2. 이미 있으면 파일을 연 뒤 **Edit this file**를 선택합니다.
+3. 기존 내용을 일부만 수정하지 말고, 방금 Cloud Shell에 출력한 `samples/azure-sample-deploy-workflow.yml` 전체 내용으로 교체합니다.
+4. workflow name이 **ACA Runner Private Blob Deploy**인지 확인하고 기본 브랜치에 commit합니다.
+5. 이 repository가 `private repository`인지, 그리고 workflow 편집 권한이 `trusted workflow authors`에게만 있는지 다시 확인합니다.
 
 <details>
-<summary>aca-runner-azure-deploy.yml 전체 내용 보기</summary>
+<summary>aca-runner-private-blob.yml 전체 내용 보기</summary>
 
 ```yaml
-name: ACA Runner Azure Sample Deploy
+name: ACA Runner Private Blob Deploy
 
-# 신뢰할 수 있는 워크숍 참가자가 수동으로 실행할 때만 시작합니다.
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  deploy-sample:
-    name: Deploy sample Container App
-    # 임시 ACA runner에 설정한 사용자 지정 label을 사용합니다.
+  deploy-private-blob:
     runs-on: [aca-runner]
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      # Azure 작업 전에 runner 환경 변수 계약이 완전한지 확인합니다.
-      - name: Validate Azure deployment context
+      - name: Validate runner inputs
         shell: bash
         run: |
           set -euo pipefail
@@ -234,321 +208,292 @@ jobs:
             AZURE_CLIENT_ID \
             AZURE_SUBSCRIPTION_ID \
             AZURE_RESOURCE_GROUP \
-            AZURE_CONTAINERAPPS_ENVIRONMENT \
-            AZURE_SAMPLE_APP; do
+            AZURE_STORAGE_ACCOUNT \
+            AZURE_STORAGE_CONTAINER \
+            AZURE_PRIVATE_ENDPOINT_CIDR; do
             if [[ -z "${!variable:-}" ]]; then
               printf 'ERROR: %s is required.\n' "$variable" >&2
               exit 1
             fi
           done
 
-      # client secret 없이 runner managed identity로 Azure에 로그인합니다.
-      - name: Sign in with the runner managed identity
+      - name: Sign in to Azure with managed identity
         shell: bash
         run: |
           set -euo pipefail
-          az login --identity --client-id "$AZURE_CLIENT_ID" --output none
+          # The runner UAMI needs Storage Blob Data Contributor on the Storage account.
+          az login --identity \
+            --client-id "$AZURE_CLIENT_ID" \
+            --allow-no-subscriptions \
+            --output none
           az account set --subscription "$AZURE_SUBSCRIPTION_ID"
           az account show \
-            --query "{subscription:name,subscriptionId:id,tenantId:tenantId}" \
+            --query "{subscription:name,subscriptionId:id,user:user.name,type:user.type}" \
             --output table
 
-      # 반복 실습도 동일한 상태에서 시작하도록 샘플 앱을 다시 생성합니다.
-      - name: Deploy the sample Container App
+      - name: Verify Blob DNS resolves to the private endpoint subnet
         shell: bash
         run: |
           set -euo pipefail
-          APP_SHOW_ERROR="${GITHUB_WORKSPACE:-$PWD}/.containerapp-show-error.log"
-          : > "$APP_SHOW_ERROR"
-          trap 'rm -f "$APP_SHOW_ERROR"' EXIT
+          # Blob private DNS is provided by privatelink.blob.core.windows.net.
+          STORAGE_BLOB_HOSTNAME="${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net"
+          mapfile -t RESOLVED_IPS < <(
+            getent ahostsv4 "$STORAGE_BLOB_HOSTNAME" |
+              awk '{print $1}' |
+              sort -u
+          )
 
-          container_app_exists() {
-            : > "$APP_SHOW_ERROR"
-            if az containerapp show \
-              --name "$AZURE_SAMPLE_APP" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --output none 2>"$APP_SHOW_ERROR"; then
-              return 0
-            fi
-
-            if grep -Eq 'ResourceNotFound|ContainerAppNotFound' "$APP_SHOW_ERROR"; then
-              return 1
-            fi
-
-            cat "$APP_SHOW_ERROR" >&2
-            printf 'ERROR: Failed to inspect Container App %s.\n' \
-              "$AZURE_SAMPLE_APP" >&2
-            return 2
-          }
-
-          if container_app_exists; then
-            printf 'Existing Container App found; deleting %s.\n' "$AZURE_SAMPLE_APP"
-            az containerapp delete \
-              --name "$AZURE_SAMPLE_APP" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --yes \
-              --output none
-
-            deleted=false
-            for delete_attempt in $(seq 1 24); do
-              if container_app_exists; then
-                printf 'Waiting for Container App deletion (attempt %s/24).\n' \
-                  "$delete_attempt" >&2
-                sleep 5
-                continue
-              else
-                inspect_status=$?
-              fi
-
-              if [[ "$inspect_status" == "1" ]]; then
-                printf 'Confirmed existing Container App deletion after %s checks.\n' \
-                  "$delete_attempt"
-                deleted=true
-                break
-              fi
-
-              exit "$inspect_status"
-            done
-
-            if [[ "$deleted" != "true" ]]; then
-              printf 'ERROR: Timed out waiting for Container App deletion after 24 checks.\n' \
-                >&2
-              exit 1
-            fi
-          else
-            inspect_status=$?
-            if [[ "$inspect_status" == "1" ]]; then
-              printf 'No existing Container App named %s found.\n' "$AZURE_SAMPLE_APP"
-            else
-              exit "$inspect_status"
-            fi
-          fi
-
-          FQDN="$(az containerapp create \
-            --name "$AZURE_SAMPLE_APP" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --environment "$AZURE_CONTAINERAPPS_ENVIRONMENT" \
-            --image mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c \
-            --ingress internal \
-            --target-port 80 \
-            --min-replicas 0 \
-            --max-replicas 1 \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv)"
-
-          if [[ -z "$FQDN" ]]; then
-            printf 'ERROR: Azure did not return a Container App FQDN.\n' >&2
+          if [[ "${#RESOLVED_IPS[@]}" -eq 0 ]]; then
+            printf 'ERROR: %s did not resolve to an IPv4 address.\n' "$STORAGE_BLOB_HOSTNAME" >&2
             exit 1
           fi
 
-          # 생성된 endpoint를 이후 workflow step과 공유합니다.
-          APP_URL="https://$FQDN"
-          printf 'APP_URL=%s\n' "$APP_URL" >> "$GITHUB_ENV"
+          PRIVATE_IP="$(python3 -c 'import ipaddress, sys; network = ipaddress.ip_network(sys.argv[1], strict=True); matches = [str(ipaddress.ip_address(value)) for value in sys.argv[2:] if ipaddress.ip_address(value) in network]; print(matches[0]) if matches else sys.exit(1)' "$AZURE_PRIVATE_ENDPOINT_CIDR" "${RESOLVED_IPS[@]}")" || {
+            printf 'ERROR: %s resolved outside private endpoint CIDR %s: %s\n' \
+              "$STORAGE_BLOB_HOSTNAME" \
+              "$AZURE_PRIVATE_ENDPOINT_CIDR" \
+              "${RESOLVED_IPS[*]}" >&2
+            exit 1
+          }
 
-      # 프로비저닝 후 internal ingress HTTPS가 runner에서 준비될 때까지 시간이 걸릴 수 있습니다.
-      - name: Verify the internal HTTPS endpoint from the runner
+          printf 'STORAGE_BLOB_HOSTNAME=%s\n' "$STORAGE_BLOB_HOSTNAME" >> "$GITHUB_ENV"
+          printf 'STORAGE_PRIVATE_IP=%s\n' "$PRIVATE_IP" >> "$GITHUB_ENV"
+          printf 'Resolved %s to private IP %s.\n' \
+            "$STORAGE_BLOB_HOSTNAME" "$PRIVATE_IP"
+
+      - name: Upload and download the private Blob artifact
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 18); do
-            if response="$(curl --fail --silent --show-error "$APP_URL")"; then
-              printf 'Verified internal endpoint %s\n' "$APP_URL"
-              printf '%s\n' "$response" | sed -n '1,12p'
-              exit 0
-            fi
-            printf 'Endpoint not ready (attempt %s/18); retrying in 5 seconds.\n' \
-              "$attempt" >&2
-            sleep 5
-          done
-          printf 'ERROR: Internal HTTP verification failed after 18 attempts: %s\n' \
-            "$APP_URL" >&2
-          exit 1
+          ARTIFACT_ROOT="${RUNNER_TEMP:-${GITHUB_WORKSPACE:-$PWD}/.runner-temp}"
+          ARTIFACT_DIR="$ARTIFACT_ROOT/private-blob-deploy"
+          SOURCE_FILE="$ARTIFACT_DIR/source.txt"
+          DOWNLOADED_FILE="$ARTIFACT_DIR/downloaded.txt"
+          REPOSITORY_VALUE="${GITHUB_REPOSITORY:-unknown/repository}"
+          COMMIT_VALUE="${GITHUB_SHA:-unknown-commit}"
+          RUN_ID_VALUE="${GITHUB_RUN_ID:-0}"
+          RUN_ATTEMPT_VALUE="${GITHUB_RUN_ATTEMPT:-0}"
+          ACTOR_VALUE="${GITHUB_ACTOR:-unknown-actor}"
+          BLOB_NAME="github-actions/${RUN_ID_VALUE}-${RUN_ATTEMPT_VALUE}.txt"
+          mkdir -p "$ARTIFACT_DIR"
 
-      # Azure Portal과 control-plane 조회를 비교할 수 있도록 최종 resource 정보를 출력합니다.
-      - name: Show deployed Azure resource
+          cat > "$SOURCE_FILE" <<EOF
+          repository=$REPOSITORY_VALUE
+          commit=$COMMIT_VALUE
+          run_id=$RUN_ID_VALUE
+          run_attempt=$RUN_ATTEMPT_VALUE
+          actor=$ACTOR_VALUE
+          EOF
+
+          SOURCE_SHA256="$(sha256sum "$SOURCE_FILE" | awk '{print $1}')"
+
+          az storage blob upload \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_STORAGE_CONTAINER" \
+            --name "$BLOB_NAME" \
+            --file "$SOURCE_FILE" \
+            --metadata sha256="$SOURCE_SHA256" \
+            --auth-mode login \
+            --overwrite true \
+            --output none
+
+          az storage blob download \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_STORAGE_CONTAINER" \
+            --name "$BLOB_NAME" \
+            --file "$DOWNLOADED_FILE" \
+            --auth-mode login \
+            --overwrite true \
+            --output none
+
+          DOWNLOADED_SHA256="$(sha256sum "$DOWNLOADED_FILE" | awk '{print $1}')"
+          BLOB_SHA256="$(az storage blob show \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_STORAGE_CONTAINER" \
+            --name "$BLOB_NAME" \
+            --auth-mode login \
+            --query metadata.sha256 \
+            --output tsv)"
+          if [[ "$DOWNLOADED_SHA256" != "$SOURCE_SHA256" || "$BLOB_SHA256" != "$SOURCE_SHA256" ]]; then
+            printf 'ERROR: Downloaded Blob checksum does not match the uploaded artifact.\n' >&2
+            printf 'source=%s downloaded=%s blob=%s\n' \
+              "$SOURCE_SHA256" "$DOWNLOADED_SHA256" "$BLOB_SHA256" >&2
+            exit 1
+          fi
+
+          printf 'BLOB_NAME=%s\n' "$BLOB_NAME" >> "$GITHUB_ENV"
+          printf 'SOURCE_SHA256=%s\n' "$SOURCE_SHA256" >> "$GITHUB_ENV"
+          printf 'DOWNLOADED_SHA256=%s\n' "$DOWNLOADED_SHA256" >> "$GITHUB_ENV"
+          printf 'BLOB_SHA256=%s\n' "$BLOB_SHA256" >> "$GITHUB_ENV"
+
+      - name: Show private deployment result
         shell: bash
         run: |
           set -euo pipefail
-          az containerapp show \
-            --name "$AZURE_SAMPLE_APP" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "{name:name,provisioningState:properties.provisioningState,externalIngress:properties.configuration.ingress.external,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
+          az storage blob show \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_STORAGE_CONTAINER" \
+            --name "$BLOB_NAME" \
+            --auth-mode login \
+            --query "{name:name,size:properties.contentLength,lastModified:properties.lastModified,sha256:metadata.sha256}" \
             --output table
+          printf 'Blob endpoint: %s (%s)\n' \
+            "$STORAGE_BLOB_HOSTNAME" "$STORAGE_PRIVATE_IP"
+          printf 'SHA-256: %s\n' "$SOURCE_SHA256"
 ```
 
 </details>
 
-⚠️ **주의**
-
-- 배포 workflow는 **one `runs-on: [aca-runner]` job**만 유지해야 합니다. `self-hosted`, `linux`, `x64` 같은 default label을 다시 넣지 마세요.
-- `push`, `pull_request`, reusable workflow call trigger를 추가하지 말고 `workflow_dispatch:`만 유지하세요.
-- `azure/login`, client secret, repository PAT를 YAML에 새로 넣지 마세요.
-
 📋 **예상 출력**
 
-- GitHub Actions 목록에 workflow 이름이 **ACA Runner Azure Sample Deploy**로 보입니다.
-- 파일 경로는 `.github/workflows/aca-runner-azure-deploy.yml`이어야 합니다.
-- reviewed sample과 같은 single-job workflow가 저장됩니다.
+- GitHub 기본 브랜치의 `.github/workflows/aca-runner-private-blob.yml`이 sample과 byte-for-byte로 같아야 합니다.
+- workflow는 single job이며 `runs-on: [aca-runner]`만 사용합니다.
+- Blob data 명령에는 모두 `--auth-mode login`이 들어 있어야 합니다.
 
-> **참고 화면:** GitHub 기본 브랜치의 `.github/workflows` 폴더에 Module 05의 `aca-runner-scale-test.yml`과 Module 06의 `aca-runner-azure-deploy.yml`이 함께 보이면 두 검증 workflow 파일이 모두 준비된 상태입니다.
-
-![GitHub workflows 폴더에 배포 및 스케일 테스트 workflow가 준비된 화면](images/06-github-workflows-console.png)
-
-## 3. GitHub Actions에서 배포 실행
+## 3. GitHub Actions에서 private artifact 배포 실행
 
 👁️ **설명**
 
-이 workflow는 기존 ACA runner가 GitHub queued job을 가져와 Azure에 샘플 앱을 배포하고, 같은 ACA Environment 안에서만 internal ingress HTTPS가 성공하는지 검증합니다. workflow는 `APP_URL=https://<fqdn>` 값을 만든 뒤 runner에서 바로 `curl`로 확인합니다. 브라우저에서 직접 수동 실행해야 trusted workflow author가 승인한 YAML만 동작합니다.
+이 workflow는 `workflow_dispatch`만 사용하므로 trusted participant가 GitHub UI에서 직접 실행해야 합니다. runner는 Event Job이 만든 ephemeral self-hosted runner이고, Azure 인증은 managed identity login만 사용합니다. 업로드되는 Blob 경로는 `github-actions/<run-id>-<run-attempt>.txt`입니다.
 
 🟢 **실행**
 
-GitHub repository에서 **Actions → ACA Runner Azure Sample Deploy → Run workflow**를 선택하고 기본 브랜치에서 실행합니다.
-
-실행이 시작되면 아래 step을 순서대로 확인합니다.
-
-1. **Validate Azure deployment context**
-2. **Sign in with the runner managed identity**
-3. **Deploy the sample Container App**
-4. **Verify the internal HTTPS endpoint from the runner**
-5. **Show deployed Azure resource**
-
-📋 **예상 출력**
-
-다음 화면처럼 **Run workflow**에서 기본 브랜치를 선택해 수동 실행합니다.
-
-![GitHub Actions에서 Azure Sample Deploy workflow 수동 실행](images/06-github-run-workflow-dispatch.png)
-
-- 전체 workflow가 `Success`로 끝나야 합니다.
-- `Sign in with the runner managed identity` step은 subscription table을 출력하고, 추가 secret 없이 로그인해야 합니다.
-- `Deploy the sample Container App` step은 기존 앱이 있으면 삭제를 확인한 뒤 동일한 pinned image를 `--ingress internal`로 다시 만듭니다.
-- `Verify the internal HTTPS endpoint from the runner` step에는 `Verified internal endpoint https://...`가 보이며, 실패 시 끝부분에 `ERROR: Internal HTTP verification failed after 18 attempts: ...` 메시지가 남습니다.
-- `Show deployed Azure resource` step에는 새 `Container App` 이름, `externalIngress=false`, image, FQDN이 출력됩니다.
-
-성공한 run을 열면 다음과 같이 HTTPS 응답 본문과 배포된 Azure 리소스 표를 함께 확인할 수 있습니다.
-
-![성공한 Azure Sample Deploy workflow의 HTTPS 및 Azure 리소스 검증 결과](images/06-github-deployment-success-details.png)
-
-run 번호, suffix, FQDN, 실행 시간은 참가자와 실행 시점마다 달라집니다. workflow 상태가 성공이고 검증 step의 의미가 위 설명과 일치하는지 확인하세요.
-
-⚠️ **주의**
-
-- workflow가 queued 상태로 오래 머물면 먼저 오래된 queued run이나 `stale runner workflow`가 같은 `aca-runner` label을 붙잡고 있지 않은지 확인하세요.
-- GitHub Actions 로그에 PAT, client secret, access token을 출력하도록 workflow를 수정하지 마세요.
-- 첫 배포의 `No existing Container App named ... found.`는 기존 샘플 앱이 없다는 정상 안내입니다.
-- `WARNING: The behavior of this command has been altered by the following extension: containerapp`도 extension 사용 안내이며 배포 실패 원인이 아닙니다. 그 다음에 출력되는 `ERROR:` 행을 기준으로 문제를 판단하세요.
-
-## 4. 같은 ACA Environment 내부에서 internal ingress 앱에 접근할 수 있는 이유
-
-👁️ **설명**
-
-Task 1에서 만든 ACA Environment는 `internal Environment`이므로 앱 FQDN이 있어도 기본 인터넷 공개 endpoint가 아닙니다. 이 모듈의 샘플 앱과 GitHub Event Job runner는 **같은 ACA Environment** 안에 있으므로, runner는 Environment에 연결된 Private DNS와 내부 data plane을 사용해 `https://$FQDN`을 해석하고 HTTPS로 접근할 수 있습니다.
-
-internal ingress는 public browser나 기본 Cloud Shell 성공을 목표로 하지 않습니다. 이 워크숍에서 성공 기준은 **같은 ACA Environment** 안의 runner가 internal endpoint를 읽는 것입니다. 반대로 VNet 안의 `VM`이나 `Application Gateway`가 ACA Environment 밖에서 이 앱을 받아야 하는 시나리오라면, 같은 `internal Environment` 안에서도 보통 app 쪽은 external ingress를 사용합니다. 그 패턴은 VNet 내부 다른 hop을 대상으로 한 설계이며, 현재 워크숍의 same-Environment runner 검증 범위 밖입니다.
+1. GitHub repository에서 **Actions → ACA Runner Private Blob Deploy**로 이동합니다.
+2. **Run workflow**를 눌러 기본 브랜치에서 실행합니다.
+3. run summary에서 아래 step 이름이 순서대로 성공하는지 확인합니다.
+   - `Validate runner inputs`
+   - `Sign in to Azure with managed identity`
+   - `Verify Blob DNS resolves to the private endpoint subnet`
+   - `Upload and download the private Blob artifact`
+   - `Show private deployment result`
 
 📋 **예상 출력**
 
-- GitHub Actions의 runner step만 `Verified internal endpoint ...`를 출력합니다.
-- `Show deployed Azure resource`의 `externalIngress=false`는 public ingress가 꺼져 있음을 보여 줍니다.
-- 이후 5단계에서 기본 Cloud Shell이 sample app의 internal-ingress FQDN에 닿지 못하더라도 정상입니다.
+다음 값들은 참가자와 실행 시점마다 달라지므로 placeholder로 비교합니다.
 
-## 5. 기본 Cloud Shell과 Azure Portal에서 확인
+```text
+Resolved stacarunner<suffix>.blob.core.windows.net to private IP 10.20.1.4.
 
-👁️ **설명**
+Name                                      Size  Last Modified          Sha256
+----------------------------------------  ----  ---------------------  ----------------------------------------------------------------
+github-actions/<run-id>-<run-attempt>.txt <bytes> <modified-timestamp> <64-hex-sha256>
 
-이제 **기본 Cloud Shell**에서 control-plane 상태와 Private DNS 연결을 확인합니다. 이 Shell은 VNet에 붙지 않았으므로 metadata 조회는 성공해야 하지만, sample app의 internal-ingress FQDN에는 바로 닿지 않는 것이 정상입니다. 즉, control plane은 보이고 data plane은 격리되어야 합니다.
-
-🟢 **실행**
-
-Cloud Shell에서 Environment, app, Private DNS를 다시 조회합니다.
-
-```bash
-# Environment, subnet, app ingress와 Private DNS 상태를 Azure에서 다시 조회합니다.
-ENV_INTERNAL=$(az containerapp env show \
-  --name "$ENV" \
-  --resource-group "$RG" \
-  --query properties.vnetConfiguration.internal \
-  --output tsv)
-INFRASTRUCTURE_SUBNET_ID=$(az containerapp env show \
-  --name "$ENV" \
-  --resource-group "$RG" \
-  --query properties.vnetConfiguration.infrastructureSubnetId \
-  --output tsv)
-FQDN=$(az containerapp show \
-  --name "$SAMPLE_APP" \
-  --resource-group "$RG" \
-  --query properties.configuration.ingress.fqdn \
-  --output tsv)
-EXTERNAL_INGRESS=$(az containerapp show \
-  --name "$SAMPLE_APP" \
-  --resource-group "$RG" \
-  --query properties.configuration.ingress.external \
-  --output tsv)
-PRIVATE_DNS_ZONE=$(az network private-dns zone list \
-  --resource-group "$RG" \
-  --query "[?contains(name, 'azurecontainerapps.io')].name | [0]" \
-  --output tsv)
-VNET_LINK=$(az network private-dns link vnet list \
-  --resource-group "$RG" \
-  --zone-name "$PRIVATE_DNS_ZONE" \
-  --query "[0].virtualNetwork.id" \
-  --output tsv)
-WILDCARD_A_RECORD=$(az network private-dns record-set a show \
-  --resource-group "$RG" \
-  --zone-name "$PRIVATE_DNS_ZONE" \
-  --name '*' \
-  --query "aRecords[0].ipv4Address" \
-  --output tsv)
-
-# network·DNS 결과를 한 번에 출력해 internal ingress 계약을 비교합니다.
-printf 'environmentInternal=%s\ninfrastructureSubnetId=%s\nexternalIngress=%s\nfqdn=%s\nPrivate DNS zone=%s\nVNet link=%s\nwildcard A record=%s\n' \
-  "$ENV_INTERNAL" \
-  "$INFRASTRUCTURE_SUBNET_ID" \
-  "$EXTERNAL_INGRESS" \
-  "$FQDN" \
-  "$PRIVATE_DNS_ZONE" \
-  "$VNET_LINK" \
-  "$WILDCARD_A_RECORD"
-
-# standard Cloud Shell에서 internal FQDN 접근이 실패하는 예상 격리 동작을 확인합니다.
-if curl --fail --silent --show-error --connect-timeout 5 --max-time 10 "https://$FQDN"; then
-  printf 'WARNING: 기본 Cloud Shell에서 internal endpoint 응답이 왔습니다. 현재 Shell이 별도 VNet 연결인지 확인하세요.\n'
-else
-  printf '기본 Cloud Shell에서 sample app의 internal-ingress FQDN에 바로 닿지 않는 것은 예상된 격리 동작입니다.\n'
-fi
+Blob endpoint: stacarunner<suffix>.blob.core.windows.net (10.20.1.4)
+SHA-256: <64-hex-sha256>
 ```
 
-그리고 `Azure Portal`에서는 아래만 확인합니다.
+- `private IP`는 `AZURE_PRIVATE_ENDPOINT_CIDR=10.20.1.0/24` 안에 있어야 합니다.
+- Blob name은 반드시 `github-actions/<run-id>-<run-attempt>.txt` 형식이어야 합니다.
+- `SHA-256`은 source, downloaded file, blob metadata가 모두 같은 값이어야 합니다.
 
-1. **Managed Environments**에서 `$ENV`를 열고 Networking에 internal/virtual network 구성이 보이는지 확인합니다.
-2. Environment detail에서 infrastructure subnet이 Cloud Shell 출력과 같은지 확인합니다.
-3. **Container Apps**에서 `hello-aca-<suffix>`를 열고 **Ingress**에서 external ingress가 꺼져 있으며 FQDN이 같은지 확인합니다.
-4. Environment와 app를 연결하는 `Private DNS zone`, `VNet link`, `wildcard A record`가 같은 Resource Group에 존재하는지 확인합니다.
-5. Portal에서는 Application URL을 브라우저로 여는 대신, `externalIngress=false`와 FQDN 일치만 비교합니다.
+## 4. Private DNS와 Blob checksum 결과 해석
+
+👁️ **설명**
+
+runner는 `AZURE_STORAGE_ACCOUNT.blob.core.windows.net`를 조회하지만, 실제 이름 해석은 `privatelink.blob.core.windows.net` Private DNS zone을 통해 private IP로 돌아와야 합니다. workflow는 `getent ahostsv4`로 모든 IPv4를 수집한 뒤 Python `ipaddress`로 `AZURE_PRIVATE_ENDPOINT_CIDR` 포함 여부를 검사합니다. shell prefix 비교를 쓰지 않는 이유는 CIDR이 `/24` 외 다른 크기로 바뀌어도 같은 검증을 유지하기 위해서입니다.
+
+업로드 artifact 내용에는 run identity가 들어갑니다.
+
+- `repository=$GITHUB_REPOSITORY`
+- `commit=$GITHUB_SHA`
+- `run_id=$GITHUB_RUN_ID`
+- `run_attempt=$GITHUB_RUN_ATTEMPT`
+- `actor=$GITHUB_ACTOR`
+
+이 파일은 `az storage blob upload --auth-mode login`으로만 올라가고, 곧바로 `az storage blob download --auth-mode login`으로 다시 받아 `sha256sum`을 비교합니다. workflow는 upload 시점의 SHA-256을 blob metadata에도 저장한 뒤 `az storage blob show --auth-mode login`으로 다시 읽어 local checksum과 일치하는지 확인합니다.
 
 📋 **예상 출력**
 
-- `environmentInternal=true`가 보이면 Environment가 internal 모드입니다.
-- `infrastructureSubnetId`는 Task 1에서 연결한 subnet resource ID여야 합니다.
-- `externalIngress=false`와 FQDN이 같은 앱을 가리켜야 합니다.
-- `Private DNS zone`, `VNet link`, `wildcard A record`가 모두 비어 있지 않아야 합니다.
-- 기본 Cloud Shell에서 sample app의 internal-ingress FQDN에 바로 닿지 않는 것은 예상된 격리 동작입니다.
-- `Azure Portal`에서도 Environment networking이 internal로 보이고 app ingress가 external off여야 합니다.
+- DNS step이 성공했다면 `Resolved ... to private IP ...` 한 줄이 남고, 그 IP는 section 1의 DNS A record와 같아야 합니다.
+- checksum이 다르면 workflow는 즉시 실패하며 `ERROR: Downloaded Blob checksum does not match the uploaded artifact.`를 출력해야 합니다.
+- shared key 또는 public blob URL 접근 없이 managed identity + Storage Blob Data Contributor만으로 read/write가 끝나야 합니다.
+
+## 5. Cloud Shell과 Azure Portal에서 control-plane 확인
+
+👁️ **설명**
+
+Cloud Shell은 control-plane만 확인합니다. 실제 data-plane private proof는 GitHub Actions runner 안에서만 수행해야 합니다.
+
+🟢 **실행**
+
+```bash
+# 1) Storage network rules와 shared-key 차단 상태를 다시 확인합니다.
+az storage account show \
+  --resource-group "$RG" \
+  --name "$STORAGE" \
+  --query "{name:name,defaultAction:networkRuleSet.defaultAction,publicNetworkAccess:publicNetworkAccess,allowBlobPublicAccess:allowBlobPublicAccess,allowSharedKeyAccess:allowSharedKeyAccess}" \
+  --output table
+
+# 2) Blob Private Endpoint approval 상태를 확인합니다.
+az storage account show \
+  --resource-group "$RG" \
+  --name "$STORAGE" \
+  --query "privateEndpointConnections[].{name:name,status:properties.privateLinkServiceConnectionState.status,description:properties.privateLinkServiceConnectionState.description}" \
+  --output table
+
+# 3) Private DNS A record가 Storage account 이름으로 생성되었는지 확인합니다.
+az network private-dns record-set a show \
+  --resource-group "$RG" \
+  --zone-name "$STORAGE_DNS_ZONE" \
+  --name "$STORAGE" \
+  --query "{fqdn:fqdn,ipv4:aRecords[0].ipv4Address}" \
+  --output table
+
+# 4) runner UAMI role assignment가 Storage scope에 유지되는지 확인합니다.
+az role assignment list \
+  --assignee "$UAMI_PID" \
+  --scope "$STORAGE_ID" \
+  --query "[?roleDefinitionName=='Storage Blob Data Contributor'].{role:roleDefinitionName,scope:scope}" \
+  --output table
+```
+
+Azure Portal에서는 아래 네 위치를 같은 실행 직후에 교차 확인합니다.
+
+1. **Storage account → Networking**: public network access와 firewall 기본 동작이 문서와 같은지 확인
+2. **Storage account → Private endpoint connections**: Blob connection이 `Approved`인지 확인
+3. **Private DNS zone → privatelink.blob.core.windows.net**: Storage account 이름으로 A record가 있는지 확인
+4. **Storage account → Access control (IAM)**: runner UAMI에 `Storage Blob Data Contributor`가 Storage scope로 있는지 확인
+
+📋 **예상 출력**
+
+- Storage network rule 조회는 `defaultAction=Deny`와 `allowSharedKeyAccess=False`를 보여야 합니다.
+- Private Endpoint 상태는 `Approved`여야 합니다.
+- DNS A record의 IPv4는 workflow가 보고한 private IP와 같아야 합니다.
+- role assignment 표에는 `Storage Blob Data Contributor` 한 줄이 보여야 합니다.
 
 ## 트러블슈팅
 
+### DNS
+
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| `az: command not found` | Azure Cloud Shell 세션이 Bash가 아니거나 CLI 초기화가 끝나지 않음 | Cloud Shell Bash를 다시 열고 `az version`이 동작할 때까지 기다립니다. 로컬 터미널에서 따라 하고 있다면 이 워크숍과 동일한 Cloud Shell Bash로 돌아옵니다. |
-| `az containerapp` 명령이 없거나 일부 subcommand가 보이지 않음 | `containerapp` extension이 없거나 워크숍 기준 버전과 다름 | Cloud Shell에서 `az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors`를 실행한 뒤 `az containerapp show --help`로 다시 확인합니다. |
-| `az login --identity --client-id` step이 실패함 | runner managed identity 연결이 끊겼거나 `AZURE_CLIENT_ID`가 현재 Job 환경과 맞지 않음 | GitHub Actions의 **Sign in with the runner managed identity** step 로그를 확인하고, Module 04의 Event Job 정의에서 user-assigned identity와 `AZURE_CLIENT_ID` env 값을 다시 검토합니다. client secret을 추가하지 말고 managed identity 경로만 복구하세요. |
-| `The environment '.../managedEnvironments/...' does not exist. Specify a valid environment` | ACA Environment가 실제로 존재해도 runner UAMI에 ACR 범위 `AcrPull`만 있고 RG 범위 `Container Apps Contributor`가 없으면 Environment를 읽거나 샘플 앱을 만들 수 없어 not-found 형태로 보일 수 있음 | 1단계의 `ENV_STATE`와 `CONTAINER_APPS_ROLE`을 다시 확인합니다. 역할이 `MISSING`이면 안내된 `az role assignment create`를 실행하고 1~5분 기다린 뒤 workflow를 다시 실행합니다. Environment나 Event Job을 다시 만들 필요는 없습니다. |
-| `AuthorizationFailed`가 발생함 | `Container Apps Contributor` role assignment 직후라 RBAC propagation이 아직 끝나지 않음 | 1~5분 정도 기다린 뒤 같은 workflow를 다시 실행합니다. role을 더 넓히지 말고 기존 resource-group scope assignment가 전파될 시간을 먼저 줍니다. |
-| `ERROR: Failed to inspect Container App`이 발생함 | 기존 앱 조회 중 인증, 네트워크 또는 Azure CLI 오류가 발생해 리소스 존재 여부를 안전하게 판단할 수 없음 | 바로 새 앱을 만들거나 삭제 완료로 간주하지 마세요. 바로 앞에 출력된 Azure CLI 오류를 기준으로 subscription, RBAC, 네트워크 상태를 복구한 뒤 workflow를 다시 실행합니다. |
-| `ERROR: AZURE_CLIENT_ID is required.` 같은 missing Job environment variables 오류가 남 | Event Job에 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_CONTAINERAPPS_ENVIRONMENT`, `AZURE_SAMPLE_APP`가 빠졌음 | GitHub secret을 새로 만들지 말고 Module 04의 Job 환경 변수 정의를 다시 확인합니다. 필요한 경우 Event Job을 같은 값으로 다시 생성한 뒤 workflow를 재실행합니다. |
-| GitHub run은 배포를 끝냈지만 `Verify the internal HTTPS endpoint from the runner` step이 `ERROR: Internal HTTP verification failed after`로 끝남 | internal ingress revision warm-up이 더 필요하거나 runner와 app가 같은 ACA Environment에 있지 않음 | 20~60초 정도 기다린 뒤 workflow를 다시 실행하고, `AZURE_CONTAINERAPPS_ENVIRONMENT`, Task 1의 internal Environment, app `externalIngress=false`, Private DNS 연결을 다시 확인합니다. |
-| 기본 Cloud Shell의 bounded `curl`이 실패함 | internal ingress app은 public endpoint가 아니므로 standard Cloud Shell에서 sample app의 internal-ingress FQDN으로 바로 들어갈 수 없음 | 5단계의 control-plane 출력과 `Private DNS zone`, `VNet link`, `wildcard A record`를 확인했다면 이 실패는 정상 격리 결과로 취급합니다. browser 재시도나 external ingress 변경으로 우회하지 마세요. |
-| deployment workflow가 계속 queued 상태이며 이전 실습 run이 섞여 보임 | 같은 `aca-runner` label을 쓰는 `stale runner workflow`가 아직 queued/running 상태이거나 최신 YAML이 아닌 오래된 workflow가 남아 있음 | GitHub Actions에서 오래된 queued run을 취소하고, `.github/workflows/aca-runner-azure-deploy.yml`과 scale test workflow가 모두 최신 sample인지 확인합니다. 특히 배포 workflow는 single job + `runs-on: [aca-runner]`만 유지한 뒤 다시 실행합니다. |
+| DNS step이 `resolved outside private endpoint CIDR`로 실패함 | runner가 받은 이름 해석 결과에 `AZURE_PRIVATE_ENDPOINT_CIDR` 안의 IPv4가 없음 | Module 02의 `privatelink.blob.core.windows.net` zone, VNet link, Private Endpoint DNS zone group, A record를 다시 확인하고 section 5의 DNS A record 조회를 재실행합니다. |
+| `did not resolve to an IPv4 address`가 발생함 | Private DNS record가 아직 없거나 잘못된 Storage account 이름을 사용함 | `AZURE_STORAGE_ACCOUNT` 값과 `az network private-dns record-set a show` 결과가 같은지 확인하고, 이름 충돌 복구가 있었다면 saved Storage name으로 다시 실행합니다. |
+
+### 네트워크/방화벽
+
+| 증상 | 주요 원인 | 해결 방법 |
+|------|-----------|-----------|
+| `az storage blob upload` 또는 `az storage blob download`가 403/timeout으로 실패함 | Storage firewall/Private Endpoint 구성 불일치 또는 DNS가 public path를 가리킴 | `defaultAction=Deny`, Private Endpoint `Approved`, DNS A record의 private IP를 함께 다시 확인합니다. Blob data-plane 명령은 모두 `--auth-mode login`으로 유지하고 shared key를 추가하지 마세요. |
+| workflow가 오래 대기하다가 실패함 | Event Job runner가 뜨지 않았거나 stale workflow가 queue를 잡고 있음 | Module 04~05의 Event Job/KEDA 검증을 다시 확인하고, 같은 `aca-runner` label을 쓰는 오래된 queued run을 취소한 뒤 다시 실행합니다. |
+
+### RBAC
+
+| 증상 | 주요 원인 | 해결 방법 |
+|------|-----------|-----------|
+| `AuthorizationPermissionMismatch` 또는 `AuthorizationFailure`가 발생함 | runner UAMI에 Storage scope의 `Storage Blob Data Contributor`가 없거나 아직 전파되지 않음 | section 1과 section 5의 role assignment 조회를 다시 실행합니다. scope를 Resource Group으로 넓히지 말고 Storage account scope assignment만 복구한 뒤 1~5분 기다리고 재시도합니다. |
+| checksum step 전까지는 성공하지만 blob show가 실패함 | upload/download는 캐시되었지만 metadata 조회 권한 전파가 늦음 | 같은 role assignment가 보이는지 확인하고 잠시 기다린 뒤 workflow를 다시 실행합니다. |
+
+### Public outbound
+
+| 증상 | 주요 원인 | 해결 방법 |
+|------|-----------|-----------|
+| `az login` 또는 `az account show` 전에 workflow가 실패함 | runner의 public outbound에서 Azure identity 또는 ARM으로 나가지 못함 | 이 워크숍은 Blob data-plane만 private path를 사용합니다. GitHub, ARM, Entra ID, Azure Monitor와 Basic ACR은 public outbound를 사용하므로 custom NSG/UDR/Firewall 정책이 이 대상들을 막지 않는지 확인합니다. |
+| runner가 GitHub queue를 처리하지 못함 | GitHub API outbound 또는 PAT approval 문제 | Module 04~05의 GitHub scaler/PAT troubleshooting을 먼저 따라간 뒤, 이후 다시 private Blob workflow를 실행합니다. |
 
 ---
 
-[← 이전: 병렬 실행과 스케일 검증](05-parallel-scale-validation.md) | [다음: 보안·제약·정리 →](07-security-limitations-cleanup.md)
+[← 이전: 병렬 실행과 스케일 검증](05-parallel-scale-validation.md)
+[다음: 보안·제약·정리 →](07-security-limitations-cleanup.md)
+
+Module 06은 필수 단계입니다. 위 링크로 이동해 private Blob 배포와 결과 확인을 계속 진행하세요.
