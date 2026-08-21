@@ -16,14 +16,15 @@
 
 👁️ **설명**
 
-Task 1에서 만든 internal ACA Environment는 **inbound access**를 제어하지만 outbound 인터넷을 자동으로 끄지 않습니다. 즉 **internal Environment controls inbound access**이며, 이 워크숍의 runner/KEDA 경로는 계속 **public outbound**를 사용합니다. Task 2의 sample app은 `externalIngress=false`인 **internal ingress** 앱이므로, Module 06에서는 **same Environment** 안의 runner만 앱 FQDN을 직접 호출합니다.
+Task 2에서 만든 foundation은 custom VNet에 붙은 **External ACA Environment**입니다. runner/KEDA 경로는 계속 **public outbound**를 사용하고, Blob artifact 경로만 separate `PE_SUBNET`과 `privatelink.blob.core.windows.net`을 통해 private path로 고정합니다.
 
-따라서 워크숍 runner와 KEDA는 public outbound로 GitHub API, ACR, Azure identity, ARM, Azure Monitor에 도달해야 합니다.
+따라서 워크숍 runner와 KEDA는 public outbound로 GitHub API, ACR, Azure identity, ARM, Azure Monitor에 도달해야 합니다. 반면 Blob data path는 `Storage public network default deny` + `Blob Private Endpoint` + `Private DNS zone` 조합을 사용합니다. ACA Event Job은 ingress를 지원하지 않으므로 External ACA Environment에서도 runner Job에 public inbound endpoint가 생기지 않습니다. In other words, Jobs do not support ingress.
+
 이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, NAT Gateway가 포함되지 않으며 모두 production extension입니다. 이 항목들은 production에서 필요 시 별도로 설계하는 out-of-scope extension입니다.
 
 ⚠️ **주의**
 
-조직 정책 때문에 custom network policy를 나중에 붙인다면 위 public outbound 대상이 막히지 않는지 먼저 확인하세요. 이 모듈의 명령은 internal Environment 자체만으로는 outbound를 차단하지 않는다는 전제를 사용합니다.
+조직 정책 때문에 custom network policy를 나중에 붙인다면 위 public outbound 대상이 막히지 않는지 먼저 확인하세요. 이 모듈의 명령은 External ACA Environment 자체만으로 outbound를 차단하지 않는다는 전제를 사용합니다.
 
 ## 태그 범례
 
@@ -48,69 +49,62 @@ Task 1에서 만든 internal ACA Environment는 **inbound access**를 제어하�
 🟢 **실행**
 
 ```bash
-# 저장한 Azure 식별자를 입력해 기존 Environment, ACR, UAMI와 Job 이름을 복원합니다.
+# 저장한 Azure 식별자를 입력해 기존 Environment, ACR, Storage, UAMI와 Job 이름을 복원합니다.
 read -rp "Saved SUFFIX: " SUFFIX
 read -rp "Saved ACR name: " ACR
-# suffix 기반 이름과 고정 image tag를 다시 구성합니다.
+
+# suffix 기반 이름과 private Blob foundation 값을 다시 구성합니다.
 LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
+VNET="vnet-acarunner-$SUFFIX"
+INFRA_SUBNET="snet-aca-infra"
+PE_SUBNET="snet-private-endpoints"
+STORAGE="stacarunner$SUFFIX"
+STORAGE_CONTAINER="runner-artifacts"
+STORAGE_PE="pe-blob-$SUFFIX"
+STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
+STORAGE_DNS_LINK="link-blob-$SUFFIX"
+PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
 
-# Job 생성에 필요한 workspace, Environment, ACR, subscription과 identity ID를 다시 조회합니다.
-LOG_ID=$(az monitor log-analytics workspace show \
-  --resource-group "$RG" \
-  --workspace-name "$LOG" \
-  --query customerId \
-  --output tsv)
-LOG_RID=$(az monitor log-analytics workspace show \
-  --resource-group "$RG" \
-  --workspace-name "$LOG" \
-  --query id \
-  --output tsv)
-ENV_ID=$(az containerapp env show \
-  --resource-group "$RG" \
-  --name "$ENV" \
-  --query id \
-  --output tsv)
+# Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+read -rp "Saved Storage account name if changed (press Enter to keep ${STORAGE}): " SAVED_STORAGE
+if [[ -n "$SAVED_STORAGE" ]]; then
+  STORAGE="$SAVED_STORAGE"
+fi
+unset SAVED_STORAGE
+
+# Job 생성에 필요한 workspace, Environment, ACR, Storage, subscription과 identity ID를 다시 조회합니다.
+LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
+LOG_RID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query id   --output tsv)
+ENV_ID=$(az containerapp env show   --resource-group "$RG"   --name "$ENV"   --query id   --output tsv)
+VNET_ID=$(az network vnet show   --resource-group "$RG"   --name "$VNET"   --query id   --output tsv)
+PE_SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$PE_SUBNET"   --query id   --output tsv)
+STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
 ACR_SERVER=$(az acr show --name "$ACR" --query loginServer --output tsv)
 ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
 SUBSCRIPTION_ID=$(az account show --query id --output tsv)
-RG_ID=$(az group show \
-  --name "$RG" \
-  --query id \
-  --output tsv)
-UAMI_RID=$(az identity show \
-  --resource-group "$RG" \
-  --name "$UAMI" \
-  --query id \
-  --output tsv)
-UAMI_PID=$(az identity show \
-  --resource-group "$RG" \
-  --name "$UAMI" \
-  --query principalId \
-  --output tsv)
-UAMI_CLIENT_ID=$(az identity show \
-  --resource-group "$RG" \
-  --name "$UAMI" \
-  --query clientId \
-  --output tsv)
+RG_ID=$(az group show   --name "$RG"   --query id   --output tsv)
+UAMI_RID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query id   --output tsv)
+UAMI_PID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query principalId   --output tsv)
+UAMI_CLIENT_ID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query clientId   --output tsv)
 
 # 복구한 Azure 변수를 현재 shell에 export하고 핵심 값을 출력해 확인합니다.
-export SUFFIX LOC RG LOG ENV ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
-printf 'JOB=%s ENV=%s ACR_SERVER=%s\n' "$JOB" "$ENV" "$ACR_SERVER"
+export SUFFIX LOC RG LOG ENV VNET INFRA_SUBNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK PRIVATE_ENDPOINT_CIDR ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID VNET_ID PE_SUBNET_ID STORAGE_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
+printf 'JOB=%s ENV=%s STORAGE=%s ACR_SERVER=%s\n' "$JOB" "$ENV" "$STORAGE" "$ACR_SERVER"
 ```
 
 📋 **예상 출력**
 
 ```text
-JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io
+JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 STORAGE=stacarunnera1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io
 ```
 
-`ACR_SERVER`는 입력한 `ACR` 값을 그대로 조회한 결과이므로, 모듈 02에서 이름 충돌 복구를 했다면 다른 registry 이름으로 출력되어야 정상입니다.
+`ACR_SERVER`는 입력한 `ACR` 값을 그대로 조회한 결과이므로, 모듈 02에서 이름 충돌 복구를 했다면 다른 registry 이름으로 출력되어야 정상입니다. `STORAGE` 역시 이름 충돌 복구가 있었다면 저장해 둔 실제 값으로 복원되어야 합니다.
 
 ### GitHub 인증 변수
 
@@ -190,7 +184,7 @@ Job 설정 오류를 복구할 때는 Resource Group 전체를 다시 만들지 
 
 👁️ **설명**
 
-이 워크숍은 queued workflow가 생겼을 때만 runner를 띄우는 Event Job을 사용합니다. runner container 이름은 문서, 검증, 로그 해석을 통일하기 위해 반드시 `github-actions-runner`로 고정합니다. 아래 `AZURE_*` 값은 Azure 리소스를 식별하는 환경 변수이며 credential이 아닙니다. 실제 인증은 workflow가 실행 중 managed-identity endpoint에서 short-lived Azure token을 받아 처리합니다. internal Environment가 inbound만 제한하므로, 이 단계의 image pull과 scaler polling은 workshop의 public outbound 경로를 그대로 사용합니다.
+이 워크숍은 queued workflow가 생겼을 때만 runner를 띄우는 Event Job을 사용합니다. runner container 이름은 문서, 검증, 로그 해석을 통일하기 위해 반드시 `github-actions-runner`로 고정합니다. 아래 `AZURE_*` 값은 Azure 리소스를 식별하는 환경 변수이며 credential이 아닙니다. 실제 인증은 workflow가 실행 중 managed-identity endpoint에서 short-lived Azure token을 받아 처리합니다. 이 단계의 image pull과 scaler polling은 workshop의 public outbound 경로를 그대로 사용하고, Blob artifact 경로에는 `AZURE_STORAGE_ACCOUNT=$STORAGE`, `AZURE_STORAGE_CONTAINER=$STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR=$PRIVATE_ENDPOINT_CIDR`를 전달해 Task 3 입력값을 고정합니다.
 
 🟢 **실행**
 
@@ -252,7 +246,9 @@ JOB_CREATE_ARGS=(
   "AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID"
   "AZURE_RESOURCE_GROUP=$RG"
   "AZURE_CONTAINERAPPS_ENVIRONMENT=$ENV"
-  "AZURE_SAMPLE_APP=hello-aca-$SUFFIX"
+  "AZURE_STORAGE_ACCOUNT=$STORAGE"
+  "AZURE_STORAGE_CONTAINER=$STORAGE_CONTAINER"
+  "AZURE_PRIVATE_ENDPOINT_CIDR=$PRIVATE_ENDPOINT_CIDR"
   "GH_URL=https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
   "RUNNER_LABELS=aca-runner"
   "RUNNER_NAME_PREFIX=aca"
@@ -367,7 +363,7 @@ GitHub 저장소의 **Settings → Actions → Runners**를 열어봅니다. wor
 | GitHub API에서 403 또는 registration token 발급 실패 | 권한 부족 또는 organization approval 누락 | 토큰 권한이 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`인지 확인하고, organization 승인 절차가 있다면 승인 상태도 다시 확인합니다. |
 | `unrecognized arguments` 또는 help와 문서가 다름 | Cloud Shell의 containerapp extension 버전이 워크숍 기준과 다름 | 모듈 01의 `az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors`를 다시 실행하고 `az version`으로 버전을 확인한 뒤 명령을 재시도합니다. |
 | 방금 토큰을 rotation했는데도 실패가 계속됨 | ACA secret과 runner env가 이전 토큰을 계속 사용 중 | 새 PAT를 다시 로드한 뒤 Job 하나만 삭제 후 이 모듈을 다시 실행해 ACA secret과 두 consumer를 모두 새 토큰으로 맞춥니다. 리소스 그룹 전체를 다시 만들 필요는 없습니다. |
-| 사용자 지정 NSG/UDR/Firewall 적용 후 execution이 생성되지 않거나 image pull/log 조회가 동시에 실패함 | GitHub API, ACR, Azure identity, ARM, Azure Monitor로 가는 public outbound가 차단됨 | 워크숍 기본값은 outbound를 열어 둔 internal Environment입니다. 조직 정책으로 NSG, UDR, Azure Firewall, forced tunneling, ACR Private Endpoint를 추가했다면 GitHub API, ACR, Azure identity, ARM, Azure Monitor 대상이 허용되는지 먼저 검증하고 다시 시도합니다. |
+| 사용자 지정 NSG/UDR/Firewall 적용 후 execution이 생성되지 않거나 image pull/log 조회가 동시에 실패함 | GitHub API, ACR, Azure identity, ARM, Azure Monitor로 가는 public outbound가 차단됨 | 워크숍 기본값은 outbound를 열어 둔 External ACA Environment입니다. 조직 정책으로 NSG, UDR, Azure Firewall, forced tunneling, ACR Private Endpoint를 추가했다면 GitHub API, ACR, Azure identity, ARM, Azure Monitor 대상이 허용되는지 먼저 검증하고 다시 시도합니다. |
 
 ---
 

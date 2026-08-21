@@ -51,7 +51,6 @@ for text in \
   '--min-tls-version TLS1_2' \
   '--allow-blob-public-access false' \
   '--allow-shared-key-access false' \
-  'az storage account network-rule add' \
   'defaultAction' \
   'Deny' \
   'Microsoft.Storage/storageAccounts/blobServices/containers' \
@@ -60,6 +59,7 @@ for text in \
   'az network private-dns zone create' \
   'privatelink.blob.core.windows.net' \
   'az network private-endpoint dns-zone-group create' \
+  'networkInterfaces[0].id' \
   'Storage Blob Data Contributor' \
   '--scope "$STORAGE_ID"'; do
   assert_contains "$ALL_TEXT" "$text" 'missing foundation marker'
@@ -77,6 +77,7 @@ assert_contains_multiline \
 
 for obsolete in \
   '--internal-only true' \
+  'az storage account network-rule add' \
   'ENV_DEFAULT_DOMAIN' \
   'ENV_STATIC_IP' \
   'az network private-dns record-set a add-record' \

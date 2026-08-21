@@ -1,6 +1,6 @@
 # 07. 보안·제약·정리
 
-> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 120분 필수 경로의 마지막 단계이며, Module 06에서 만든 deployment workflow까지 함께 정리합니다. 실습 구성을 그대로 운영에 올리지 않고, 어떤 지점을 production 확장으로 보완해야 하는지까지 연결해 설명합니다.
+> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 Task 2 기준 foundation을 정리하며, External ACA Environment + custom VNet + private Blob 구성을 production 확장 관점에서 다시 해석합니다.
 
 ## 목표
 
@@ -8,7 +8,7 @@
 
 - 워크숍 구성을 production 기준으로 어떻게 확장할지 설명할 수 있다.
 - `Private repository`와 trusted workflow authors 전제를 지키며 self-hosted runner 노출면을 줄일 수 있다.
-- attached managed identity와 `Container Apps Contributor` 범위를 왜 좁게 유지해야 하는지 설명할 수 있다.
+- Blob artifact 경로를 `Storage public network default deny`, `Blob Private Endpoint`, `Private DNS zone`, Storage-scoped RBAC로 제한한 이유를 설명할 수 있다.
 - Fine-grained PAT permission, rotation, revoke 순서를 다시 확인할 수 있다.
 - Azure Container Apps Job과 GitHub runner 모델의 제약을 운영 관점에서 설명할 수 있다.
 - Azure 리소스 그룹과 GitHub 측 실습 흔적을 안전하게 정리할 수 있다.
@@ -62,22 +62,24 @@ az group list --query "[?starts_with(name, 'rg-acarunner-')].name" --output tabl
 
 | Workshop choice | Production extension | Reason |
 |---|---|---|
+| External ACA Environment + custom VNet | dedicated egress design, UDR, Azure Firewall, NAT Gateway | runner/KEDA는 여전히 outbound Internet 경로가 필요하므로 destination 제어를 별도 설계해야 합니다. |
+| Storage public network default deny | endpoint별 예외 정책, 정책 감사, 진단 자동화 | public endpoint를 완전히 제거하지 않아도 data plane 허용 경로를 Private Endpoint + firewall로 좁힐 수 있습니다. |
+| Blob Private Endpoint | multi-region storage design, failover playbook | artifact 저장 경로를 private IP로 고정하지만 DR 토폴로지는 별도 설계가 필요합니다. |
+| Private DNS zone | custom DNS forwarding, hub/spoke reachability | VNet 밖의 resolver가 Blob private name을 풀어야 하면 forwarding 체계를 따로 설계해야 합니다. |
+| Storage Blob Data Contributor at Storage scope | 더 세분화된 data-action role, JIT elevation, access review | foundation 단계에서는 Resource Group broad 권한 대신 artifact 저장소 범위만 열어 두는 것이 더 안전합니다. |
+| delegated ACA subnet과 Private Endpoint subnet을 분리 | subnet별 NSG/UDR 표준화, IP 계획 자동화 | ACA infrastructure와 PE lifecycle, policy 요구사항이 다르므로 같은 subnet에 섞지 않습니다. |
 | ACA secret의 단일 Fine-grained PAT | separate credentials, Azure Key Vault 또는 external token broker | stronger credential isolation and centralized rotation |
-| registration token 방식 | GitHub JIT runner | reduced registration lifecycle exposure |
-| Workshop VNet + public outbound | UDR + Azure Firewall + private endpoints(예: ACR Private Endpoint) | internal Environment는 inbound만 private로 제한하며, production에서는 outbound destination을 더 엄격하게 제어할 수 있습니다. |
-| same-Environment internal ingress 검증 | private DNS forwarding, hub/spoke reachability, 중앙 egress 정책 | internal ingress 앱은 같은 Environment 경로부터 먼저 검증하고 이후 필요한 네트워크 확장을 설계합니다. |
 | Repository runner | organization runner group | controlled reuse across repositories |
-| Consumption profile | workload profiles when required | predictable dedicated capacity |
 
 📋 **예상 출력**
 
-- 참가자는 워크숍이 교육용 최소 구성이고, production에서는 separate credentials, Azure Key Vault, external token broker, UDR, Azure Firewall, ACR Private Endpoint, organization runner group 같은 확장이 필요하다는 점을 설명할 수 있어야 합니다.
+- 참가자는 워크숍이 교육용 최소 구성이고, production에서는 egress control, DNS forwarding, DR, access review, Key Vault 또는 token broker 같은 확장이 필요하다는 점을 설명할 수 있어야 합니다.
 
 ## 2. 반드시 지킬 보안 규칙
 
 👁️ **설명**
 
-self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므로, 저장소 신뢰 경계와 credential 관리 원칙이 가장 중요합니다.
+self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므로, 저장소 신뢰 경계와 credential 관리 원칙이 가장 중요합니다. Task 2 foundation에서는 Blob artifact 경로를 private path로 고정하고 broad Azure 권한을 늦게 열어 두는 것이 핵심입니다.
 
 ⚠️ **주의**
 
@@ -87,7 +89,10 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 - repository permission은 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`만 유지하세요.
 - 워크숍용 PAT는 **30 days** 만료를 선호하고, 만료 전에 rotation을 끝내세요.
 - workflow를 수정할 수 있는 사람은 **trusted workflow authors**로 제한하세요.
-- Module 06의 샘플 배포에서 사용한 `Container Apps Contributor`는 의도적으로 resource-group scope에만 부여합니다. broad `Contributor`로 바꾸지 마세요.
+- `Storage public network default deny`와 `allowSharedKeyAccess=false`를 함께 유지해 public data-plane 우회를 막으세요.
+- Blob artifact 경로는 `Blob Private Endpoint`와 `Private DNS zone`을 통해서만 private name resolution이 되도록 유지하세요.
+- `Storage Blob Data Contributor`는 Storage scope에만 두고, broad `Contributor`나 불필요한 RG-scope data access로 넓히지 마세요.
+- `delegated ACA subnet과 Private Endpoint subnet을 분리`한 상태를 유지하세요. ACA delegated subnet에 Private Endpoint를 넣거나, PE subnet에 delegation을 추가하지 마세요.
 - Fine-grained PAT, registration token, remove token은 `echo`, 로그, 스크린샷, Git 기록에 출력하지 마세요.
 - runner image는 `ghcr.io/actions/actions-runner:2.336.0@sha256:...`처럼 version과 digest를 함께 고정하고 정기적으로 rebuild/scanning 하세요.
 - 오래 남은 offline runner나 stale registration record는 주기적으로 삭제하세요.
@@ -95,10 +100,8 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 
 ### PAT rotation
 
-1. 새 Fine-grained PAT를 같은 repository와 permission으로 생성하고 필요한
-   organization approval을 완료합니다.
-2. ACA secret을 새 PAT로 먼저 갱신하고 Job이 queue 감시와 runner 등록을
-   정상 수행하는지 확인합니다.
+1. 새 Fine-grained PAT를 같은 repository와 permission으로 생성하고 필요한 organization approval을 완료합니다.
+2. ACA secret을 새 PAT로 먼저 갱신하고 Job이 queue 감시와 runner 등록을 정상 수행하는지 확인합니다.
 3. 정상 동작 확인 후 기존 PAT를 revoke합니다.
 
 ## 3. 현재 워크숍 구성의 제약 사항
@@ -109,10 +112,11 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 
 | 항목 | 현재 한계 | 운영 해석 |
 |------|-----------|-----------|
-| network type | ACA Environment의 `network type`은 생성 후 immutable | external/basic 환경을 internal로 전환하지 말고 새 Environment를 만듭니다. |
-| same-Environment internal ingress | internal ingress app은 같은 Environment runner에서만 직접 검증 | 다른 VNet, peered network, on-prem 경로는 별도 설계/검증이 필요합니다. |
-| standard Cloud Shell | `standard Cloud Shell`은 workshop VNet에 붙어 있지 않음 | Cloud Shell에서 sample app의 internal-ingress FQDN 실패는 정상이며, 이를 public path 회귀로 오해하지 않습니다. |
-| custom DNS forwarding | `Private DNS zone/link`만으로 workshop VNet 내부 이름 해석을 완료 | hub/spoke 또는 on-prem DNS를 붙이면 `custom DNS forwarding`을 별도로 설계해야 합니다. |
+| network type | ACA Environment의 `network type`은 생성 후 immutable | basic/external 기반 환경을 다른 network type으로 뒤집지 말고 새 Environment를 만듭니다. |
+| Jobs do not support ingress | Event Job은 public endpoint를 만들지 않음 | External ACA Environment여도 runner Job 자체에 inbound URL이 생기지 않습니다. |
+| Storage path validation from Cloud Shell | Cloud Shell은 workshop VNet에 붙어 있지 않음 | Blob private endpoint data path는 runner 또는 VNet 내부 경로에서 검증해야 합니다. |
+| Private DNS zone scope | `Private DNS zone/link`만으로 workshop VNet 내부 이름 해석을 완료 | hub/spoke 또는 on-prem DNS를 붙이면 forwarding을 따로 설계해야 합니다. |
+| delegated subnet separation | ACA delegated subnet에는 Private Endpoint를 둘 수 없음 | subnet 설계를 바꿔야 하면 Environment/PE 재생성이 필요할 수 있습니다. |
 | Docker-in-Docker | 지원하지 않음 | workflow에서 `docker build` 또는 Docker daemon 의존 단계를 넣지 않습니다. |
 | service containers | Docker daemon이 필요한 service container 미지원 | DB/service container가 필요한 테스트는 다른 실행 환경을 고려합니다. |
 | workspace 지속성 | execution 간 persistent workspace 없음 | 캐시나 산출물 재사용을 기본 가정으로 두지 않습니다. |
@@ -124,30 +128,27 @@ self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므�
 
 ⚠️ **주의**
 
-- `Docker-in-Docker` 미지원은 실습 편의 문제가 아니라 플랫폼 제약입니다.
+- `Jobs do not support ingress`는 실습 편의가 아니라 플랫폼 모델입니다.
 - active execution이 0이어도 과거 execution history는 일부 recent records로 남을 수 있습니다.
-- sample app의 internal-ingress FQDN은 same Environment runner에서만 직접 검증합니다.
-- standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.
-- workshop VNet은 inbound를 internal로 제한하지만 egress는 계속 public outbound입니다.
+- Cloud Shell은 workshop VNet에 직접 붙어 있지 않으므로 Blob private endpoint data plane 테스트를 대신하지 못합니다.
+- workshop foundation은 runner/KEDA의 public outbound를 그대로 사용합니다. GitHub API, ACR, Azure identity, ARM, Azure Monitor 경로를 차단하지 마세요.
 - 이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, VNet-isolated Cloud Shell이 포함되지 않으며 모두 production extension입니다.
 
 ## 4. Azure 리소스 정리 요청
 
 👁️ **설명**
 
-실습 비용을 멈추는 가장 확실한 방법은 리소스 그룹 전체를 삭제하는 것입니다. 이 워크숍의 모든 Azure 리소스는 `$RG` 아래에 있으므로 개별 삭제보다 RG 삭제를 우선합니다. Module 06에서 만든 sample `Container App`도 `$RG`에 포함되므로, 정리 단계에서는 별도 `az containerapp delete`보다 resource-group 삭제가 authoritative path입니다.
+실습 비용을 멈추는 가장 확실한 방법은 리소스 그룹 전체를 삭제하는 것입니다. 이 워크숍의 모든 Azure 리소스는 `$RG` 아래에 있으므로 개별 삭제보다 RG 삭제를 우선합니다.
 
-리소스 그룹 삭제 경로에는 runner image가 있는 ACR, Job, managed identity, Log Analytics workspace뿐 아니라 workshop **VNet**, **delegated subnet**, **Private DNS zone/link**, Environment와 함께 정리되는 **internal load balancer resources**, 그리고 sample app까지 모두 포함됩니다. 즉 cleanup은 기존 RG 삭제 경로 하나로 수렴합니다.
+리소스 그룹 삭제 경로에는 runner image가 있는 ACR, Job, managed identity, Log Analytics workspace뿐 아니라 workshop **VNet**, **delegated ACA subnet**, **PE subnet**, **Storage account**, **Blob Private Endpoint**, **Private DNS zone/link**, Environment와 함께 정리되는 provider-managed infrastructure까지 모두 포함됩니다. 즉 cleanup은 기존 RG 삭제 경로 하나로 수렴합니다.
 
 🟢 **실행**
 
 ```bash
 # workshop Resource Group의 비동기 삭제를 요청하고 요청이 접수된 이름을 기록합니다.
-az group delete \
-  --name "$RG" \
-  --yes \
-  --no-wait
-printf '리소스 그룹 삭제 요청됨: %s\n' "$RG"
+az group delete   --name "$RG"   --yes   --no-wait
+printf '리소스 그룹 삭제 요청됨: %s
+' "$RG"
 ```
 
 📋 **예상 출력**
@@ -169,24 +170,16 @@ printf '리소스 그룹 삭제 요청됨: %s\n' "$RG"
 
 ```bash
 # ResourceGroupNotFound가 반환되는지 조회해 Resource Group 삭제 완료를 확인합니다.
-az group show \
-  --name "$RG" \
-  --query "{name:name,state:properties.provisioningState}" \
-  --output table
+az group show   --name "$RG"   --query "{name:name,state:properties.provisioningState}"   --output table
 
 # 같은 이름과 연관된 Azure resource가 남지 않았는지 최종 목록으로 교차 확인합니다.
-az resource list \
-  --resource-group "$RG" \
-  --query "[].{name:name,type:type}" \
-  --output table
+az resource list   --resource-group "$RG"   --query "[].{name:name,type:type}"   --output table
 ```
 
 📋 **예상 출력**
 
-- 삭제 진행 중에는 `properties.provisioningState`가 `Deleting`으로 보일 수
-  있습니다.
-- ACR, Job, identity, workspace, VNet, `Private DNS zone/link`, sample app가 먼저 사라지고 ACA managed environment가 마지막까지 남을 수 있습니다. **ACA managed environment 삭제는 오래 걸릴 수 있습니다.**
-- Environment 아래의 provider-managed **internal load balancer resources**도 managed environment 삭제 완료와 함께 정리되므로, 중간 상태만 보고 같은 이름을 다시 만들지 마세요.
+- 삭제 진행 중에는 `properties.provisioningState`가 `Deleting`으로 보일 수 있습니다.
+- ACR, Job, identity, workspace, VNet, `Storage account`, `Blob Private Endpoint`, `Private DNS zone/link`, ACA Environment가 차례로 사라질 수 있습니다. Environment/provider-managed infrastructure 삭제는 오래 걸릴 수 있습니다.
 - 삭제가 완료되면 최종적으로 아래와 비슷한 결과를 기대합니다.
 
 ```text
@@ -199,7 +192,7 @@ az resource list \
 
 👁️ **설명**
 
-Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이나 불필요한 PAT가 계속 남을 수 있습니다. Module 06에서 만든 배포 workflow도 같은 trusted boundary 안에 남아 있으므로, 더 이상 쓰지 않을 때는 함께 정리하세요.
+Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이나 불필요한 PAT가 계속 남을 수 있습니다. 더 이상 워크숍을 반복하지 않을 때는 아래 항목도 함께 정리하세요.
 
 🟢 **실행**
 
@@ -208,8 +201,7 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 1. 실습용 Fine-grained PAT를 revoke하여 PAT 삭제를 완료합니다.
 2. Cloud Shell에서 `unset GITHUB_PAT`를 실행합니다.
 3. `aca-runner-lab`의 `.github/workflows/aca-runner-scale-test.yml`, stale runner record, lab repository 보존 여부를 정리합니다.
-4. `.github/workflows/aca-runner-azure-deploy.yml`을 더 이상 사용할 필요가
-   없으면 삭제합니다.
+4. Task 3 이후 별도 workflow를 만들었다면 더 이상 필요 없는 workflow 파일도 함께 정리합니다.
 
 ⚠️ **주의**
 
@@ -221,11 +213,11 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
 | `AuthorizationFailed` | 현재 Azure 계정에 RG 삭제 권한이 없음 | `az account show`로 구독을 다시 확인하고, 해당 RG에 Contributor 이상 권한이 있는 계정으로 다시 로그인합니다. |
-| `az group delete` 후에도 RG가 오래 보임 | ACA managed environment를 포함한 asynchronous deletion 진행 중 | `az group show`의 `Deleting` 상태와 `az resource list`의 잔여 리소스를 확인합니다. 오류나 lock이 없다면 기다리고, 최종 기준은 `(ResourceGroupNotFound)`입니다. |
+| `az group delete` 후에도 RG가 오래 보임 | ACA Environment 또는 Private Endpoint를 포함한 asynchronous deletion 진행 중 | `az group show`의 `Deleting` 상태와 `az resource list`의 잔여 리소스를 확인합니다. 오류나 lock이 없다면 기다리고, 최종 기준은 `(ResourceGroupNotFound)`입니다. |
 | 삭제가 계속 실패하거나 멈춤 | resource lock 존재 | 포털 또는 CLI로 delete lock/read-only lock을 확인한 뒤 해제하고 다시 시도합니다. |
 | GitHub에 stale offline runner가 남음 | UI 반영 지연 또는 이전 execution metadata 잔존 | 몇 분 후 새로고침하고, 계속 남으면 runner 목록에서 stale runner를 수동 제거합니다. |
 | 새 workflow가 갑자기 401/403을 반환 | PAT가 revoked/expired 되었거나 organization approval 미완료, 또는 permission 불일치 | Fine-grained PAT가 아직 유효한지 확인하고, approval 상태와 함께 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`가 유지되는지 확인합니다. |
-| 예상보다 비용이 계속 발생함 | RG 삭제 미완료, Log Analytics/ACR 등 잔존 리소스 존재 | `az group show` 결과와 Azure Portal 비용 분석을 함께 확인하고, RG가 남아 있으면 삭제 완료까지 추적합니다. |
+| 예상보다 비용이 계속 발생함 | RG 삭제 미완료, Log Analytics/ACR/Storage 등 잔존 리소스 존재 | `az group show` 결과와 Azure Portal 비용 분석을 함께 확인하고, RG가 남아 있으면 삭제 완료까지 추적합니다. |
 | workflow의 Docker 단계가 실패함 | Docker-in-Docker 또는 Docker daemon/service container 의존 | 이 플랫폼 제약은 우회하지 말고, Docker daemon이 필요한 작업은 다른 runner 환경으로 분리합니다. |
 
 ---
