@@ -54,7 +54,7 @@ for text in \
 done
 
 for text in \
-  '`github-actions-runner` container을 사용하는 ACA Event Job을 만든다.' \
+  '`github-actions-runner` container를 사용하는 ACA Event Job을 만든다.' \
   'GitHub repository와 Fine-grained PAT를 KEDA `github-runner` scaler에 연결한다.'; do
   assert_contains "$JOB_OBJECTIVES" "$text" 'missing module 04 objective marker'
 done
