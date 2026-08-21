@@ -65,6 +65,11 @@ for text in \
   assert_contains "$DOC_TEXT" "$text" 'module 06 missing private-blob marker'
 done
 
+public_network_expectation='`publicNetworkAccess`는 `Enabled`여야 합니다.'
+if [[ "$(grep -F -c -- "$public_network_expectation" "$DOC")" -ne 2 ]]; then
+  fail "module 06 must state publicNetworkAccess=Enabled in both control-plane expected-output sections"
+fi
+
 for old_screenshot in \
   'images/06-azure-portal-resource-group-result.png' \
   'images/06-container-app-hello-world-result.png' \

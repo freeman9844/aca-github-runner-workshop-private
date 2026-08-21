@@ -153,6 +153,7 @@ printf 'Workflow inputs: AZURE_STORAGE_ACCOUNT=%s AZURE_STORAGE_CONTAINER=%s AZU
 📋 **예상 출력**
 
 - `defaultAction`은 `Deny`여야 합니다.
+- `publicNetworkAccess`는 `Enabled`여야 합니다.
 - `allowBlobPublicAccess`는 `False`, `allowSharedKeyAccess`는 `False`여야 합니다.
 - Private Endpoint connection 상태는 `Approved`여야 합니다.
 - role assignment 표에는 `Storage Blob Data Contributor`가 정확히 `$STORAGE_ID` scope로 표시되어야 합니다.
@@ -461,6 +462,7 @@ Azure Portal에서는 아래 네 위치를 같은 실행 직후에 교차 확인
 📋 **예상 출력**
 
 - Storage network rule 조회는 `defaultAction=Deny`와 `allowSharedKeyAccess=False`를 보여야 합니다.
+- `publicNetworkAccess`는 `Enabled`여야 합니다.
 - Private Endpoint 상태는 `Approved`여야 합니다.
 - DNS A record의 IPv4는 workflow가 보고한 private IP와 같아야 합니다.
 - role assignment 표에는 `Storage Blob Data Contributor` 한 줄이 보여야 합니다.
