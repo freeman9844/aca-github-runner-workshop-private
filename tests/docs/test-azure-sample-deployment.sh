@@ -65,10 +65,25 @@ for text in \
   assert_contains "$DOC_TEXT" "$text" 'module 06 missing private-blob marker'
 done
 
+section_one="$(
+  awk '
+    /^## 1\. / { in_section=1 }
+    /^## 2\. / { exit }
+    in_section { print }
+  ' "$DOC"
+)"
+section_five="$(
+  awk '
+    /^## 5\. / { in_section=1 }
+    /^## 트러블슈팅$/ { exit }
+    in_section { print }
+  ' "$DOC"
+)"
 public_network_expectation='`publicNetworkAccess`는 `Enabled`여야 합니다.'
-if [[ "$(grep -F -c -- "$public_network_expectation" "$DOC")" -ne 2 ]]; then
-  fail "module 06 must state publicNetworkAccess=Enabled in both control-plane expected-output sections"
-fi
+assert_contains "$section_one" "$public_network_expectation" \
+  'module 06 section 1 must state publicNetworkAccess=Enabled'
+assert_contains "$section_five" "$public_network_expectation" \
+  'module 06 section 5 must state publicNetworkAccess=Enabled'
 
 for old_screenshot in \
   'images/06-azure-portal-resource-group-result.png' \
