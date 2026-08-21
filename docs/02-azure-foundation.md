@@ -13,7 +13,7 @@
 - Storage Account를 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `allowSharedKeyAccess=false` 상태로 만들고 Blob container를 management plane으로 생성한다.
 - UAMI를 만들고 ACR 범위에 `AcrPull`, Storage 범위에 `Storage Blob Data Contributor` 역할을 부여한다.
 - 다음 모듈에서 사용할 `SUBSCRIPTION_ID`, `RG_ID`, `LOG_ID`, `LOG_RID`, `VNET_ID`, `SUBNET_ID`, `PE_SUBNET_ID`, `ENV_ID`, `ACR_SERVER`, `ACR_ID`, `STORAGE`, `STORAGE_ID`, `STORAGE_CONTAINER`, `STORAGE_PE`, `STORAGE_DNS_ZONE`, `UAMI_RID`, `UAMI_PID`, `UAMI_CLIENT_ID`를 확보한다.
-- 다음 Module 03~06 재접속과 복구에 대비해 `SUFFIX`, 실제 `ACR` 이름, 원래 `SUBSCRIPTION_ID`를 각각 별도 값으로 저장해 둔다. Storage 이름은 충돌 복구가 있었을 때만 실제 값을 추가로 저장한다.
+- 이후 세션 재연결이 필요할 때 사용할 수 있도록 `SUFFIX`, 실제 `ACR` 이름, 원래 `SUBSCRIPTION_ID`를 각각 별도 값으로 저장한다. Storage 이름은 충돌 복구가 있었을 때만 실제 값을 추가로 저장한다.
 
 ## 태그 범례
 
@@ -151,7 +151,7 @@ PE_SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-nam
 
 이 워크숍은 Log Analytics Shared Key를 쓰지 않고, ACA Environment 자체를 Azure Monitor에 연결한 뒤 resource-based diagnostic setting으로 로그를 보냅니다. Task 2의 foundation은 `internal=false`인 **External custom VNet Environment**로 바뀌므로, Environment 기본 도메인에 대한 Private DNS wildcard record는 더 이상 만들지 않습니다.
 
-기본 네트워크로 만든 기존 ACA environment나 이전 internal environment는 현재 foundation으로 변환할 수 없습니다. 새 workshop suffix로 environment를 다시 만들어야 합니다.
+이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다. 해당 Environment는 현재 External custom VNet foundation으로 변환할 수 없으므로, 이 워크숍을 처음 실행할 때는 아래 명령으로 새 Environment를 만들고 이전 버전에서 이어오는 경우에는 새 workshop suffix로 다시 만듭니다.
 
 🟢 **실행**
 

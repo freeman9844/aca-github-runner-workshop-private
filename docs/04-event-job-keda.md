@@ -6,11 +6,12 @@
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
-- 저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 Azure 변수들을 복구한다.
-- 세션이 재시작되었더라도 GitHub owner/repo/Fine-grained PAT를 안전하게 다시 입력한다.
-- `github-actions-runner`라는 container name으로 ACA Event Job을 만든다.
-- `github-runner` scaler의 execution/scale/auth/metadata 값을 이해한다.
+- `github-actions-runner` container를 사용하는 ACA Event Job을 만든다.
+- User-Assigned Managed Identity와 Storage 입력 변수를 runner container에 전달한다.
+- GitHub repository와 Fine-grained PAT를 KEDA `github-runner` scaler에 연결한다.
+- scaler의 execution/scale/auth/metadata 값을 이해한다.
 - secret 값을 노출하지 않고 Job 설정과 초기 상태를 검증한다.
+- Cloud Shell 세션을 재연결한 경우에만 선택적 복구 절차로 Azure 변수와 GitHub 입력을 다시 구성한다.
 
 ## 워크숍 네트워크 전제
 
