@@ -151,7 +151,8 @@ PE_SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-nam
 
 이 워크숍은 Log Analytics Shared Key를 쓰지 않고, ACA Environment 자체를 Azure Monitor에 연결한 뒤 resource-based diagnostic setting으로 로그를 보냅니다. Task 2의 foundation은 `internal=false`인 **External custom VNet Environment**로 바뀌므로, Environment 기본 도메인에 대한 Private DNS wildcard record는 더 이상 만들지 않습니다.
 
-이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다. 해당 Environment는 현재 External custom VNet foundation으로 변환할 수 없으므로, 이 워크숍을 처음 실행할 때는 아래 명령으로 새 Environment를 만들고 이전 버전에서 이어오는 경우에는 새 workshop suffix로 다시 만듭니다.
+이 워크숍을 처음 실행하는 경우에는 아래 명령으로 새 External custom VNet Environment를 만듭니다.
+이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다. 해당 Environment는 현재 External custom VNet foundation으로 변환할 수 없으므로, 이전 버전에서 이어오는 경우에는 새 workshop suffix로 다시 만듭니다.
 
 🟢 **실행**
 

@@ -76,11 +76,25 @@ assert_contains_multiline \
   $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --all \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
   'module 02 must verify only ACR_ID and STORAGE_ID scopes'
 
-for text in \
-  '이후 세션 재연결이 필요할 때 사용할 수 있도록' \
-  '이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다.'; do
-  assert_contains "$FOUNDATION_TEXT" "$text" 'missing first-run recovery framing'
-done
+assert_contains \
+  "$FOUNDATION_TEXT" \
+  '이 워크숍을 처음 실행하는 경우에는 아래 명령으로 새 External custom VNet Environment를 만듭니다.' \
+  'missing first-run instruction'
+
+assert_contains \
+  "$FOUNDATION_TEXT" \
+  '이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다.' \
+  'missing legacy migration condition'
+
+first_run_line="$(grep -nF '이 워크숍을 처음 실행하는 경우에는 아래 명령으로 새 External custom VNet Environment를 만듭니다.' "$FOUNDATION" | head -n1 | cut -d: -f1)"
+legacy_line="$(grep -nF '이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다.' "$FOUNDATION" | head -n1 | cut -d: -f1)"
+
+[[ -n "$first_run_line" && -n "$legacy_line" ]] || fail "missing section 4 ordering markers"
+[[ "$first_run_line" -lt "$legacy_line" ]] || fail "first-run instruction must appear before legacy migration condition"
+
+if grep -F '이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다. 해당 Environment는 현재 External custom VNet foundation으로 변환할 수 없으므로, 이 워크숍을 처음 실행할 때는 아래 명령으로 새 Environment를 만들고 이전 버전에서 이어오는 경우에는 새 workshop suffix로 다시 만듭니다.' "$FOUNDATION" >/dev/null; then
+  fail "legacy-only combined paragraph must be split and reordered"
+fi
 
 for obsolete in \
   '--internal-only ''true' \
