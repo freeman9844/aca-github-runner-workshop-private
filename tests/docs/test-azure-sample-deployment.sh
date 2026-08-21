@@ -89,4 +89,4 @@ for forbidden in \
   fi
 done
 
-printf 'PASS: Azure sample deployment doc and workflow disclosure\n'
+printf 'PASS: Private Blob 배포와 결과 확인 doc and workflow disclosure\n'
