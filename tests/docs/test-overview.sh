@@ -35,6 +35,13 @@ for heading in \
   require "$heading" "missing README heading"
 done
 
+require '처음 Cloud Shell을 사용하는 경우 **Mount storage account**를 선택해 영구 스토리지를 연결한 뒤 Bash를 엽니다.' 'missing README first-run storage guidance'
+
+storage_line=$(grep -nF '처음 Cloud Shell을 사용하는 경우 **Mount storage account**를 선택해 영구 스토리지를 연결한 뒤 Bash를 엽니다.' "$README" | cut -d: -f1)
+clone_line=$(grep -nF 'git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' "$README" | cut -d: -f1)
+[[ -n "$storage_line" && -n "$clone_line" && "$storage_line" -lt "$clone_line" ]] ||
+  fail 'README must establish persistent Cloud Shell storage before cloning'
+
 for module in \
   'docs/01-prerequisites-github.md' \
   'docs/02-azure-foundation.md' \

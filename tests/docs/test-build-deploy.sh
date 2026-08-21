@@ -34,6 +34,14 @@ for text in \
 done
 
 for text in \
+  '`runner/Dockerfile`과 `runner/entrypoint.sh`를 검토하고 정적 검사를 실행한다.' \
+  'ACR Tasks의 `az acr build`로 runner image를 빌드하고 ACR에 게시한다.' \
+  '`github-actions-runner` container를 사용하는 ACA Event Job을 만든다.' \
+  'GitHub repository와 Fine-grained PAT를 KEDA `github-runner` scaler에 연결한다.'; do
+  assert_contains "$ALL_TEXT" "$text" 'missing first-run objective marker'
+done
+
+for text in \
   'AZURE_STORAGE_ACCOUNT' \
   'AZURE_STORAGE_CONTAINER' \
   'AZURE_PRIVATE_ENDPOINT_CIDR' \
@@ -42,14 +50,22 @@ for text in \
   assert_contains "$JOB_TEXT" "$text" 'module 04 private-blob marker missing'
 done
 
+assert_contains "$JOB_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 'missing optional recovery heading'
+
 for obsolete in \
   'AZURE_SAMPLE_''APP' \
   'internal ''Environment' \
   'same ''Environment' \
-  'internal ''ingress'; do
+  'internal ''ingress' \
+  '저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 모듈 02의 Azure 변수들을 복구한다.' \
+  '저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 Azure 변수들을 복구한다.' \
+  '세션이 재시작되었더라도 GitHub owner/repo/Fine-grained PAT를 안전하게 다시 입력한다.' \
+  'PASS: runner image and workflow artifacts'; do
   if grep -F -- "$obsolete" "$IMAGE_DOC" "$JOB_DOC" >/dev/null; then
     fail "obsolete sample-app architecture still present: $obsolete"
   fi
 done
+
+assert_contains "$IMAGE_DOC" '`bash tests/test-artifacts.sh`는 `PASS: workflow artifacts contract`를 출력합니다.' 'missing module 03 expected output'
 
 printf 'PASS: build and deploy docs\n'

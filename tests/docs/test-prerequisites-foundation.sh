@@ -76,6 +76,12 @@ assert_contains_multiline \
   $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --all \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
   'module 02 must verify only ACR_ID and STORAGE_ID scopes'
 
+for text in \
+  '이후 세션 재연결이 필요할 때 사용할 수 있도록' \
+  '이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다.'; do
+  assert_contains "$FOUNDATION_TEXT" "$text" 'missing first-run recovery framing'
+done
+
 for obsolete in \
   '--internal-only ''true' \
   'az storage account network-rule add' \
@@ -85,7 +91,9 @@ for obsolete in \
   '--record-set-name "*"' \
   'Container Apps Contributor' \
   'RG scope role verification' \
-  'sample app capacity wording'; do
+  'sample app capacity wording' \
+  '다음 Module 03~06 재접속과 복구에 대비해' \
+  '기본 네트워크로 만든 기존 ACA environment나 이전 internal environment는 현재 foundation으로 변환할 수 없습니다.'; do
   if grep -F -- "$obsolete" "$FOUNDATION" "$PREREQ" >/dev/null; then
     fail "obsolete internal-ACA contract still present: $obsolete"
   fi
