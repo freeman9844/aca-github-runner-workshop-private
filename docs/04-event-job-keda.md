@@ -184,7 +184,7 @@ Job 설정 오류를 복구할 때는 Resource Group 전체를 다시 만들지 
 
 👁️ **설명**
 
-이 워크숍은 queued workflow가 생겼을 때만 runner를 띄우는 Event Job을 사용합니다. runner container 이름은 문서, 검증, 로그 해석을 통일하기 위해 반드시 `github-actions-runner`로 고정합니다. 아래 `AZURE_*` 값은 Azure 리소스를 식별하는 환경 변수이며 credential이 아닙니다. 실제 인증은 workflow가 실행 중 managed-identity endpoint에서 short-lived Azure token을 받아 처리합니다. 이 단계의 image pull과 scaler polling은 workshop의 public outbound 경로를 그대로 사용하고, Blob artifact 경로에는 `AZURE_STORAGE_ACCOUNT=$STORAGE`, `AZURE_STORAGE_CONTAINER=$STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR=$PRIVATE_ENDPOINT_CIDR`를 전달해 Task 3 입력값을 고정합니다.
+이 워크숍은 queued workflow가 생겼을 때만 runner를 띄우는 Event Job을 사용합니다. runner container 이름은 문서, 검증, 로그 해석을 통일하기 위해 반드시 `github-actions-runner`로 고정합니다. 아래 `AZURE_*` 값은 Azure 리소스를 식별하는 환경 변수이며 credential이 아닙니다. 실제 인증은 workflow가 실행 중 managed-identity endpoint에서 short-lived Azure token을 받아 처리합니다. 이 단계의 image pull과 scaler polling은 workshop의 public outbound 경로를 그대로 사용하고, Blob artifact 경로에는 `AZURE_STORAGE_ACCOUNT=$STORAGE`, `AZURE_STORAGE_CONTAINER=$STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR=$PRIVATE_ENDPOINT_CIDR`를 전달해 Module 06 workflow 입력값을 고정합니다.
 
 🟢 **실행**
 

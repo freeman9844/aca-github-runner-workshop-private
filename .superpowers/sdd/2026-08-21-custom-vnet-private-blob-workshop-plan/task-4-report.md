@@ -87,3 +87,46 @@
 
 ## Concerns
 - None.
+
+## Final-fix wave (2026-08-21)
+
+### Scope
+- Deleted the four tracked, unreferenced legacy Module 06 screenshots requested in final review.
+- Replaced participant-facing `Task 2` / `Task 3` wording in workshop docs with resolvable Module terminology.
+- Removed the redundant `Storage Blob Data Contributor` artifact-test marker while keeping deleted screenshot filenames as forbidden regression-test strings.
+
+### Changed files
+- `docs/02-azure-foundation.md`
+- `docs/04-event-job-keda.md`
+- `docs/06-azure-sample-deployment.md`
+- `docs/07-security-limitations-cleanup.md`
+- `tests/docs/test-azure-sample-deployment.sh`
+- `tests/test-artifacts.sh`
+
+### Deleted files
+- `docs/images/06-azure-portal-resource-group-result.png`
+- `docs/images/06-container-app-hello-world-result.png`
+- `docs/images/06-github-run-workflow-dispatch.png`
+- `docs/images/06-github-workflows-console.png`
+
+### Exact validation evidence
+- `bash tests/docs/test-prerequisites-foundation.sh`
+  - `PASS: prerequisites and foundation docs`
+- `bash tests/docs/test-build-deploy.sh`
+  - `PASS: build and deploy docs`
+- `bash tests/docs/test-azure-sample-deployment.sh`
+  - `PASS: Private Blob 배포와 결과 확인 doc and workflow disclosure`
+- `bash tests/docs/test-security-cleanup.sh`
+  - `PASS: security cleanup doc`
+- `bash tests/test-artifacts.sh`
+  - `PASS: workflow artifacts contract`
+- `bash tests/test-validate-workshop.sh`
+  - `PASS: integrated workshop validator`
+- `git ls-files docs/images/06-container-app-hello-world-result.png docs/images/06-github-run-workflow-dispatch.png docs/images/06-github-workflows-console.png docs/images/06-azure-portal-resource-group-result.png`
+  - `no output`
+- `grep -RInE 'Task [0-9]\\b' README.md docs --include='*.md'`
+  - `no output`
+- `grep -RInE '06-container-app-hello-world-result\\.png|06-github-run-workflow-dispatch\\.png|06-github-workflows-console\\.png|06-azure-portal-resource-group-result\\.png' README.md docs samples --include='*.md' --include='*.yml' --include='*.yaml'`
+  - `no output`
+- `git diff --check origin/master...HEAD`
+  - `no output`

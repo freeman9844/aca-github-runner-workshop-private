@@ -160,7 +160,7 @@ printf 'Workflow inputs: AZURE_STORAGE_ACCOUNT=%s AZURE_STORAGE_CONTAINER=%s AZU
 
 ⚠️ **주의**
 
-- 여기서 role이 보이지 않으면 Task 2 foundation이 incomplete한 상태입니다. 범위를 넓히지 말고 Module 02의 Storage scope role assignment 절차를 다시 확인하세요.
+- 여기서 role이 보이지 않으면 Module 02 foundation이 incomplete한 상태입니다. 범위를 넓히지 말고 Module 02의 Storage scope role assignment 절차를 다시 확인하세요.
 - `defaultAction=Deny`와 `allowSharedKeyAccess=False`는 data-plane을 private endpoint + managed identity 경로로 고정하기 위한 조건입니다.
 
 ## 2. Private Blob workflow를 GitHub에 생성

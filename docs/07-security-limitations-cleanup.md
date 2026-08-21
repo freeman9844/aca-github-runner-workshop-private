@@ -1,6 +1,6 @@
 # 07. 보안·제약·정리
 
-> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 Task 2 기준 foundation을 정리하며, External ACA Environment + custom VNet + private Blob 구성을 production 확장 관점에서 다시 해석합니다.
+> Azure Cloud Shell Bash 기준으로 이 워크숍의 보안 기본선, 운영 한계, Azure/GitHub 정리 절차를 마무리합니다. 이 모듈은 Module 02 foundation을 정리하며, External ACA Environment + custom VNet + private Blob 구성을 production 확장 관점에서 다시 해석합니다.
 
 ## 목표
 
@@ -79,7 +79,7 @@ az group list --query "[?starts_with(name, 'rg-acarunner-')].name" --output tabl
 
 👁️ **설명**
 
-self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므로, 저장소 신뢰 경계와 credential 관리 원칙이 가장 중요합니다. Task 2 foundation에서는 Blob artifact 경로를 private path로 고정하고 broad Azure 권한을 늦게 열어 두는 것이 핵심입니다.
+self-hosted runner는 GitHub Actions workflow 코드를 실제로 실행하므로, 저장소 신뢰 경계와 credential 관리 원칙이 가장 중요합니다. Module 02 foundation에서는 Blob artifact 경로를 private path로 고정하고 broad Azure 권한을 늦게 열어 두는 것이 핵심입니다.
 
 ⚠️ **주의**
 
@@ -201,7 +201,7 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 1. 실습용 Fine-grained PAT를 revoke하여 PAT 삭제를 완료합니다.
 2. Cloud Shell에서 `unset GITHUB_PAT`를 실행합니다.
 3. `aca-runner-lab`의 `.github/workflows/aca-runner-scale-test.yml`, stale runner record, lab repository 보존 여부를 정리합니다.
-4. Task 3 이후 별도 workflow를 만들었다면 더 이상 필요 없는 workflow 파일도 함께 정리합니다.
+4. Module 06 workflow 이후 별도 workflow를 만들었다면 더 이상 필요 없는 workflow 파일도 함께 정리합니다.
 
 ⚠️ **주의**
 

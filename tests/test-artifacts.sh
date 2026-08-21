@@ -12,7 +12,6 @@ fail() {
 [[ -f "$WORKFLOW" ]] || fail "sample deploy workflow missing"
 
 for text in \
-  'Storage Blob Data Contributor' \
   'AZURE_STORAGE_ACCOUNT' \
   'AZURE_STORAGE_CONTAINER' \
   'AZURE_PRIVATE_ENDPOINT_CIDR' \

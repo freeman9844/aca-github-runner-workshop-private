@@ -66,6 +66,8 @@ for text in \
 done
 
 for old_screenshot in \
+  'images/06-azure-portal-resource-group-result.png' \
+  'images/06-container-app-hello-world-result.png' \
   'images/06-github-workflows-console.png' \
   'images/06-github-run-workflow-dispatch.png' \
   'images/06-github-deployment-success-details.png'; do
