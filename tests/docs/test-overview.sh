@@ -60,14 +60,14 @@ require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | C
 require '| 06 | [Private Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 private Blob 업로드·다운로드와 checksum 검증 | 20분 |' 'README Module 06 row mismatch'
 
 for obsolete in \
-  '--internal-only true' \
-  'ENV_DEFAULT_DOMAIN' \
-  'ENV_STATIC_IP' \
-  'same Environment HTTPS' \
+  '--internal-only ''true' \
+  'ENV_DEFAULT_''DOMAIN' \
+  'ENV_STATIC_''IP' \
+  'same ''Environment HTTPS' \
   'internal-ingress FQDN' \
-  'AZURE_SAMPLE_APP'; do
+  'AZURE_SAMPLE_''APP'; do
   if grep -F -- "$obsolete" "$README" >/dev/null; then
-    fail "README contains obsolete internal ACA content: $obsolete"
+    fail "README contains obsolete internal ""ACA content: $obsolete"
   fi
 done
 

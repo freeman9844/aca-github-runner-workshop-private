@@ -43,10 +43,10 @@ for text in \
 done
 
 for obsolete in \
-  'AZURE_SAMPLE_APP' \
-  'internal Environment' \
-  'same Environment' \
-  'internal ingress'; do
+  'AZURE_SAMPLE_''APP' \
+  'internal ''Environment' \
+  'same ''Environment' \
+  'internal ''ingress'; do
   if grep -F -- "$obsolete" "$IMAGE_DOC" "$JOB_DOC" >/dev/null; then
     fail "obsolete sample-app architecture still present: $obsolete"
   fi

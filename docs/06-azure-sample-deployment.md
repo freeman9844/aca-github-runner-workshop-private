@@ -174,6 +174,7 @@ printf 'Workflow inputs: AZURE_STORAGE_ACCOUNT=%s AZURE_STORAGE_CONTAINER=%s AZU
 먼저 Cloud Shell에서 checked-in sample을 그대로 출력합니다.
 
 ```bash
+# checked-in private Blob workflow sample 전체를 Cloud Shell에서 출력합니다.
 cd ~/aca-github-runner-workshop
 sed -n '1,220p' samples/azure-sample-deploy-workflow.yml
 ```

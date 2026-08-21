@@ -222,4 +222,4 @@ Azure만 지우고 GitHub 실습 흔적을 남겨 두면 stale runner 기록이�
 
 ---
 
-[← 이전: Azure 샘플 배포와 결과 확인](06-azure-sample-deployment.md)
+[← 이전: Private Blob 배포와 결과 확인](06-azure-sample-deployment.md)

@@ -76,10 +76,10 @@ assert_contains_multiline \
   'module 02 must verify only ACR_ID and STORAGE_ID scopes'
 
 for obsolete in \
-  '--internal-only true' \
+  '--internal-only ''true' \
   'az storage account network-rule add' \
-  'ENV_DEFAULT_DOMAIN' \
-  'ENV_STATIC_IP' \
+  'ENV_DEFAULT_''DOMAIN' \
+  'ENV_STATIC_''IP' \
   'az network private-dns record-set a add-record' \
   '--record-set-name "*"' \
   'Container Apps Contributor' \

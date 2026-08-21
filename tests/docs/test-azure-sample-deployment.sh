@@ -76,11 +76,11 @@ done
 
 for forbidden in \
   'Container Apps Contributor' \
-  'AZURE_SAMPLE_APP' \
+  'AZURE_SAMPLE_''APP' \
   'SAMPLE_APP' \
-  'hello-aca' \
+  'hello-''aca' \
   'containerapp create' \
-  'internal ingress' \
+  'internal ''ingress' \
   'same ACA Environment' \
   'APP_URL' \
   'FQDN'; do

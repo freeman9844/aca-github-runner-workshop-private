@@ -31,9 +31,9 @@ done
 
 for obsolete in \
   'sample app' \
-  'internal Environment' \
-  'same Environment' \
-  'internal ingress'; do
+  'internal ''Environment' \
+  'same ''Environment' \
+  'internal ''ingress'; do
   if grep -F -- "$obsolete" "$DOC" >/dev/null; then
     fail "module 07 still uses old internal-ACA language: $obsolete"
   fi

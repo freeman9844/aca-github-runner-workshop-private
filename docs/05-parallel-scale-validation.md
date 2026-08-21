@@ -527,6 +527,6 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 ---
 
 [← 이전: Event Job + KEDA 구성](04-event-job-keda.md)
-[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)
+[다음: Private Blob 배포와 결과 확인 →](06-azure-sample-deployment.md)
 
-Module 06은 필수 단계입니다. 위 링크로 이동해 Azure 샘플 배포와 결과 확인을 계속합니다.
+Module 06은 필수 단계입니다. 위 링크로 이동해 Private Blob 배포와 결과 확인을 계속합니다.

@@ -28,7 +28,7 @@ done
 for forbidden in \
   'containerapp create' \
   '--ingress internal' \
-  'AZURE_SAMPLE_APP'; do
+  'AZURE_SAMPLE_''APP'; do
   if grep -F -- "$forbidden" "$WORKFLOW" >/dev/null; then
     fail "workflow still contains obsolete sample-app behavior: $forbidden"
   fi
