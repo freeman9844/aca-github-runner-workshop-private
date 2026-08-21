@@ -55,6 +55,8 @@ for text in \
   'AZURE_PRIVATE_ENDPOINT_CIDR' \
   'privatelink.blob.core.windows.net' \
   'private IP' \
+  'External ACA Job은 ingress를 지원하지 않으며' \
+  'inbound reachability를 증명하지 않습니다' \
   'az storage blob upload' \
   'az storage blob download' \
   '--auth-mode login' \

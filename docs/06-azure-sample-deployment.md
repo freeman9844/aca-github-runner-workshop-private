@@ -1,6 +1,7 @@
 # 06. Private Blob 배포와 결과 확인
 
 > 필수 모듈입니다. Azure Cloud Shell Bash, GitHub 웹 UI, Azure Portal을 함께 사용해 trusted single-job workflow로 private Blob artifact를 업로드·다운로드하고, managed identity와 Private Endpoint 경로가 실제로 사용됐는지 검증합니다. `private repository`와 `trusted workflow authors` 경계를 유지한 채 runner Job의 public outbound와 Blob data-plane private path를 분리해 증명합니다.
+> External ACA Job은 ingress를 지원하지 않으므로, 이 workflow는 inbound reachability가 아니라 private Blob data-plane outbound access만 증명합니다.
 
 ## 목표
 
@@ -107,6 +108,8 @@ printf 'RG=%s\nENV=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID
 👁️ **설명**
 
 Module 04의 Event Job은 이미 runner에 `AZURE_CLIENT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR`를 전달합니다. 이 모듈은 그 입력을 그대로 사용해 Blob data-plane proof만 수행합니다. 따라서 여기서 확인할 핵심은 세 가지입니다.
+
+External ACA Job은 ingress를 지원하지 않으며, 이 workflow는 runner에 대한 inbound reachability를 증명하지 않습니다. 대신 private Blob data-plane으로의 outbound access만 증명합니다.
 
 1. runner UAMI가 Storage account 범위의 `Storage Blob Data Contributor`를 가지고 있는지,
 2. Storage public access가 막혀 있고 shared-key access가 꺼져 있는지,
