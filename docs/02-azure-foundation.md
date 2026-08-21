@@ -351,6 +351,7 @@ az role assignment create \
 # 두 역할이 의도한 각 scope에 ServicePrincipal 대상으로 할당되었는지 함께 확인합니다.
 az role assignment list \
   --assignee "$UAMI_PID" \
+  --all \
   --query "[?scope=='$ACR_ID' || scope=='$STORAGE_ID'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \
   --output table
 ```
@@ -400,7 +401,7 @@ Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로 �
 | `az acr create`가 이름 중복 오류를 반환함 | `ACR` 이름은 전역 고유인데 이미 다른 구독에서 사용 중 | 아래 ACR 이름 충돌 복구 절차에 따라 ACR 이름만 바꾸고, 바뀐 실제 `ACR` 이름을 새로 저장한 뒤 다시 시도합니다. |
 | `az storage account create`가 이름 중복 오류를 반환함 | `STORAGE` 이름은 전역 고유인데 이미 다른 구독에서 사용 중 | 아래 Storage 이름 충돌 복구 절차에 따라 Storage 이름만 바꾸고, 바뀐 실제 `STORAGE` 이름을 새로 저장한 뒤 6단계를 다시 실행합니다. |
 | `az monitor diagnostic-settings create`가 권한 오류를 반환함 | 현재 구독/리소스 그룹에서 diagnostic setting을 만들 권한이 없음 | Contributor 이상 권한인지 확인하고, 잘못된 구독에 배포했다면 `az account show`로 현재 구독을 다시 확인합니다. |
-| role assignment는 성공했는데 image pull 또는 Blob access가 아직 실패함 | RBAC propagation 지연 | 몇 분 기다린 뒤 `az role assignment list --assignee "$UAMI_PID" --query "[?scope=='$ACR_ID' || scope=='$STORAGE_ID'].roleDefinitionName" --output tsv`로 역할 전파를 확인하고 다음 모듈을 재시도합니다. |
+| role assignment는 성공했는데 image pull 또는 Blob access가 아직 실패함 | RBAC propagation 지연 | 몇 분 기다린 뒤 `az role assignment list --assignee "$UAMI_PID" --all --query "[?scope=='$ACR_ID' || scope=='$STORAGE_ID'].roleDefinitionName" --output tsv`로 역할 전파를 확인하고 다음 모듈을 재시도합니다. |
 
 ### ACR 이름 충돌 복구
 

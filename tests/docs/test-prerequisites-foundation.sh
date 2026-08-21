@@ -73,7 +73,7 @@ assert_contains_multiline \
 
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \
-  $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
+  $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --all \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
   'module 02 must verify only ACR_ID and STORAGE_ID scopes'
 
 for obsolete in \
