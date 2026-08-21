@@ -53,7 +53,8 @@ for text in \
   '--allow-shared-key-access false' \
   'defaultAction' \
   'Deny' \
-  'Microsoft.Storage/storageAccounts/blobServices/containers' \
+  'az storage container-rm create' \
+  '--public-access off' \
   'az network private-endpoint create' \
   '--group-id blob' \
   'az network private-dns zone create' \

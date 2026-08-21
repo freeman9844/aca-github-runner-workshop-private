@@ -244,7 +244,7 @@ enabled
 
 Task 2의 핵심 변화는 runner artifact 보관소를 private Blob path로 전환하는 것입니다. Storage Account는 public endpoint 자체를 제거하지 않고 `publicNetworkAccess=Enabled` 상태를 유지하되, `defaultAction=Deny`와 `allowSharedKeyAccess=false`로 잠그고 Blob 서브리소스에만 Private Endpoint를 연결합니다.
 
-Blob container는 shared key가 꺼져 있고 나중에 public network path도 data plane에서 막힐 수 있으므로, `az storage container create` 대신 ARM management plane 경로인 `az resource create`로 만듭니다. 이 방법은 shared-key-disabled, public-network-denied Storage에도 호환됩니다.
+Blob container는 shared key가 꺼져 있고 나중에 public network path도 data plane에서 막힐 수 있으므로, `az storage container create` 대신 Microsoft.Storage management plane 명령인 `az storage container-rm create`로 만듭니다. 이 방법은 shared-key-disabled, public-network-denied Storage에도 호환됩니다.
 
 🟢 **실행**
 
@@ -256,7 +256,7 @@ az storage account create   --resource-group "$RG"   --name "$STORAGE"   --locat
 STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
 
 # shared key 없이도 동작하는 management plane 경로로 Blob container를 만듭니다.
-az resource create   --resource-group "$RG"   --resource-type "Microsoft.Storage/storageAccounts/blobServices/containers"   --name "$STORAGE/default/$STORAGE_CONTAINER"   --api-version 2023-05-01   --properties '{"publicAccess":"None"}'   --output none
+az storage container-rm create   --resource-group "$RG"   --storage-account "$STORAGE"   --name "$STORAGE_CONTAINER"   --public-access off   --output none
 
 # Blob 서브리소스에만 연결되는 Private Endpoint를 별도 PE subnet에 만듭니다.
 az network private-endpoint create   --resource-group "$RG"   --name "$STORAGE_PE"   --location "$LOC"   --subnet "$PE_SUBNET_ID"   --private-connection-resource-id "$STORAGE_ID"   --group-id blob   --connection-name "conn-$STORAGE_PE"   --output none
@@ -394,7 +394,7 @@ Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로 �
 | `az containerapp env create`가 subnet 관련 오류를 반환함 | `Microsoft.App/environments` subnet delegation이 없거나, delegated subnet과 PE subnet을 섞으려 함 | 3단계의 `az network vnet subnet update`를 다시 실행한 뒤 `INFRA_SUBNET`에만 delegation이 있는지 확인합니다. Blob Private Endpoint는 반드시 `PE_SUBNET`에 다시 만듭니다. |
 | `az containerapp env create`가 address space 또는 capacity 오류를 반환함 | `/27`보다 작은 subnet은 Workload profiles environment에 사용할 수 없음 | ACA subnet을 `/27` 이상으로 다시 만들고, 이미 잘못된 network foundation으로 Environment를 만들었다면 새 workshop suffix로 1단계부터 다시 시작합니다. |
 | Storage Account 또는 Private Endpoint 생성에서 MissingSubscriptionRegistration이 발생함 | 현재 구독에 `Microsoft.Storage` provider가 등록되지 않음 | [모듈 01](01-prerequisites-github.md)의 provider 등록 명령을 다시 실행해 `Microsoft.Storage`가 `Registered`인지 확인한 뒤 Storage/Private Endpoint 단계를 다시 실행합니다. |
-| Blob container 생성이 data plane 인증 오류로 실패함 | shared key를 끄고 방화벽을 닫은 Storage에서 data plane 명령을 사용함 | `az storage container create`로 우회하지 말고 문서의 `az resource create --resource-type "Microsoft.Storage/storageAccounts/blobServices/containers"` 경로를 그대로 다시 실행합니다. |
+| Blob container 생성이 data plane 인증 오류로 실패함 | shared key를 끄고 방화벽을 닫은 Storage에서 data plane 명령을 사용함 | `az storage container create`로 우회하지 말고 문서의 `az storage container-rm create --public-access off` management plane 경로를 그대로 다시 실행합니다. |
 | `customDnsConfigs[0]`가 비어 있어 `STORAGE_PE_IP`가 빈 값으로 남음 | region 또는 시점에 따라 Private Endpoint show 응답에 DNS config가 늦게 채워짐 | 문서의 NIC fallback 블록을 그대로 실행합니다. `networkInterfaces[0].id`에서 NIC를 찾고 `az network nic show --ids "$STORAGE_PE_NIC_ID" --query "ipConfigurations[0].privateIPAddress" --output tsv` 결과를 사용합니다. |
 | Blob 이름이 VNet 내부에서 해석되지 않음 | `privatelink.blob.core.windows.net` zone, VNet link 또는 zone group이 누락됨 | 6단계의 `az network private-dns zone create`, `az network private-dns link vnet create`, `az network private-endpoint dns-zone-group create`를 다시 확인하고 `az network private-dns record-set a show` 검증을 재실행합니다. |
 | `az acr create`가 이름 중복 오류를 반환함 | `ACR` 이름은 전역 고유인데 이미 다른 구독에서 사용 중 | 아래 ACR 이름 충돌 복구 절차에 따라 ACR 이름만 바꾸고, 바뀐 실제 `ACR` 이름을 새로 저장한 뒤 다시 시도합니다. |
