@@ -79,6 +79,13 @@ def main() -> None:
     if missing_step_names:
         fail(f"missing step names: {', '.join(sorted(missing_step_names))}")
 
+    signin_step = get_step(steps, "Sign in to Azure with managed identity")
+    signin_script = signin_step.get("run")
+    if not isinstance(signin_script, str):
+        fail("sign-in step must contain a run script")
+    if "az login --identity" not in signin_script:
+        fail("sign-in step must use managed identity login")
+
     dns_script = get_step(steps, "Verify Blob DNS resolves to the private endpoint subnet").get("run")
     if not isinstance(dns_script, str):
         fail("DNS step must contain a run script")
@@ -210,14 +217,14 @@ printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111
             fail("blob step must emit the checksum mismatch error")
 
         calls = calls_log.read_text(encoding="utf-8")
-        for fragment in (
-            "storage blob upload",
-            "--auth-mode login",
-            "storage blob download",
-            "storage blob show",
-        ):
-            if fragment not in calls:
-                fail(f"mock call log missing: {fragment}")
+        command_lines = calls.splitlines()
+        for command in ("storage blob upload", "storage blob download", "storage blob show"):
+            matches = [line for line in command_lines if command in line]
+            if not matches:
+                fail(f"mock call log missing command: {command}")
+            for line in matches:
+                if "--auth-mode login" not in line:
+                    fail(f"mock call log missing auth-mode login for {command}: {line}")
 
     finally:
         shutil.rmtree(SCRATCH, ignore_errors=True)

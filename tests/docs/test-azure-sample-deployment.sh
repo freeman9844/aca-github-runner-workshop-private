@@ -64,9 +64,9 @@ for text in \
 done
 
 for old_screenshot in \
-  'images/06-github-actions-deployment-success.png' \
-  'images/06-azure-portal-resource-group-result.png' \
-  'images/06-container-app-hello-world-result.png'; do
+  'images/06-github-workflows-console.png' \
+  'images/06-github-run-workflow-dispatch.png' \
+  'images/06-github-deployment-success-details.png'; do
   if grep -F -- "$old_screenshot" "$DOC" >/dev/null; then
     fail "module 06 still references obsolete screenshot: $old_screenshot"
   fi
