@@ -2,137 +2,235 @@
 
 from pathlib import Path
 import os
+import shutil
 import subprocess
-import tempfile
 
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOWS = (
-    ROOT / ".github/workflows/validate-workshop.yml",
-    ROOT / "samples/parallel-runner-workflow.yml",
-    ROOT / "samples/azure-sample-deploy-workflow.yml",
-)
+WORKFLOW = ROOT / "samples/azure-sample-deploy-workflow.yml"
+SCRATCH = ROOT / ".workflow-yaml-test-scratch"
 
 
-for workflow in WORKFLOWS:
-    with workflow.open(encoding="utf-8") as stream:
-        document = yaml.load(stream, Loader=yaml.BaseLoader)
+def fail(message: str) -> None:
+    raise SystemExit(f"FAIL: {message}")
 
+
+def load_workflow() -> dict:
+    try:
+        with WORKFLOW.open(encoding="utf-8") as stream:
+            document = yaml.safe_load(stream)
+    except FileNotFoundError:
+        fail("samples/azure-sample-deploy-workflow.yml missing")
     if not isinstance(document, dict):
-        raise SystemExit(f"FAIL: {workflow.relative_to(ROOT)} is not a YAML mapping")
+        fail("workflow must be a YAML mapping")
+    return document
 
-    missing = {"name", "on", "jobs"} - document.keys()
-    if missing:
-        raise SystemExit(
-            f"FAIL: {workflow.relative_to(ROOT)} missing keys: {', '.join(sorted(missing))}"
-        )
 
-    if not isinstance(document["jobs"], dict) or not document["jobs"]:
-        raise SystemExit(f"FAIL: {workflow.relative_to(ROOT)} has no jobs")
+def get_step(steps: list[dict], name: str) -> dict:
+    for step in steps:
+        if isinstance(step, dict) and step.get("name") == name:
+            return step
+    fail(f"missing workflow step: {name}")
+    raise AssertionError
 
-with (ROOT / "samples/azure-sample-deploy-workflow.yml").open(
-    encoding="utf-8"
-) as stream:
-    deploy_workflow = yaml.safe_load(stream)
 
-deploy_script = deploy_workflow["jobs"]["deploy-sample"]["steps"][2]["run"]
+def write_executable(path: Path, content: str) -> None:
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o755)
 
-with tempfile.TemporaryDirectory() as temp_dir:
-    temp = Path(temp_dir)
-    bin_dir = temp / "bin"
-    bin_dir.mkdir()
-    mock_az = bin_dir / "az"
-    mock_az.write_text(
-        """#!/usr/bin/env bash
-set -euo pipefail
-printf '%s\\n' "$*" >> "$MOCK_CALLS"
 
-if [[ "$1 $2" == "containerapp show" ]]; then
-  case "$MOCK_SCENARIO" in
-    inspection-error)
-      printf '(AuthorizationFailed) denied\\n' >&2
-      exit 3
-      ;;
-    absent)
-      printf '(ResourceNotFound) absent\\n' >&2
-      exit 3
-      ;;
-    existing-delete)
-      if [[ -f "$MOCK_DELETED" ]]; then
-        printf '(ResourceNotFound) deleted\\n' >&2
-        exit 3
-      fi
-      exit 0
-      ;;
-  esac
-fi
-
-if [[ "$1 $2" == "containerapp delete" ]]; then
-  touch "$MOCK_DELETED"
-  exit 0
-fi
-
-if [[ "$1 $2" == "containerapp create" ]]; then
-  printf 'hello.example.azurecontainerapps.io\\n'
-  exit 0
-fi
-
-exit 99
-""",
-        encoding="utf-8",
+def run_script(script: str, *, env: dict[str, str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", "-c", script],
+        cwd=cwd,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
     )
-    mock_az.chmod(0o755)
 
-    base_environment = os.environ | {
-        "PATH": f"{bin_dir}:{os.environ['PATH']}",
-        "AZURE_SAMPLE_APP": "hello-test",
-        "AZURE_RESOURCE_GROUP": "rg-test",
-        "AZURE_CONTAINERAPPS_ENVIRONMENT": "env-test",
-        "MOCK_CALLS": str(temp / "az-calls.log"),
-        "MOCK_DELETED": str(temp / "deleted"),
+
+def main() -> None:
+    document = load_workflow()
+    try:
+        deploy_workflow = document["jobs"]
+        deploy_job = deploy_workflow["deploy-private-blob"]
+        steps = deploy_job["steps"]
+    except KeyError as exc:
+        fail("workflow must define jobs.deploy-private-blob")
+    if not isinstance(deploy_job, dict):
+        fail("deploy-private-blob job must be a mapping")
+    if not isinstance(steps, list):
+        fail("deploy-private-blob job must define steps")
+
+    required_step_names = {
+        "Validate runner inputs",
+        "Sign in to Azure with managed identity",
+        "Verify Blob DNS resolves to the private endpoint subnet",
+        "Upload and download the private Blob artifact",
+        "Show private deployment result",
     }
+    actual_step_names = {
+        step.get("name") for step in steps if isinstance(step, dict) and step.get("name")
+    }
+    missing_step_names = required_step_names - actual_step_names
+    if missing_step_names:
+        fail(f"missing step names: {', '.join(sorted(missing_step_names))}")
 
-    def run_deploy_step(scenario: str) -> subprocess.CompletedProcess[str]:
-        github_env = temp / f"github-env-{scenario}"
-        environment = base_environment | {
-            "GITHUB_ENV": str(github_env),
-            "MOCK_SCENARIO": scenario,
-        }
-        return subprocess.run(
-            ["bash", "-c", deploy_script],
-            check=False,
-            capture_output=True,
-            env=environment,
-            text=True,
+    signin_step = get_step(steps, "Sign in to Azure with managed identity")
+    signin_script = signin_step.get("run")
+    if not isinstance(signin_script, str):
+        fail("sign-in step must contain a run script")
+    if "az login --identity" not in signin_script:
+        fail("sign-in step must use managed identity login")
+
+    dns_script = get_step(steps, "Verify Blob DNS resolves to the private endpoint subnet").get("run")
+    if not isinstance(dns_script, str):
+        fail("DNS step must contain a run script")
+    if "ipaddress" not in dns_script or "startswith(" in dns_script:
+        fail("DNS step must use Python ipaddress instead of shell prefix matching")
+
+    blob_script = get_step(steps, "Upload and download the private Blob artifact").get("run")
+    if not isinstance(blob_script, str):
+        fail("blob step must contain a run script")
+
+    if SCRATCH.exists():
+        shutil.rmtree(SCRATCH)
+    SCRATCH.mkdir(parents=True)
+    try:
+        bin_dir = SCRATCH / "bin"
+        bin_dir.mkdir()
+        calls_log = SCRATCH / "calls.log"
+        sha_log = SCRATCH / "sha.log"
+
+        write_executable(
+            bin_dir / "getent",
+            r'''#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$MOCK_CALLS"
+case "${MOCK_GETENT_CASE:-}" in
+  private)
+    printf '%s %s\n' "${MOCK_GETENT_IP:-10.20.1.4}" "$2"
+    exit 0
+    ;;
+  public)
+    printf '%s %s\n' "${MOCK_GETENT_IP:-20.60.1.4}" "$2"
+    exit 0
+    ;;
+  unresolved)
+    exit 2
+    ;;
+  *)
+    printf 'unexpected getent scenario\n' >&2
+    exit 99
+    ;;
+esac
+''',
+        )
+        write_executable(
+            bin_dir / "az",
+            r'''#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$MOCK_CALLS"
+case "$1 $2 $3" in
+  'storage blob upload'|'storage blob upload-batch')
+    exit 0
+    ;;
+  'storage blob download')
+    destination=""
+    for ((i=1; i<=$#; i++)); do
+      arg="${!i}"
+      if [[ "$arg" == '--file' || "$arg" == '-f' ]]; then
+        next_index=$((i + 1))
+        destination="${!next_index}"
+        break
+      fi
+    done
+    if [[ -n "$destination" ]]; then
+      printf 'downloaded blob\n' > "$destination"
+    fi
+    exit 0
+    ;;
+  'storage blob show')
+    printf '%s\n' "${MOCK_BLOB_SHOW_SHA:-2222222222222222222222222222222222222222222222222222222222222222}"
+    exit 0
+    ;;
+  *)
+    printf 'unexpected az invocation: %s\n' "$*" >&2
+    exit 99
+    ;;
+esac
+''',
+        )
+        write_executable(
+            bin_dir / "sha256sum",
+            r'''#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$MOCK_SHA_LOG"
+file="${!#}"
+printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111111111111111111111111111111}" "$file"
+''',
         )
 
-    inspection_error = run_deploy_step("inspection-error")
-    if inspection_error.returncode != 2:
-        raise SystemExit("FAIL: inspection errors must stop deployment")
-    if "ERROR: Failed to inspect Container App hello-test." not in inspection_error.stderr:
-        raise SystemExit("FAIL: inspection errors must remain visible")
-    if "containerapp create" in (temp / "az-calls.log").read_text(encoding="utf-8"):
-        raise SystemExit("FAIL: deployment continued after an inspection error")
+        base_env = os.environ.copy()
+        base_env.update(
+            {
+                "PATH": f"{bin_dir}:{base_env['PATH']}",
+                "AZURE_CLIENT_ID": "client-id",
+                "AZURE_SUBSCRIPTION_ID": "sub-id",
+                "AZURE_RESOURCE_GROUP": "rg-test",
+                "AZURE_CONTAINERAPPS_ENVIRONMENT": "env-test",
+                "AZURE_STORAGE_ACCOUNT": "stacarunnertest",
+                "AZURE_STORAGE_CONTAINER": "runner-artifacts",
+                "AZURE_PRIVATE_ENDPOINT_CIDR": "10.20.1.0/24",
+                "GITHUB_WORKSPACE": str(SCRATCH),
+                "GITHUB_ENV": str(SCRATCH / "github-env"),
+                "MOCK_CALLS": str(calls_log),
+                "MOCK_SHA_LOG": str(sha_log),
+                "MOCK_BLOB_SHOW_SHA": "2222222222222222222222222222222222222222222222222222222222222222",
+                "MOCK_SHA256SUM_VALUE": "1111111111111111111111111111111111111111111111111111111111111111",
+            }
+        )
 
-    (temp / "az-calls.log").unlink()
-    absent = run_deploy_step("absent")
-    if absent.returncode != 0 or "No existing Container App" not in absent.stdout:
-        raise SystemExit("FAIL: ResourceNotFound must allow first deployment")
-    absent_calls = (temp / "az-calls.log").read_text(encoding="utf-8")
-    create_call = next(
-        (line for line in absent_calls.splitlines() if line.startswith("containerapp create ")),
-        "",
-    )
-    if "--ingress internal" not in create_call:
-        raise SystemExit("FAIL: containerapp create must use internal ingress")
-    if "--ingress external" in create_call:
-        raise SystemExit("FAIL: containerapp create must not use external ingress")
+        dns_cases = {
+            "private": ("10.20.1.4", 0),
+            "public": ("20.60.1.4", 1),
+            "unresolved": ("", 1),
+        }
+        for case_name, (ip_value, expected_rc) in dns_cases.items():
+            env = base_env | {"MOCK_GETENT_CASE": case_name, "MOCK_GETENT_IP": ip_value}
+            result = run_script(dns_script, env=env, cwd=SCRATCH)
+            if result.returncode != expected_rc:
+                fail(
+                    f"DNS step returned {result.returncode} for {case_name}; expected {expected_rc}\n"
+                    f"stdout: {result.stdout}\nstderr: {result.stderr}"
+                )
 
-    (temp / "az-calls.log").unlink()
-    existing = run_deploy_step("existing-delete")
-    if existing.returncode != 0 or "Confirmed existing Container App deletion" not in existing.stdout:
-        raise SystemExit("FAIL: existing app deletion was not confirmed")
+        env = base_env | {"MOCK_GETENT_CASE": "private", "MOCK_GETENT_IP": "10.20.1.4"}
+        result = run_script(blob_script, env=env, cwd=SCRATCH)
+        if result.returncode == 0:
+            fail("blob step must fail when checksum mismatches")
+        combined_output = result.stdout + result.stderr
+        if "ERROR: Downloaded Blob checksum does not match the uploaded artifact." not in combined_output:
+            fail("blob step must emit the checksum mismatch error")
 
-print("PASS: workflow YAML syntax and deploy behavior")
+        calls = calls_log.read_text(encoding="utf-8")
+        command_lines = calls.splitlines()
+        for command in ("storage blob upload", "storage blob download", "storage blob show"):
+            matches = [line for line in command_lines if command in line]
+            if not matches:
+                fail(f"mock call log missing command: {command}")
+            for line in matches:
+                if "--auth-mode login" not in line:
+                    fail(f"mock call log missing auth-mode login for {command}: {line}")
+
+    finally:
+        shutil.rmtree(SCRATCH, ignore_errors=True)
+
+    print("PASS: workflow YAML syntax and private Blob behavior")
+
+
+if __name__ == "__main__":
+    main()

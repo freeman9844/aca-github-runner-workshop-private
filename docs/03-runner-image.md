@@ -39,70 +39,62 @@ Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 모듈 02에서 �
 read -rp "Saved SUFFIX: " SUFFIX
 read -rp "Saved ACR name: " ACR
 
-# suffix에서 파생되는 공통 이름과 고정 runner image tag를 다시 구성합니다.
+# suffix에서 파생되는 공통 이름과 private Blob foundation 값을 다시 구성합니다.
 LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
+VNET="vnet-acarunner-$SUFFIX"
+INFRA_SUBNET="snet-aca-infra"
+PE_SUBNET="snet-private-endpoints"
+STORAGE="stacarunner$SUFFIX"
+STORAGE_CONTAINER="runner-artifacts"
+STORAGE_PE="pe-blob-$SUFFIX"
+STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
+STORAGE_DNS_LINK="link-blob-$SUFFIX"
+PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
 
-# workspace, Environment, ACR, subscription과 Resource Group ID를 Azure에서 다시 조회합니다.
-LOG_ID=$(az monitor log-analytics workspace show \
-  --resource-group "$RG" \
-  --workspace-name "$LOG" \
-  --query customerId \
-  --output tsv)
-LOG_RID=$(az monitor log-analytics workspace show \
-  --resource-group "$RG" \
-  --workspace-name "$LOG" \
-  --query id \
-  --output tsv)
-ENV_ID=$(az containerapp env show \
-  --resource-group "$RG" \
-  --name "$ENV" \
-  --query id \
-  --output tsv)
+# Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+read -rp "Saved Storage account name if changed (press Enter to keep ${STORAGE}): " SAVED_STORAGE
+if [[ -n "$SAVED_STORAGE" ]]; then
+  STORAGE="$SAVED_STORAGE"
+fi
+unset SAVED_STORAGE
+
+# workspace, Environment, ACR, Storage, subscription과 Resource Group ID를 Azure에서 다시 조회합니다.
+LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
+LOG_RID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query id   --output tsv)
+ENV_ID=$(az containerapp env show   --resource-group "$RG"   --name "$ENV"   --query id   --output tsv)
+VNET_ID=$(az network vnet show   --resource-group "$RG"   --name "$VNET"   --query id   --output tsv)
+PE_SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$PE_SUBNET"   --query id   --output tsv)
+STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
 ACR_SERVER=$(az acr show --name "$ACR" --query loginServer --output tsv)
 ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
 SUBSCRIPTION_ID=$(az account show --query id --output tsv)
-RG_ID=$(az group show \
-  --name "$RG" \
-  --query id \
-  --output tsv)
+RG_ID=$(az group show   --name "$RG"   --query id   --output tsv)
 
 # UAMI의 resource, principal, client ID를 각각 Job 연결·RBAC·Azure login 용도로 복원합니다.
-UAMI_RID=$(az identity show \
-  --resource-group "$RG" \
-  --name "$UAMI" \
-  --query id \
-  --output tsv)
-UAMI_PID=$(az identity show \
-  --resource-group "$RG" \
-  --name "$UAMI" \
-  --query principalId \
-  --output tsv)
-UAMI_CLIENT_ID=$(az identity show \
-  --resource-group "$RG" \
-  --name "$UAMI" \
-  --query clientId \
-  --output tsv)
+UAMI_RID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query id   --output tsv)
+UAMI_PID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query principalId   --output tsv)
+UAMI_CLIENT_ID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query clientId   --output tsv)
 
 # 다음 명령과 모듈이 같은 값을 사용하도록 복구한 변수를 현재 shell에 export합니다.
-export SUFFIX LOC RG LOG ENV ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
+export SUFFIX LOC RG LOG ENV VNET INFRA_SUBNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK PRIVATE_ENDPOINT_CIDR ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID VNET_ID PE_SUBNET_ID STORAGE_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
 
-# 복구한 suffix, 실제 ACR 이름과 image tag를 출력해 session 상태를 확인합니다.
-printf 'SUFFIX=%s ACR=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$IMAGE"
+# 복구한 suffix, 실제 ACR 이름, Storage 이름과 image tag를 출력해 session 상태를 확인합니다.
+printf 'SUFFIX=%s ACR=%s STORAGE=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$STORAGE" "$IMAGE"
 ```
 
 📋 **예상 출력**
 
 ```text
-SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
+SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 STORAGE=stacarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 ```
 
-`ACR` 값은 위 형식이 기본값일 뿐이며, 모듈 02에서 이름 충돌 복구를 했다면 입력한 실제 `ACR` 값이 그대로 출력되어야 합니다.
+`ACR` 값은 위 형식이 기본값일 뿐이며, 모듈 02에서 이름 충돌 복구를 했다면 입력한 실제 `ACR` 값이 그대로 출력되어야 합니다. `STORAGE`도 이름 충돌 복구가 있었다면 저장해 둔 실제 값으로 출력되어야 정상입니다.
 
 </details>
 

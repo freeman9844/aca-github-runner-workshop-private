@@ -24,19 +24,39 @@
 🟢 **실행**
 
 ```bash
-# 저장한 suffix에서 scale validation에 필요한 Resource Group, workspace와 Job 이름을 복원합니다.
-SUFFIX="<your-saved-suffix>"
+# 저장한 suffix와 실제 ACR 이름으로 scale validation에 필요한 foundation 값을 복원합니다.
+read -rp "Saved SUFFIX: " SUFFIX
+read -rp "Saved ACR name: " ACR
+
+LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
+ENV="env-acarunner-$SUFFIX"
+VNET="vnet-acarunner-$SUFFIX"
+INFRA_SUBNET="snet-aca-infra"
+PE_SUBNET="snet-private-endpoints"
 JOB="job-ghrunner-$SUFFIX"
-# Log Analytics customer ID를 다시 조회하고 복구한 값을 출력합니다.
-LOG_ID=$(az monitor log-analytics workspace show \
-  --resource-group "$RG" \
-  --workspace-name "$LOG" \
-  --query customerId \
-  --output tsv)
+STORAGE="stacarunner$SUFFIX"
+STORAGE_CONTAINER="runner-artifacts"
+STORAGE_PE="pe-blob-$SUFFIX"
+STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
+STORAGE_DNS_LINK="link-blob-$SUFFIX"
+PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 
-printf 'RG=%s\nLOG=%s\nJOB=%s\nLOG_ID=%s\n' "$RG" "$LOG" "$JOB" "$LOG_ID"
+# Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+read -rp "Saved Storage account name if changed (press Enter to keep ${STORAGE}): " SAVED_STORAGE
+if [[ -n "$SAVED_STORAGE" ]]; then
+  STORAGE="$SAVED_STORAGE"
+fi
+unset SAVED_STORAGE
+
+# Log Analytics, PE subnet, Storage를 다시 조회하고 복구한 값을 출력합니다.
+LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
+PE_SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$PE_SUBNET"   --query id   --output tsv)
+STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
+
+printf 'RG=%s\nLOG=%s\nJOB=%s\nSTORAGE=%s\nLOG_ID=%s\n' \
+  "$RG" "$LOG" "$JOB" "$STORAGE" "$LOG_ID"
 ```
 
 📋 **예상 출력**
@@ -71,6 +91,8 @@ printf 'RG=%s\nLOG=%s\nJOB=%s\nLOG_ID=%s\n' "$RG" "$LOG" "$JOB" "$LOG_ID"
 | Metadata | Metadata: Read-only |
 
 organization 정책이 승인 절차를 요구하면 workflow를 실행하기 전에 Fine-grained PAT의 `token approval`이 완료되어 있어야 합니다.
+
+Module 04의 Event Job에는 이미 `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR=10.20.1.0/24`가 설정되어 있습니다. 이 모듈은 그 foundation 위에서 queue-driven scale만 검증합니다. Jobs do not support ingress 이므로 이번 검증 대상은 public inbound endpoint가 아니라 queued workflow를 처리하는 ephemeral runner lifecycle입니다.
 
 🟢 **실행**
 
@@ -505,6 +527,6 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 ---
 
 [← 이전: Event Job + KEDA 구성](04-event-job-keda.md)
-[다음: Azure 샘플 배포와 결과 확인 →](06-azure-sample-deployment.md)
+[다음: Private Blob 배포와 결과 확인 →](06-azure-sample-deployment.md)
 
-Module 06은 필수 단계입니다. 위 링크로 이동해 Azure 샘플 배포와 결과 확인을 계속합니다.
+Module 06은 필수 단계입니다. 위 링크로 이동해 Private Blob 배포와 결과 확인을 계속합니다.

@@ -1,18 +1,17 @@
-name: ACA Runner Azure Sample Deploy
+name: ACA Runner Private Blob Deploy
 
-# 신뢰할 수 있는 워크숍 참가자가 수동으로 실행할 때만 시작합니다.
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  deploy-sample:
-    name: Deploy sample Container App
-    # 임시 ACA runner에 설정한 사용자 지정 label을 사용합니다.
+  deploy-private-blob:
     runs-on: [aca-runner]
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      # Azure 작업 전에 runner 환경 변수 계약이 완전한지 확인합니다.
-      - name: Validate Azure deployment context
+      - name: Validate runner inputs
         shell: bash
         run: |
           set -euo pipefail
@@ -20,143 +19,135 @@ jobs:
             AZURE_CLIENT_ID \
             AZURE_SUBSCRIPTION_ID \
             AZURE_RESOURCE_GROUP \
-            AZURE_CONTAINERAPPS_ENVIRONMENT \
-            AZURE_SAMPLE_APP; do
+            AZURE_STORAGE_ACCOUNT \
+            AZURE_STORAGE_CONTAINER \
+            AZURE_PRIVATE_ENDPOINT_CIDR; do
             if [[ -z "${!variable:-}" ]]; then
               printf 'ERROR: %s is required.\n' "$variable" >&2
               exit 1
             fi
           done
 
-      # client secret 없이 runner managed identity로 Azure에 로그인합니다.
-      - name: Sign in with the runner managed identity
+      - name: Sign in to Azure with managed identity
         shell: bash
         run: |
           set -euo pipefail
-          az login --identity --client-id "$AZURE_CLIENT_ID" --output none
+          # The runner UAMI needs Storage Blob Data Contributor on the Storage account.
+          az login --identity \
+            --client-id "$AZURE_CLIENT_ID" \
+            --allow-no-subscriptions \
+            --output none
           az account set --subscription "$AZURE_SUBSCRIPTION_ID"
           az account show \
-            --query "{subscription:name,subscriptionId:id,tenantId:tenantId}" \
+            --query "{subscription:name,subscriptionId:id,user:user.name,type:user.type}" \
             --output table
 
-      # 반복 실습도 동일한 상태에서 시작하도록 샘플 앱을 다시 생성합니다.
-      - name: Deploy the sample Container App
+      - name: Verify Blob DNS resolves to the private endpoint subnet
         shell: bash
         run: |
           set -euo pipefail
-          APP_SHOW_ERROR="${GITHUB_WORKSPACE:-$PWD}/.containerapp-show-error.log"
-          : > "$APP_SHOW_ERROR"
-          trap 'rm -f "$APP_SHOW_ERROR"' EXIT
+          # Blob private DNS is provided by privatelink.blob.core.windows.net.
+          STORAGE_BLOB_HOSTNAME="${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net"
+          mapfile -t RESOLVED_IPS < <(
+            getent ahostsv4 "$STORAGE_BLOB_HOSTNAME" |
+              awk '{print $1}' |
+              sort -u
+          )
 
-          container_app_exists() {
-            : > "$APP_SHOW_ERROR"
-            if az containerapp show \
-              --name "$AZURE_SAMPLE_APP" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --output none 2>"$APP_SHOW_ERROR"; then
-              return 0
-            fi
-
-            if grep -Eq 'ResourceNotFound|ContainerAppNotFound' "$APP_SHOW_ERROR"; then
-              return 1
-            fi
-
-            cat "$APP_SHOW_ERROR" >&2
-            printf 'ERROR: Failed to inspect Container App %s.\n' \
-              "$AZURE_SAMPLE_APP" >&2
-            return 2
-          }
-
-          if container_app_exists; then
-            printf 'Existing Container App found; deleting %s.\n' "$AZURE_SAMPLE_APP"
-            az containerapp delete \
-              --name "$AZURE_SAMPLE_APP" \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --yes \
-              --output none
-
-            deleted=false
-            for delete_attempt in $(seq 1 24); do
-              if container_app_exists; then
-                printf 'Waiting for Container App deletion (attempt %s/24).\n' \
-                  "$delete_attempt" >&2
-                sleep 5
-                continue
-              else
-                inspect_status=$?
-              fi
-
-              if [[ "$inspect_status" == "1" ]]; then
-                printf 'Confirmed existing Container App deletion after %s checks.\n' \
-                  "$delete_attempt"
-                deleted=true
-                break
-              fi
-
-              exit "$inspect_status"
-            done
-
-            if [[ "$deleted" != "true" ]]; then
-              printf 'ERROR: Timed out waiting for Container App deletion after 24 checks.\n' \
-                >&2
-              exit 1
-            fi
-          else
-            inspect_status=$?
-            if [[ "$inspect_status" == "1" ]]; then
-              printf 'No existing Container App named %s found.\n' "$AZURE_SAMPLE_APP"
-            else
-              exit "$inspect_status"
-            fi
-          fi
-
-          FQDN="$(az containerapp create \
-            --name "$AZURE_SAMPLE_APP" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --environment "$AZURE_CONTAINERAPPS_ENVIRONMENT" \
-            --image mcr.microsoft.com/k8se/quickstart@sha256:9f41c026ef51e985a271eed474995ea08c0d6a5a4939e65622ed03c3fcc9fb2c \
-            --ingress internal \
-            --target-port 80 \
-            --min-replicas 0 \
-            --max-replicas 1 \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv)"
-
-          if [[ -z "$FQDN" ]]; then
-            printf 'ERROR: Azure did not return a Container App FQDN.\n' >&2
+          if [[ "${#RESOLVED_IPS[@]}" -eq 0 ]]; then
+            printf 'ERROR: %s did not resolve to an IPv4 address.\n' "$STORAGE_BLOB_HOSTNAME" >&2
             exit 1
           fi
 
-          # 생성된 endpoint를 이후 workflow step과 공유합니다.
-          APP_URL="https://$FQDN"
-          printf 'APP_URL=%s\n' "$APP_URL" >> "$GITHUB_ENV"
+          PRIVATE_IP="$(python3 -c 'import ipaddress, sys; network = ipaddress.ip_network(sys.argv[1], strict=True); matches = [str(ipaddress.ip_address(value)) for value in sys.argv[2:] if ipaddress.ip_address(value) in network]; print(matches[0]) if matches else sys.exit(1)' "$AZURE_PRIVATE_ENDPOINT_CIDR" "${RESOLVED_IPS[@]}")" || {
+            printf 'ERROR: %s resolved outside private endpoint CIDR %s: %s\n' \
+              "$STORAGE_BLOB_HOSTNAME" \
+              "$AZURE_PRIVATE_ENDPOINT_CIDR" \
+              "${RESOLVED_IPS[*]}" >&2
+            exit 1
+          }
 
-      # 프로비저닝 후 internal ingress HTTPS가 runner에서 준비될 때까지 시간이 걸릴 수 있습니다.
-      - name: Verify the internal HTTPS endpoint from the runner
+          printf 'STORAGE_BLOB_HOSTNAME=%s\n' "$STORAGE_BLOB_HOSTNAME" >> "$GITHUB_ENV"
+          printf 'STORAGE_PRIVATE_IP=%s\n' "$PRIVATE_IP" >> "$GITHUB_ENV"
+          printf 'Resolved %s to private IP %s.\n' \
+            "$STORAGE_BLOB_HOSTNAME" "$PRIVATE_IP"
+
+      - name: Upload and download the private Blob artifact
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 18); do
-            if response="$(curl --fail --silent --show-error "$APP_URL")"; then
-              printf 'Verified internal endpoint %s\n' "$APP_URL"
-              printf '%s\n' "$response" | sed -n '1,12p'
-              exit 0
-            fi
-            printf 'Endpoint not ready (attempt %s/18); retrying in 5 seconds.\n' \
-              "$attempt" >&2
-            sleep 5
-          done
-          printf 'ERROR: Internal HTTP verification failed after 18 attempts: %s\n' \
-            "$APP_URL" >&2
-          exit 1
+          ARTIFACT_ROOT="${RUNNER_TEMP:-${GITHUB_WORKSPACE:-$PWD}/.runner-temp}"
+          ARTIFACT_DIR="$ARTIFACT_ROOT/private-blob-deploy"
+          SOURCE_FILE="$ARTIFACT_DIR/source.txt"
+          DOWNLOADED_FILE="$ARTIFACT_DIR/downloaded.txt"
+          REPOSITORY_VALUE="${GITHUB_REPOSITORY:-unknown/repository}"
+          COMMIT_VALUE="${GITHUB_SHA:-unknown-commit}"
+          RUN_ID_VALUE="${GITHUB_RUN_ID:-0}"
+          RUN_ATTEMPT_VALUE="${GITHUB_RUN_ATTEMPT:-0}"
+          ACTOR_VALUE="${GITHUB_ACTOR:-unknown-actor}"
+          BLOB_NAME="github-actions/${RUN_ID_VALUE}-${RUN_ATTEMPT_VALUE}.txt"
+          mkdir -p "$ARTIFACT_DIR"
 
-      # Azure Portal과 control-plane 조회를 비교할 수 있도록 최종 resource 정보를 출력합니다.
-      - name: Show deployed Azure resource
+          cat > "$SOURCE_FILE" <<EOF
+          repository=$REPOSITORY_VALUE
+          commit=$COMMIT_VALUE
+          run_id=$RUN_ID_VALUE
+          run_attempt=$RUN_ATTEMPT_VALUE
+          actor=$ACTOR_VALUE
+          EOF
+
+          SOURCE_SHA256="$(sha256sum "$SOURCE_FILE" | awk '{print $1}')"
+
+          az storage blob upload \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_STORAGE_CONTAINER" \
+            --name "$BLOB_NAME" \
+            --file "$SOURCE_FILE" \
+            --metadata sha256="$SOURCE_SHA256" \
+            --auth-mode login \
+            --overwrite true \
+            --output none
+
+          az storage blob download \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_STORAGE_CONTAINER" \
+            --name "$BLOB_NAME" \
+            --file "$DOWNLOADED_FILE" \
+            --auth-mode login \
+            --overwrite true \
+            --output none
+
+          DOWNLOADED_SHA256="$(sha256sum "$DOWNLOADED_FILE" | awk '{print $1}')"
+          BLOB_SHA256="$(az storage blob show \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_STORAGE_CONTAINER" \
+            --name "$BLOB_NAME" \
+            --auth-mode login \
+            --query metadata.sha256 \
+            --output tsv)"
+          if [[ "$DOWNLOADED_SHA256" != "$SOURCE_SHA256" || "$BLOB_SHA256" != "$SOURCE_SHA256" ]]; then
+            printf 'ERROR: Downloaded Blob checksum does not match the uploaded artifact.\n' >&2
+            printf 'source=%s downloaded=%s blob=%s\n' \
+              "$SOURCE_SHA256" "$DOWNLOADED_SHA256" "$BLOB_SHA256" >&2
+            exit 1
+          fi
+
+          printf 'BLOB_NAME=%s\n' "$BLOB_NAME" >> "$GITHUB_ENV"
+          printf 'SOURCE_SHA256=%s\n' "$SOURCE_SHA256" >> "$GITHUB_ENV"
+          printf 'DOWNLOADED_SHA256=%s\n' "$DOWNLOADED_SHA256" >> "$GITHUB_ENV"
+          printf 'BLOB_SHA256=%s\n' "$BLOB_SHA256" >> "$GITHUB_ENV"
+
+      - name: Show private deployment result
         shell: bash
         run: |
           set -euo pipefail
-          az containerapp show \
-            --name "$AZURE_SAMPLE_APP" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "{name:name,provisioningState:properties.provisioningState,externalIngress:properties.configuration.ingress.external,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
+          az storage blob show \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_STORAGE_CONTAINER" \
+            --name "$BLOB_NAME" \
+            --auth-mode login \
+            --query "{name:name,size:properties.contentLength,lastModified:properties.lastModified,sha256:metadata.sha256}" \
             --output table
+          printf 'Blob endpoint: %s (%s)\n' \
+            "$STORAGE_BLOB_HOSTNAME" "$STORAGE_PRIVATE_IP"
+          printf 'SHA-256: %s\n' "$SOURCE_SHA256"
