@@ -22,16 +22,21 @@ DOC_TEXT="$(<"$DOC")"
 
 for text in \
   '## 0. 세션 재연결 시 변수 복구 (선택)' \
+  'INFRA_SUBNET="snet-aca-infra"' \
+  'PE_SUBNET="snet-private-endpoints"' \
   'STORAGE="stacarunner$SUFFIX"' \
   'STORAGE_CONTAINER="runner-artifacts"' \
+  'STORAGE_PE="pe-blob-$SUFFIX"' \
+  'STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"' \
+  'STORAGE_DNS_LINK="link-blob-$SUFFIX"' \
+  'PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"' \
   'STORAGE_ID=$(az storage account show' \
   'PE_SUBNET_ID=$(az network vnet subnet show' \
   'AZURE_STORAGE_ACCOUNT' \
   'AZURE_STORAGE_CONTAINER' \
   'AZURE_PRIVATE_ENDPOINT_CIDR' \
-  'Jobs do not support ingress' \
-  '10.20.1.0/24'; do
-  assert_contains "$DOC_TEXT" "$text" 'module 05 private-blob marker missing'
+  'Jobs do not support ingress'; do
+  assert_contains "$DOC_TEXT" "$text" 'module 05 recovery/private-blob marker missing'
 done
 
 for obsolete in \
