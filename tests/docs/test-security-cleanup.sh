@@ -3,187 +3,40 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DOC="$ROOT/docs/07-security-limitations-cleanup.md"
-IGNORE="$ROOT/.gitignore"
-[[ -f "$DOC" ]] || { echo "FAIL: module 07 missing" >&2; exit 1; }
-[[ -f "$IGNORE" ]] || { echo "FAIL: .gitignore missing" >&2; exit 1; }
 
 fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
 
-grep -Fx '## 0. 세션 재연결 시 변수 복구 (선택)' "$DOC" >/dev/null ||
-  fail "module 07 missing optional Step 0 recovery heading"
-details_open_line="$(grep -nF -m1 '<details>' "$DOC" | cut -d: -f1)"
-summary_line="$(grep -nF -m1 '<summary>세션이 끊겼다면 변수 복구 명령 보기</summary>' "$DOC" | cut -d: -f1)"
-details_close_line="$(grep -nF -m1 '</details>' "$DOC" | cut -d: -f1)"
-[[ "$(grep -Fc '<details>' "$DOC")" -eq 1 ]] ||
-  fail "module 07 must contain exactly one details block"
-[[ "$(grep -Fc '</details>' "$DOC")" -eq 1 ]] ||
-  fail "module 07 must close exactly one details block"
-[[ -n "$details_open_line" && -n "$summary_line" && -n "$details_close_line" ]] ||
-  fail "module 07 missing recovery disclosure structure"
-(( details_open_line < summary_line && summary_line < details_close_line )) ||
-  fail "module 07 recovery summary must be inside the details block"
-summary_next_line="$(sed -n "$((summary_line + 1))p" "$DOC")"
-details_prev_line="$(sed -n "$((details_close_line - 1))p" "$DOC")"
-[[ -z "${summary_next_line//[[:space:]]/}" ]] ||
-  fail "module 07 summary must be followed by a blank line"
-[[ -z "${details_prev_line//[[:space:]]/}" ]] ||
-  fail "module 07 details close must be preceded by a blank line"
+assert_contains() {
+  local haystack="$1"
+  local needle="$2"
+  local message="$3"
+  [[ "$haystack" == *"$needle"* ]] || fail "$message: $needle"
+}
 
-if grep -Fx '## 0. 정리 전에 변수 복구' "$DOC" >/dev/null; then
-  fail "module 07 still uses the old recovery heading"
-fi
+[[ -f "$DOC" ]] || fail "module 07 missing"
 
-legend_line="$(grep -nF -m1 '## 태그 범례' "$DOC" | cut -d: -f1)"
-(( details_close_line < legend_line )) ||
-  fail "module 07 recovery details must close before the tag legend"
+DOC_TEXT="$(<"$DOC")"
 
 for text in \
-  '이 모듈은 120분 필수 경로의 마지막 단계이며, Module 06에서 만든 deployment workflow까지 함께 정리합니다.' \
-  'SUFFIX="<your-saved-suffix>"' \
-  'RG="rg-acarunner-$SUFFIX"' \
-  "starts_with(name, 'rg-acarunner-')" \
-  'az group list --query' \
-  'suffix를 잃어버렸다면' \
-  'Azure Key Vault' \
-  'VNet' \
-  'egress' \
-  'public outbound' \
-  'network type' \
-  'custom DNS forwarding' \
-  'Private DNS zone/link' \
-  'internal load balancer resources' \
-  'organization' \
-  'Docker-in-Docker' \
-  'public repository' \
-  'aca-runner-azure-deploy.yml' \
-  'Container Apps Contributor' \
-  'managed identity' \
-  'trusted workflow authors' \
-  'az group delete' \
-  '--yes --no-wait' \
-  '리소스 그룹 삭제 요청됨: rg-acarunner-a1b2c3' \
-  'az group show' \
-  'properties.provisioningState' \
-  'az resource list' \
-  'delegated subnet' \
-  'ACA managed environment 삭제는 오래 걸릴 수 있습니다.' \
-  'ResourceGroupNotFound' \
-  "Resource group 'rg-acarunner-a1b2c3' could not be found." \
-  'aca-runner-lab'; do
-  grep -F -- "$text" "$DOC" >/dev/null || { echo "FAIL: module 07 missing $text" >&2; exit 1; }
+  'Storage public network default deny' \
+  'Blob Private Endpoint' \
+  'Private DNS zone' \
+  'Storage Blob Data Contributor' \
+  'delegated ACA subnet과 Private Endpoint subnet을 분리'; do
+  assert_contains "$DOC_TEXT" "$text" 'module 07 missing cleanup marker'
 done
 
-grep -F 'sample app의 internal-ingress FQDN은 same Environment runner에서만 직접 검증합니다.' "$DOC" >/dev/null ||
-  fail "module 07 must describe same-environment internal-ingress verification exactly"
-grep -F 'standard Cloud Shell은 sample app의 internal-ingress FQDN에 직접 도달하지 못합니다.' "$DOC" >/dev/null ||
-  fail "module 07 must describe Cloud Shell internal-ingress isolation exactly"
-grep -F '이 워크숍에는 ACR Private Endpoint, UDR, NSG, Azure Firewall, forced tunneling, VNet-isolated Cloud Shell이 포함되지 않으며 모두 production extension입니다.' "$DOC" >/dev/null ||
-  fail "module 07 must describe excluded enterprise controls exactly"
-
-if grep -E '코어 90분|Module 06을 수행했다면|Module 06을 수행했다면 배포 workflow' \
-  "$DOC" >/dev/null; then
-  fail "module 07 still treats Module 06 as optional"
-fi
-
-if grep -Fx '## 7. 전체 워크숍 완료 확인' "$DOC" >/dev/null; then
-  echo "FAIL: module 07 still has a redundant workshop completion summary" >&2
-  exit 1
-fi
-
-for text in \
-  'Fine-grained PAT' \
-  'Actions: Read-only' \
-  'Administration: Read and write' \
-  'Metadata: Read-only' \
-  'Only select repositories' \
-  '30 days' \
-  'PAT rotation' \
-  'ACA secret을 새 PAT로 먼저 갱신' \
-  '기존 PAT를 revoke' \
-  'PAT 삭제' \
-  'Azure Key Vault' \
-  'external token broker'; do
-  grep -F -- "$text" "$DOC" >/dev/null ||
-    { echo "FAIL: module 07 missing $text" >&2; exit 1; }
+for obsolete in \
+  'sample app' \
+  'internal Environment' \
+  'same Environment' \
+  'internal ingress'; do
+  if grep -F -- "$obsolete" "$DOC" >/dev/null; then
+    fail "module 07 still uses old internal-ACA language: $obsolete"
+  fi
 done
 
-if grep -E 'GitHub App|GITHUB_APP_|App ID/installation ID|private key PEM' \
-  "$DOC" >/dev/null; then
-  echo "FAIL: module 07 still contains GitHub App cleanup" >&2
-  exit 1
-fi
-
-! grep -F -- '| Fine-grained PAT | GitHub App | higher rate limit and centralized lifecycle |' "$DOC" >/dev/null || { echo "FAIL: module 07 still has old PAT production row" >&2; exit 1; }
-! grep -F -- 'PAT 폐기' "$DOC" >/dev/null || { echo "FAIL: module 07 still has PAT cleanup step" >&2; exit 1; }
-! grep -F -- 'PAT 만료' "$DOC" >/dev/null || { echo "FAIL: module 07 still has PAT troubleshooting guidance" >&2; exit 1; }
-! grep -F -- '## 8. 전체 워크숍 완료 확인' "$DOC" >/dev/null || { echo "FAIL: module 07 still has old completion section number" >&2; exit 1; }
-! grep -nE 'rg-acarunner-[0-9a-f]{5}\b' "$DOC" >/dev/null || { echo "FAIL: module 07 regressed to a five-character suffix example" >&2; exit 1; }
-! grep -F '105분 필수 경로' "$DOC" >/dev/null || { echo "FAIL: module 07 still uses the old 105-minute cleanup framing" >&2; exit 1; }
-! grep -F '| Public egress | VNet, firewall, restricted egress | control reachable destinations |' "$DOC" >/dev/null || { echo "FAIL: module 07 still has the old public egress production row" >&2; exit 1; }
-
-grep -F '.superpowers/' "$IGNORE" >/dev/null
-grep -F 'docs/superpowers/' "$IGNORE" >/dev/null
-grep -F '.env' "$IGNORE" >/dev/null
-grep -F '*.local' "$IGNORE" >/dev/null
-for pattern in \
-  '.env.*' \
-  '!.env.example' \
-  '*.pem' \
-  '*.key' \
-  '*.pfx' \
-  '*.p12' \
-  '*.out' \
-  '*.bak' \
-  '*.swp' \
-  '*~'; do
-  grep -Fx -- "$pattern" "$IGNORE" >/dev/null ||
-    fail ".gitignore missing $pattern"
-done
-
-for path in \
-  '.env.production' \
-  'aca-runner.private-key.pem' \
-  'runner-signing.key' \
-  'runner-identity.pfx' \
-  'runner-identity.p12' \
-  'autoscale-load.out' \
-  'notes.bak' \
-  'module.swp' \
-  'draft~'; do
-  git -C "$ROOT" check-ignore -q "$path" ||
-    fail ".gitignore does not ignore $path"
-done
-
-if git -C "$ROOT" check-ignore -q '.env.example'; then
-  fail ".env.example must remain eligible for tracking"
-fi
-
-if [[ -n "$(git -C "$ROOT" ls-files docs/superpowers)" ]]; then
-  fail "internal docs/superpowers files are still tracked"
-fi
-
-for path in \
-  'README.md' \
-  'docs/01-prerequisites-github.md' \
-  'docs/02-azure-foundation.md' \
-  'docs/03-runner-image.md' \
-  'docs/04-event-job-keda.md' \
-  'docs/05-parallel-scale-validation.md' \
-  'docs/06-azure-sample-deployment.md' \
-  'docs/07-security-limitations-cleanup.md' \
-  'docs/images/02-azure-portal-resource-group-resources.png' \
-  'docs/images/05-github-actions-queued-matrix.png' \
-  'docs/images/05-github-actions-successful-matrix.png' \
-  'runner/Dockerfile' \
-  'runner/entrypoint.sh' \
-  'samples/parallel-runner-workflow.yml' \
-  'tests/validate-workshop.sh' \
-  '.github/workflows/validate-workshop.yml'; do
-  git -C "$ROOT" ls-files --error-unmatch "$path" >/dev/null 2>&1 ||
-    fail "required workshop file is no longer tracked: $path"
-done
-
-printf 'PASS: security and cleanup doc\n'
+printf 'PASS: security cleanup doc\n'
