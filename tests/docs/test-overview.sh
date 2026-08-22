@@ -78,14 +78,23 @@ done
 
 require '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | GitHub App 설치, Azure Portal Cloud Shell file upload와 installation 범위 검증 | 30분 |' 'README Module 01 row mismatch'
 require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Storage·Key Vault service endpoint와 runtime RBAC | 30분 |' 'README Module 02 row mismatch'
-require '| 06 | [VNet 제한 Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 Blob 업로드·다운로드와 checksum 검증 | 20분 |' 'README Module 06 row mismatch'
+require '| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job의 `0 → N → 0`과 `JobName` 기반 Log Analytics 검증 | 20분 |' 'README Module 05 row mismatch'
+require '| 06 | [VNet 제한 Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | control-plane 사전 확인과 Managed Identity 기반 Blob checksum 검증 | 20분 |' 'README Module 06 row mismatch'
 require '**약 150분**' 'README top-level duration mismatch'
 require '|  | **워크숍 합계** |  | **150분** |' 'README module table total mismatch'
 require '| 합계 | 전체 워크숍 | 150분 |' 'README schedule total mismatch'
 require '> 리소스 그룹 삭제 요청은 150분 일정에 포함되지만' 'README cleanup note total mismatch'
 require '이 워크숍은 Fine-grained PAT를 사용하지 않습니다.' 'README must explicitly state Fine-grained PAT is not used'
 require '- [ ] GitHub App이 `aca-runner-lab` repository에만 설치되어 있습니다.' 'README completion checklist typo or contract mismatch'
+require 'Module 06의 1단계에서 control-plane을 확인하고, 3단계에서 runner의 Blob data-plane 성공과 checksum 결과를 함께 해석합니다.' 'README Module 06 flow summary mismatch'
 require 'GitHub App installation 또는 권한 변경은 organization 보안 정책에 따라 owner 승인 또는 재승인이 필요할 수 있습니다.' 'README missing GitHub App approval caveat'
+for obsolete in \
+  '- [ ] GitHub에 permanent online ephemeral runner가 남지 않습니다.' \
+  'Cloud Shell에서 Step 6/7 data-plane `403`'; do
+  if grep -F -- "$obsolete" "$README" >/dev/null; then
+    fail "README still references removed module content: $obsolete"
+  fi
+done
 for text in \
   'Module 04의 Key Vault reference synchronization/execution을 workshop delivery 전 live rehearsal로 직접 성공시켜야 합니다.' \
   '저장소 테스트만으로 증명할 수 없습니다.' \

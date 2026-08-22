@@ -137,8 +137,8 @@ flowchart LR
 | 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Storage·Key Vault service endpoint와 runtime RBAC | 30분 |
 | 03 | [Runner image 빌드](docs/03-runner-image.md) | root wrapper·non-root runner, App key 배포·권한 제한과 ACR image 빌드 | 15분 |
 | 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | GitHub App scaler metadata·auth, Key Vault secret reference와 Event Job 배포 | 15분 |
-| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job의 `0 → N → 0`과 조건 기반 Log Analytics 수집 검증 | 20분 |
-| 06 | [VNet 제한 Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 Blob 업로드·다운로드와 checksum 검증 | 20분 |
+| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job의 `0 → N → 0`과 `JobName` 기반 Log Analytics 검증 | 20분 |
+| 06 | [VNet 제한 Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | control-plane 사전 확인과 Managed Identity 기반 Blob checksum 검증 | 20분 |
 | 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | trusted private workflow 경계, App 제거, 보안 검토와 확인된 cleanup | 15분 |
 |  | **워크숍 합계** |  | **150분** |
 
@@ -172,7 +172,6 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 - [ ] self-hosted runner가 Managed Identity로 Azure에 로그인하고 VNet 제한 Blob artifact를 업로드·다운로드합니다.
 - [ ] Storage account가 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`, `allowBlobPublicAccess=False`, `allowSharedKeyAccess=False` 상태입니다.
 - [ ] Storage와 Key Vault 모두 ACA subnet rule과 runtime RBAC가 교차 검증됩니다.
-- [ ] GitHub에 permanent online ephemeral runner가 남지 않습니다.
 - [ ] GitHub App installation이 제거되었습니다. App도 삭제합니다.
 - [ ] Azure cleanup 후 조회 결과가 `ResourceGroupNotFound`에 도달합니다.
 
@@ -197,7 +196,7 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 > KEDA `0 → 4 → 0` 확장, VNet 제한 Blob upload/download, service endpoint firewall 계약,
 > ephemeral runner 종료, Log Analytics 수집, 리소스 그룹 삭제 계약을 기준으로 문서와 스크립트를 유지합니다.
 > live validation은 참가자 구독의 ACA subnet service endpoint, Storage/Key Vault firewall rule, Storage data-plane RBAC 상태에 따라 Module 06 절차를 직접 재실행해야 하며,
-> Cloud Shell에서 Step 6/7 data-plane `403`이 보이는 것은 예상된 control-plane-only 확인 결과입니다.
+> Module 06의 1단계에서 control-plane을 확인하고, 3단계에서 runner의 Blob data-plane 성공과 checksum 결과를 함께 해석합니다. Cloud Shell에서 같은 Blob data-plane 명령을 실행할 때 `403`이 보이는 것은 예상된 결과입니다.
 > Module 04의 Key Vault reference synchronization/execution을 workshop delivery 전 live rehearsal로 직접 성공시켜야 합니다.
 > 이 경로는 Microsoft 문서화가 제한적이어서 저장소 테스트만으로 증명할 수 없습니다.
 > 모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요.
