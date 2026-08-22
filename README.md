@@ -159,7 +159,7 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 
 ## 완료 기준
 
-- [ ] GitHub App が `aca-runner-lab` repository에만 설치되어 있습니다.
+- [ ] GitHub App이 `aca-runner-lab` repository에만 설치되어 있습니다.
 - [ ] ACR에 runner image tag가 존재합니다.
 - [ ] ACA Event Job이 예상한 image와 GitHub App KEDA metadata·auth를 사용합니다.
 - [ ] ACA Environment가 External + Custom VNet 통합 상태입니다.
@@ -193,7 +193,7 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 | 마무리 | 보안·제약 정리 + 리소스 삭제 | 15분 |
 | 합계 | 전체 워크숍 | 150분 |
 
-> 리소스 그룹 삭제 요청은 120분 일정에 포함되지만, ACA managed environment의
+> 리소스 그룹 삭제 요청은 150분 일정에 포함되지만, ACA managed environment의
 > 비동기 삭제 완료는 워크숍 종료 후까지 이어질 수 있습니다.
 
 > ✅ **검증된 범위와 남은 전제** — 체크인된 자동 검증은 README/문서 계약과 스크립트 인터페이스를 확인합니다.
@@ -203,7 +203,7 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 > live private-data-plane proof는 참가자 구독의 Custom VNet, Blob Private Endpoint,
 > Private DNS, Storage data-plane RBAC 상태에 따라 Module 06 절차를 직접 재실행해야 하며,
 > 이 README는 별도의 라이브 Azure/GitHub private-network rehearsal을 주장하지 않습니다.
-> Fine-grained PAT의 organization 승인과 최소 권한 동작은 참가자의 GitHub enterprise/organization 정책에 따라 달라집니다.
+> GitHub App installation 또는 권한 변경은 organization 보안 정책에 따라 owner 승인 또는 재승인이 필요할 수 있습니다.
 
 ---
 

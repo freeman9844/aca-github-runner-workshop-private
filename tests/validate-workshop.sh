@@ -59,7 +59,7 @@ fi
 
 # Reject PAT operational patterns in core workshop paths.
 # Prose that explains PAT is not used (e.g. "PAT를 사용하지 않습니다") is permitted.
-pat_operational_pattern='personalAccessToken=|personal-access-token=|secretref:personal-access-token|Fine-grained personal access token'
+pat_operational_pattern='GITHUB_PAT|personalAccessToken=|personal-access-token=|secretref:personal-access-token|Fine-grained personal access token'
 if grep -RInE "$pat_operational_pattern" "${core_workshop_paths[@]}"; then
   echo 'FAIL: PAT operational pattern found in workshop paths' >&2
   exit 1
