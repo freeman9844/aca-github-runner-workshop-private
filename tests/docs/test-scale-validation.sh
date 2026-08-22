@@ -39,6 +39,29 @@ for text in \
   assert_contains "$DOC_TEXT" "$text" 'module 05 recovery/private-blob marker missing'
 done
 
+for text in \
+  'GITHUB_APP_ID' \
+  'GITHUB_APP_INSTALLATION_ID' \
+  'applicationID' \
+  'installationID' \
+  'appKey' \
+  'GitHub App installation' \
+  'Key Vault' \
+  '401' \
+  '403'; do
+  assert_contains "$DOC_TEXT" "$text" 'module 05 GitHub App failure marker missing'
+done
+
+for obsolete in \
+  'Fine-grained PAT' \
+  'GITHUB_PAT' \
+  'personalAccessToken' \
+  'personal-access-token'; do
+  if grep -F -- "$obsolete" "$DOC" >/dev/null; then
+    fail "obsolete PAT guidance still present: $obsolete"
+  fi
+done
+
 for obsolete in \
   'AZURE_SAMPLE_''APP' \
   'internal ''Environment' \

@@ -7,7 +7,7 @@
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
 - `samples/parallel-runner-workflow.yml` 전체를 확인한 뒤 GitHub 웹 UI로 workflow를 만든다.
-- 브라우저 기반 workflow 작성과 Fine-grained PAT runner 인증 경로를 분리하는 이유를 설명할 수 있다.
+- 브라우저 기반 workflow 작성과 GitHub App installation runner 인증 경로를 분리하는 이유를 설명할 수 있다.
 - execution 이력과 현재 active execution을 구분해 `0 → N → 0` 상태를 읽는다.
 - `az containerapp job logs show`와 `ContainerAppConsoleLogs` KQL로 runner lifecycle marker를 확인한다.
 - GitHub Actions와 **Settings → Actions → Runners**에서 ephemeral runner가 영구 온라인 상태로 남지 않았는지 검증한다.
@@ -98,17 +98,9 @@ printf 'RG=%s\nLOG=%s\nJOB=%s\nSTORAGE=%s\nKEY_VAULT=%s\nLOG_ID=%s\n' \
 
 👁️ **설명**
 
-이 워크숍은 로컬 편집기나 `git push` 대신 GitHub 웹 UI로 workflow 파일을 만듭니다. 이렇게 하면 browser-based workflow creation이 repository-write activity를 처리하고, 모듈 01/04에서 준비한 Fine-grained PAT는 KEDA queue 조회와 runner bootstrap 용도로만 남겨 둘 수 있습니다. 즉 Cloud Shell에 별도의 repository write credential을 둘 필요가 없고, PAT에도 Contents write permission을 추가할 필요가 없습니다.
+이 워크숍은 로컬 편집기나 `git push` 대신 GitHub 웹 UI로 workflow 파일을 만듭니다. 이렇게 하면 browser-based workflow creation이 repository-write activity를 처리하고, 모듈 04에서 준비한 GitHub App installation과 Key Vault-backed private key는 queue monitoring과 runner bootstrap 용도로만 남겨 둘 수 있습니다. 즉 Cloud Shell에 별도의 repository write credential을 둘 필요가 없습니다.
 
-모듈 04의 Event Job은 같은 credential을 ACA secret `personal-access-token`과 runner bootstrap 환경 변수 `GITHUB_PAT`로 연결했지만, 이 PAT는 아래 repository permission만 사용합니다.
-
-| Permission | Value |
-|---|---|
-| Actions | Actions: Read-only |
-| Administration | Administration: Read and write |
-| Metadata | Metadata: Read-only |
-
-organization 정책이 승인 절차를 요구하면 workflow를 실행하기 전에 Fine-grained PAT의 `token approval`이 완료되어 있어야 합니다.
+모듈 04의 Event Job은 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `applicationID`, `installationID`, `appKey`를 KEDA queue monitoring과 runner bootstrap에 연결합니다. 이 모듈은 그 foundation 위에서 queue-driven scale만 검증합니다.
 
 Module 04의 Event Job에는 이미 `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR=10.20.1.0/24`가 설정되어 있습니다. 이 모듈은 그 foundation 위에서 queue-driven scale만 검증합니다. Jobs do not support ingress 이므로 이번 검증 대상은 public inbound endpoint가 아니라 queued workflow를 처리하는 ephemeral runner lifecycle입니다.
 
@@ -129,7 +121,7 @@ sed -n '1,200p' samples/parallel-runner-workflow.yml
 
 ⚠️ **주의**
 
-CLI에서 workflow를 commit/push하려고 Cloud Shell에 별도의 repository write credential을 추가하지 마세요. 이 모듈은 **웹 UI로만 workflow를 생성**해 browser session의 repository-write 활동과 Fine-grained PAT 기반 queue monitoring/runner bootstrap 경로를 분리합니다.
+CLI에서 workflow를 commit/push하려고 Cloud Shell에 별도의 repository write credential을 추가하지 마세요. 이 모듈은 **웹 UI로만 workflow를 생성**해 browser session의 repository-write 활동과 GitHub App installation 기반 queue monitoring/runner bootstrap 경로를 분리합니다.
 
 이전 실습처럼 `self-hosted`, `linux`, `x64` default label을 `aca-runner`와
 함께 요구하는 `runs-on` 배열을 그대로 두면 `noDefaultLabels=true`인 현재
@@ -506,6 +498,29 @@ az containerapp job execution list \
 대기 Job 처리가 끝나면 active execution 수는 0이 됩니다. 완료 execution 이력은 남을 수 있습니다.
 ```
 
+## GitHub App 실패 검증 메모
+
+👁️ **설명**
+
+queued workflow가 생겼는데 runner가 뜨지 않으면 `applicationID`, `installationID`, `appKey`, `github-app-private-key` secretRef를 먼저 확인합니다. private key PEM은 읽지 말고 `az containerapp job show --query "properties.configuration.eventTriggerConfig.scale.rules"` 출력만 검증합니다. `GitHub App installation`이 `aca-runner-lab` repository에 유지되어 있는지도 함께 확인하고, `401`은 JWT clock skew 또는 installation token 문제로, `403`은 App 권한 또는 installation approval 문제로 분리해서 봅니다.
+
+🟢 **실행**
+
+```bash
+az containerapp job show \
+  --name "$JOB" \
+  --resource-group "$RG" \
+  --query "properties.configuration.eventTriggerConfig.scale.rules" \
+  --output yaml
+```
+
+📋 **예상 출력**
+
+- `applicationID`, `installationID`, `appKey`가 보입니다.
+- `github-app-private-key` secretRef가 유지되어야 합니다.
+- `GitHub App installation`이 `aca-runner-lab` repository에 설치된 상태여야 합니다.
+- `401`과 `403`은 서로 다른 복구 경로를 뜻합니다.
+
 ## 10. GitHub Settings에서 permanent online runner가 남지 않았는지 확인
 
 👁️ **설명**
@@ -529,16 +544,16 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| GitHub job이 계속 queued 상태로 남음 | Fine-grained PAT가 revoked 또는 expired 되었거나, `token approval`이 아직 끝나지 않았거나, 다른 repository 기준으로 발급되었거나, workflow label이 다름 | Fine-grained PAT가 `aca-runner-lab` repository에 대해 아직 유효한지, approval 상태인지, selected repository가 맞는지 확인하고, workflow가 `runs-on: [aca-runner]`를 그대로 쓰는지 검토합니다. |
+| GitHub job이 계속 queued 상태로 남음 | GitHub App이 `aca-runner-lab` repository에 설치되지 않았거나, `applicationID`/`installationID`가 틀렸거나, workflow label이 다름 | GitHub App installation이 선택한 `aca-runner-lab` repository에 남아 있는지 확인하고, `az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.configuration.eventTriggerConfig.scale.rules"`에서 `githubApiURL=https://api.github.com`, `owner`, `runnerScope=repo`, `repos=$GITHUB_REPO`, `labels=aca-runner`, `noDefaultLabels=true`, `targetWorkflowQueueLength=1`, `applicationID`, `installationID`, `appKey -> github-app-private-key`가 모두 정확한지 다시 확인합니다. |
 | `ContainerAppJobsExecutionNotFound`와 `execution - replicas`가 표시됨 | `EXECUTION`이 비어 있으며, 흔히 기존 workflow가 default label을 계속 요구해 KEDA가 queued Job을 세지 못한 상태 | GitHub workflow를 최신 sample 전체로 교체해 `runs-on: [aca-runner]`로 만들고, 기존 queued run을 취소한 뒤 다시 실행합니다. ACA execution이 생성된 후 6단계의 `EXECUTION=$(...)` 블록부터 다시 실행합니다. |
 | workflow hostname의 suffix가 현재 `$SUFFIX`와 다르거나 현재 execution이 timeout됨 | 다른 Event Job이 같은 repository와 `aca-runner` label을 감시함 | 모듈 04의 중복 watcher query로 이전 Job을 찾습니다. 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 다시 실행합니다. |
 | Running execution이 항상 1개만 보임 | polling 타이밍상 동시에 관찰하지 못했거나 Azure quota/시작 지연이 있음 | 먼저 GitHub에서 네 job이 모두 생성되었는지 확인하고, 30~90초 동안 같은 `Running` query를 반복합니다. 네 개가 항상 한 번에 보여야 한다고 가정하지 마세요. |
 | `az containerapp job logs show`에 아직 로그가 거의 없음 | execution 시작 직후라 runner bootstrap 로그가 아직 수집되지 않음 | 10~20초 정도 기다렸다가 같은 `EXECUTION`으로 다시 조회하고, 필요하면 가장 최근 execution 이름을 다시 잡아 확인합니다. |
 | ACA 쪽 execution은 끝났는데 과거 replica 로그가 안 보이거나 일부만 남음 | 로그 보존/수집 지연 또는 조회 대상을 잘못 잡음 | `EXECUTION=$(...)`로 최신 execution 이름을 다시 구한 뒤 `ContainerAppConsoleLogs | where ContainerGroupName startswith '$EXECUTION'` KQL로 조회 범위를 좁힙니다. |
-| GitHub API 또는 scaler 동작이 401/403을 반환함 | Fine-grained PAT approval 또는 repository permission이 부족함 | approval 상태와 함께 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only` 세 permission이 정확한지 다시 확인합니다. |
-| KEDA scaler가 queue를 감시하지 못함 | ACA secret 또는 auth mapping 이름이 맞지 않음 | ACA secret `personal-access-token`과 scale-rule auth `personalAccessToken` 매핑이 그대로 유지됐는지 `az containerapp job show ... --query "properties.configuration.eventTriggerConfig.scale.rules"`로 다시 확인합니다. |
-| runner registration이 실패함 | PAT에 runner registration용 Administration 권한이 부족함 | Fine-grained PAT의 repository permission에서 `Administration: Read and write`가 정확히 설정되어 있는지 확인한 뒤 Job을 다시 만듭니다. |
-| secret rotation 뒤에도 이전 PAT처럼 동작함 | 교체 후 기존 Job 정의가 그대로 남아 있음 | 교체 PAT를 같은 permission과 repository 범위로 발급한 뒤, replacement PAT로 **Job만 다시 생성**해 secret을 갱신합니다. |
+| GitHub API 또는 scaler 동작이 401/403을 반환함 | JWT clock skew, installation token 실패, 또는 App permission/approval 누락 | `401`이면 private key로 만든 JWT의 시스템 시간이 맞는지 먼저 확인하고, `403`이면 App 권한 변경 후 installation approval이 갱신됐는지 확인합니다. 둘 다 `applicationID`, `installationID`, `GitHub App installation`, `appKey`를 다시 점검해야 합니다. |
+| KEDA scaler가 queue를 감시하지 못함 | ACA secret 또는 auth mapping 이름이 맞지 않음 | ACA secret `github-app-private-key`와 scale-rule auth `appKey` 매핑이 그대로 유지됐는지 `az containerapp job show ... --query "properties.configuration.eventTriggerConfig.scale.rules"`로 다시 확인합니다. |
+| runner registration이 실패함 | private key가 손상되었거나 disabled/deleted key를 참조하거나 registration token 발급이 실패함 | `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지 확인하고, execution log에서 `Requesting registration token`과 `Runner configured` 중 어디까지 도달했는지 확인합니다. |
+| secret rotation 뒤에도 이전 인증처럼 동작함 | 교체 후 기존 Job 정의가 그대로 남아 있거나 옛 Key Vault secretRef를 계속 참조함 | 새 `github-app-private-key` secret으로 바꾼 뒤 이 워크숍 Job만 다시 생성해 `appKey`가 새 Key Vault secret을 resolve하도록 합니다. |
 | workflow가 오래 걸리다가 timeout으로 실패함 | execution 기동 지연, GitHub queue 적체, 또는 외부 서비스 일시 지연 | GitHub Actions와 ACA execution 시작 시간을 함께 비교합니다. 필요하면 잠시 후 같은 workflow를 다시 실행해 재현성을 확인합니다. |
 | **Settings → Actions → Runners**에 stale offline runner가 남아 보임 | GitHub UI의 기록 반영 지연 또는 cleanup metadata 잔존 | 몇 분 후 새로고침해 사라지는지 확인하고, 계속 남으면 최신 execution 로그에서 `Runner process exited`가 있었는지 먼저 검토합니다. persistent online runner가 남는 경우만 문제로 취급합니다. |
 
