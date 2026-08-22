@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 bash -n runner/entrypoint.sh
+bash -n scripts/verify-github-app-installation.sh
 bash tests/runner/test-dockerfile.sh
 bash tests/runner/test-entrypoint.sh
 bash tests/test-artifacts.sh
@@ -27,6 +28,7 @@ core_workshop_paths=(
   docs/06-azure-sample-deployment.md
   docs/07-security-limitations-cleanup.md
   runner
+  scripts
   samples/azure-sample-deploy-workflow.yml
   samples
 )
@@ -35,6 +37,7 @@ required_files=(
   README.md
   runner/Dockerfile
   runner/entrypoint.sh
+  scripts/verify-github-app-installation.sh
   samples/parallel-runner-workflow.yml
   samples/azure-sample-deploy-workflow.yml
   docs/01-prerequisites-github.md

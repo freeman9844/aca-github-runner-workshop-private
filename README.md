@@ -113,7 +113,7 @@ flowchart LR
 |------|------|
 | Azure Contributor | 실습용 Azure 리소스를 만들고 관리할 수 있어야 합니다. |
 | Azure RBAC 역할 할당 권한 | workshop Resource Group 또는 상위 범위에서 `Microsoft.Authorization/roleAssignments/write`가 필요합니다. ACR 범위의 `AcrPull`, Storage account 범위의 `Storage Blob Data Contributor`, Key Vault 범위의 `Key Vault Secrets User`를 모두 할당할 수 있어야 합니다. |
-| 로컬 Azure CLI 또는 Cloud Shell Bash | 모든 필수 단계는 Azure Cloud Shell Bash 기준으로 진행합니다. 로컬 Azure CLI를 사용할 경우 현재 공인 IP를 Key Vault 방화벽에 임시 허용해야 합니다. |
+| Azure Portal Cloud Shell Bash | 모든 필수 명령은 Cloud Shell에서 실행합니다. Module 01에서는 **Manage files → Upload**로 PEM을 일시적으로 올리고 Key Vault 저장 직후 자동 삭제합니다. |
 | GitHub account | GitHub Actions와 self-hosted runner 등록에 사용할 계정이 필요합니다. |
 | GitHub organization owner 권한 | organization-owned GitHub App을 만들고 설치하려면 organization owner 권한이 필요합니다. |
 | Private repository 권한 | 새 `Private repository`를 만들거나 실습용 저장소에 접근할 수 있어야 합니다. |
@@ -136,7 +136,7 @@ flowchart LR
 | # | 모듈 | 한 줄 설명 | 시간 |
 |---|------|------------|---:|
 | 00 | (현재 문서) | 전체 개요, 아키텍처, 목표, 비용, 이동 경로 | 5분 |
-| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | GitHub App 설치, Azure Portal Key Vault private key 저장과 실제 installation 인증 | 30분 |
+| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | GitHub App 설치, Azure Portal Cloud Shell file upload와 installation 범위 검증 | 30분 |
 | 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Blob·Key Vault Private Endpoint·Private DNS와 runtime RBAC | 30분 |
 | 03 | [Runner image 빌드](docs/03-runner-image.md) | root wrapper·non-root runner, App key 배포·권한 제한과 ACR image 빌드 | 15분 |
 | 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | GitHub App scaler metadata·auth, Key Vault secret reference와 Event Job 배포 | 15분 |

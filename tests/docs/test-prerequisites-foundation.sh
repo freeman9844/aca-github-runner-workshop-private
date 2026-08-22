@@ -10,6 +10,7 @@ APP_INSTALL_TARGET_IMAGE="$ROOT/docs/images/01-github-app-install-target.png"
 APP_SELECT_REPOSITORY_IMAGE="$ROOT/docs/images/01-github-app-select-repository.png"
 KEY_VAULT_SECRETS_IMAGE="$ROOT/docs/images/01-key-vault-secrets-list.png"
 KEY_VAULT_CREATE_SECRET_IMAGE="$ROOT/docs/images/01-key-vault-create-secret.png"
+GITHUB_APP_VERIFIER="$ROOT/scripts/verify-github-app-installation.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -38,9 +39,11 @@ assert_contains_multiline() {
 [[ -f "$APP_SELECT_REPOSITORY_IMAGE" ]] || fail "module 01 GitHub App repository selection image missing"
 [[ -f "$KEY_VAULT_SECRETS_IMAGE" ]] || fail "module 01 Key Vault secrets list image missing"
 [[ -f "$KEY_VAULT_CREATE_SECRET_IMAGE" ]] || fail "module 01 Key Vault create secret image missing"
+[[ -f "$GITHUB_APP_VERIFIER" ]] || fail "module 01 GitHub App verifier missing"
 
 PREREQ_TEXT="$(<"$PREREQ")"
 FOUNDATION_TEXT="$(<"$FOUNDATION")"
+GITHUB_APP_VERIFIER_TEXT="$(<"$GITHUB_APP_VERIFIER")"
 ALL_TEXT="$PREREQ_TEXT
 $FOUNDATION_TEXT"
 
@@ -96,7 +99,7 @@ for text in \
   'GITHUB_APP_INSTALLATION_ID' \
   '/settings/installations/' \
   'Install is prohibited' \
-  '로컬 Azure CLI' \
+  'Cloud Shell 검증 script' \
   'Microsoft.Storage' \
   'PE_SUBNET="snet-private-endpoints"' \
   'PE_SUBNET_ID=$(az network vnet subnet show' \
@@ -136,10 +139,12 @@ for text in \
   '--retention-days 7' \
   '--default-action Deny' \
   'Key Vault Secrets Officer' \
-  '### 7-L. Azure Portal: GitHub App PEM secret 만들기' \
+  '### 7-L. Azure Portal Cloud Shell: GitHub App PEM file 업로드' \
   '**Objects** → **Secrets**' \
-  '**+ Generate/Import**' \
-  'Name | `github-app-private-key`' \
+  '**Manage files** → **Upload**' \
+  '--name "$GITHUB_APP_KEY_SECRET"' \
+  'az keyvault secret set' \
+  '--file "$UPLOADED_PEM_FILE"' \
   '--group-id vault' \
   'privatelink.vaultcore.azure.net' \
   'az keyvault update' \
@@ -156,8 +161,8 @@ assert_contains \
 
 assert_contains \
   "$PREREQ_TEXT" \
-  'private key PEM 파일은 로컬 워크스테이션에만 보관하고 Cloud Shell에 업로드하거나 Git에 commit하지 않습니다.' \
-  'module 01 must forbid PEM upload or commit'
+  '7-L에서는 Azure Portal Cloud Shell에 PEM을 일시적으로 upload하지만, Key Vault 저장 직후 upload 파일을 자동 삭제합니다.' \
+  'module 01 must limit PEM upload to temporary Key Vault ingestion'
 
 for text in \
   '### 일반 GitHub 무료 계정 사용자의 경우' \
@@ -220,6 +225,10 @@ assert_contains \
   "$step_six_section" \
   '# 입력한 식별자를 한 번에 출력해 GitHub 화면의 값과 비교합니다.' \
   'module 01 step 6 must explain identifier output'
+assert_contains \
+  "$step_six_section" \
+  'export GITHUB_OWNER GITHUB_REPO GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID' \
+  'module 01 step 6 must export identifiers for the verifier script'
 
 step_seven_section="$(
   awk '
@@ -254,6 +263,10 @@ assert_contains \
   "$step_seven_cloud_shell" \
   '--default-action Allow' \
   'module 01 step 7-C must temporarily allow public network access for workshop testing'
+assert_contains \
+  "$step_seven_cloud_shell" \
+  'export KEY_VAULT GITHUB_APP_KEY_SECRET' \
+  'module 01 step 7-C must export Key Vault identifiers for the verifier script'
 if [[ "$step_seven_cloud_shell" == *'--enable-purge-protection false'* ]]; then
   fail 'module 01 step 7-C must not send irreversible purge protection as false'
 fi
@@ -265,27 +278,35 @@ for forbidden in \
   fi
 done
 for text in \
-  '### 7-L. Azure Portal: GitHub App PEM secret 만들기' \
+  '### 7-L. Azure Portal Cloud Shell: GitHub App PEM file 업로드' \
+  '**Manage files** → **Upload**' \
+  'UPLOADED_PEM_FILE="$HOME/$UPLOADED_PEM_NAME"' \
+  'openssl pkey -in "$UPLOADED_PEM_FILE" -check -noout' \
+  'az keyvault secret set' \
+  '--name "$GITHUB_APP_KEY_SECRET"' \
+  '--file "$UPLOADED_PEM_FILE"' \
+  '--content-type "application/x-pem-file"' \
+  'rm -f -- "$UPLOADED_PEM_FILE"' \
   '**Objects** → **Secrets**' \
-  '**+ Generate/Import**' \
-  'Upload options | **Manual**' \
-  'Name | `github-app-private-key`' \
-  'Value | 로컬 PEM 파일의 전체 내용' \
-  '`-----BEGIN RSA PRIVATE KEY-----`' \
-  '`-----END RSA PRIVATE KEY-----`' \
-  '**Create**' \
   'Secret Identifier' \
   '![Azure Portal Key Vault의 Secrets 메뉴와 Generate/Import 예시](images/01-key-vault-secrets-list.png)' \
-  '![Azure Portal에서 github-app-private-key secret을 만드는 입력 예시](images/01-key-vault-create-secret.png)'; do
+  '![Azure Portal의 github-app-private-key secret 설정 화면 참고](images/01-key-vault-create-secret.png)'; do
   assert_contains "$step_seven_portal" "$text" \
     'module 01 step 7-L Azure Portal secret guidance missing'
 done
 for forbidden in \
-  'az login' \
-  'az keyvault secret set' \
-  'GITHUB_APP_PRIVATE_KEY_FILE'; do
+  'Value | 로컬 PEM 파일의 전체 내용' \
+  '클립보드에 남은 PEM'; do
   if [[ "$step_seven_portal" == *"$forbidden"* ]]; then
-    fail "module 01 step 7-L must not require local Azure CLI: $forbidden"
+    fail "module 01 step 7-L must use the Cloud Shell file upload path: $forbidden"
+  fi
+done
+for forbidden in \
+  'az login' \
+  'export SUBSCRIPTION_ID=' \
+  '로컬 워크스테이션 Bash'; do
+  if [[ "$step_seven_section" == *"$forbidden"* ]]; then
+    fail "module 01 step 7 must stay in the existing Cloud Shell session: $forbidden"
   fi
 done
 for text in \
@@ -304,7 +325,7 @@ for text in \
   '--default-action Allow' \
   'KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=$(az ad signed-in-user show' \
   'Key Vault Secrets Officer' \
-  '### 7-L. Azure Portal: GitHub App PEM secret 만들기' \
+  '### 7-L. Azure Portal Cloud Shell: GitHub App PEM file 업로드' \
   '# 동일한 이름을 재사용할 수 있도록 공통 Azure 리소스 이름을 변수로 만듭니다.' \
   '# 이후 모든 Azure 리소스를 함께 정리할 Resource Group을 먼저 만듭니다.' \
   '# GitHub App private key를 보관할 RBAC 기반 Key Vault를 만듭니다.' \
@@ -323,7 +344,17 @@ step_eight_section="$(
   ' "$PREREQ"
 )"
 for text in \
-  '## 8. Key Vault secret으로 GitHub App 설치 연결 검증' \
+  '## 8. Cloud Shell에서 GitHub App 설치 범위 검증' \
+  'cd ~/aca-github-runner-workshop' \
+  'bash scripts/verify-github-app-installation.sh'; do
+  assert_contains "$step_eight_section" "$text" \
+    'module 01 step 8 intuitive script execution missing'
+done
+for text in \
+  '[1/4] 입력값 확인' \
+  '[2/4] Key Vault private key 확인' \
+  '[3/4] GitHub App 설치와 권한 확인' \
+  '[4/4] 접근 repository 확인' \
   'az keyvault secret download' \
   '--name "$GITHUB_APP_KEY_SECRET"' \
   '--encoding utf-8' \
@@ -331,30 +362,34 @@ for text in \
   'rm -f -- "$TEMP_PRIVATE_KEY_FILE"' \
   'trap cleanup EXIT' \
   'unset app_jwt' \
+  'unset installation_token' \
+  'openssl pkey -in "$TEMP_PRIVATE_KEY_FILE" -check -noout' \
   'openssl dgst -binary -sha256 -sign "$TEMP_PRIVATE_KEY_FILE"' \
   'Authorization: Bearer $app_jwt' \
   '"https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID"' \
-  'select(.app_id == $app_id)' \
-  'PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인' \
-  'for required_variable in SUBSCRIPTION_ID KEY_VAULT GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID' \
+  '.repository_selection == "selected"' \
+  '.permissions.administration == "write"' \
+  '.permissions.actions == "read"' \
+  '"https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID/access_tokens"' \
+  '"https://api.github.com/installation/repositories?per_page=100"' \
+  '.total_count == 1' \
+  'PASS: Key Vault secret과 GitHub App 설치 범위 확인' \
+  'GITHUB_APP_INSTALLATION_ID; do' \
   'ERROR: required variable is not set:' \
-  '# 인증에 필요한 로컬 명령이 모두 설치되어 있는지 먼저 확인합니다.' \
-  '# 7-C에서 전달한 Azure와 GitHub 식별자가 현재 로컬 shell에 있는지 확인합니다.' \
+  '# 인증에 필요한 Cloud Shell 명령이 모두 설치되어 있는지 먼저 확인합니다.' \
+  '# 앞 단계에서 입력한 Azure와 GitHub 식별자가 현재 Cloud Shell에 있는지 확인합니다.' \
   '# App ID와 Installation ID가 GitHub에서 사용하는 양의 정수 형식인지 검사합니다.' \
-  '# 임시 private key 파일을 만들고 함수 종료 시 secret과 JWT를 항상 정리합니다.' \
+  '# 임시 private key 파일을 만들고 script 종료 시 secret과 JWT를 항상 정리합니다.' \
   '# Key Vault secret을 보호된 임시 파일로 내려받아 JWT 서명에 사용합니다.' \
+  '# 다운로드한 값이 줄바꿈이 보존된 유효한 PEM private key인지 확인합니다.' \
   '# GitHub App JWT에 사용할 base64url 인코딩 함수를 정의합니다.' \
   '# 현재 시간을 기준으로 10분 이내에 만료되는 GitHub App JWT payload를 만듭니다.' \
   '# Key Vault에서 받은 private key로 JWT에 RS256 서명합니다.' \
-  '# JWT로 Installation 정보를 조회하고 응답의 App ID가 입력값과 같은지 확인합니다.' \
-  '# 검증 함수를 실행하고 완료 후 현재 shell에서 함수 정의를 제거합니다.'; do
-  assert_contains "$step_eight_section" "$text" \
-    'module 01 step 8 stored-secret authentication missing'
+  '# JWT로 Installation 정보와 App 권한 및 organization 범위를 확인합니다.' \
+  '# Installation token으로 접근 가능한 repository가 실습 저장소 하나뿐인지 확인합니다.'; do
+  assert_contains "$GITHUB_APP_VERIFIER_TEXT" "$text" \
+    'module 01 GitHub App verifier behavior missing'
 done
-assert_contains \
-  "$step_seven_cloud_shell" \
-  'export SUBSCRIPTION_ID=' \
-  'module 01 step 7-C must print the local step 8 export command'
 for forbidden in \
   'read -rp "Azure subscription ID:' \
   'read -rp "Key Vault name:' \
@@ -364,12 +399,83 @@ for forbidden in \
     fail "module 01 step 8 must reuse existing variables instead of prompting: $forbidden"
   fi
 done
+if grep -F 'verify_key_vault_app_installation()' "$PREREQ" >/dev/null; then
+  fail 'module 01 step 8 must not expose the verifier implementation inline'
+fi
+bash -n "$GITHUB_APP_VERIFIER" ||
+  fail 'module 01 GitHub App verifier has invalid Bash syntax'
+
+fake_bin="$(mktemp -d)"
+for fake_command in az openssl curl jq; do
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$fake_bin/$fake_command"
+  chmod +x "$fake_bin/$fake_command"
+done
+
+if missing_variable_output="$(
+  env -i \
+    PATH="$fake_bin:/usr/bin:/bin" \
+    HOME="${HOME:-/tmp}" \
+    bash "$GITHUB_APP_VERIFIER" 2>&1
+)"; then
+  fail 'module 01 GitHub App verifier must reject missing variables'
+fi
+assert_contains \
+  "$missing_variable_output" \
+  'ERROR: required variable is not set: SUBSCRIPTION_ID' \
+  'module 01 GitHub App verifier must identify the first missing variable'
+
+if invalid_id_output="$(
+  env -i \
+    PATH="$fake_bin:/usr/bin:/bin" \
+    HOME="${HOME:-/tmp}" \
+    SUBSCRIPTION_ID='00000000-1111-2222-3333-444444444444' \
+    KEY_VAULT='kvacarunnertest' \
+    GITHUB_OWNER='contoso' \
+    GITHUB_REPO='aca-runner-lab' \
+    GITHUB_APP_ID='not-a-number' \
+    GITHUB_APP_INSTALLATION_ID='12345678' \
+    bash "$GITHUB_APP_VERIFIER" 2>&1
+)"; then
+  fail 'module 01 GitHub App verifier must reject invalid App IDs'
+fi
+assert_contains \
+  "$invalid_id_output" \
+  'ERROR: App ID and Installation ID must be positive integers.' \
+  'module 01 GitHub App verifier must explain the identifier format'
+
+for fake_command in az openssl curl jq; do
+  rm -f -- "$fake_bin/$fake_command"
+done
+rmdir -- "$fake_bin"
+for forbidden in \
+  'az login' \
+  'export SUBSCRIPTION_ID=' \
+  '로컬 워크스테이션'; do
+  if [[ "$step_eight_section" == *"$forbidden"* ]]; then
+    fail "module 01 step 8 must run directly in the existing Cloud Shell session: $forbidden"
+  fi
+done
 for text in \
-  'GitHub App private key를 Azure Portal에서 Key Vault secret으로 저장한다.' \
-  'Key Vault에 저장된 private key로 App ID와 Installation ID의 실제 연결을 인증한다.'; do
+  'GitHub App private key를 Azure Portal Cloud Shell의 file upload로 Key Vault secret에 저장한다.' \
+  'Key Vault에 저장된 private key로 App ID, Installation ID, 권한과 repository 범위를 인증한다.'; do
   assert_contains "$PREREQ_TEXT" "$text" \
     'module 01 goals must include Key Vault bootstrap and authentication'
 done
+
+assert_contains \
+  "$PREREQ_TEXT" \
+  'RBAC 전파에는 최대 10분이 걸릴 수 있습니다.' \
+  'module 01 must allow sufficient time for Azure RBAC propagation'
+assert_contains \
+  "$PREREQ_TEXT" \
+  'export SUBSCRIPTION_ID' \
+  'module 01 must export the selected subscription for the verifier script'
+if [[ "$PREREQ_TEXT" == *'최대 2분'* ]]; then
+  fail 'module 01 must not claim Azure RBAC propagation is limited to two minutes'
+fi
+if [[ "$step_five_section" == *'다음 모듈에서는 Cloud Shell의 비밀이 아닌 식별자와 로컬 워크스테이션에만 남겨 둔'* ]]; then
+  fail 'module 01 step 5 must not claim the next module directly creates the installation token'
+fi
 
 if [[ "$step_eight_section" == *'-sign "$GITHUB_APP_PRIVATE_KEY_FILE"'* ]]; then
   fail "module 01 step 8 must authenticate with the Key Vault download, not the source PEM"
