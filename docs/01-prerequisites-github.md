@@ -171,6 +171,7 @@ GitHub 웹 UI에서 organization 아래에 새 저장소를 만들고 아래 값
 git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
 # 상대 경로 기반 문서·runner·sample 명령이 동작하도록 clone directory로 이동합니다.
 cd ~/aca-github-runner-workshop
+# clone 결과에 workshop의 필수 디렉터리와 파일이 있는지 확인합니다.
 ls
 ```
 
@@ -310,6 +311,7 @@ read -rp "GitHub organization: " GITHUB_OWNER
 read -rp "Private repository name: " GITHUB_REPO
 read -rp "GitHub App ID: " GITHUB_APP_ID
 read -rp "GitHub App Installation ID: " GITHUB_APP_INSTALLATION_ID
+# 입력한 식별자를 한 번에 출력해 GitHub 화면의 값과 비교합니다.
 printf 'GITHUB_OWNER=%s\nGITHUB_REPO=%s\nGITHUB_APP_ID=%s\nGITHUB_APP_INSTALLATION_ID=%s\n' \
   "$GITHUB_OWNER" "$GITHUB_REPO" "$GITHUB_APP_ID" "$GITHUB_APP_INSTALLATION_ID"
 ```
@@ -345,17 +347,20 @@ GITHUB_APP_INSTALLATION_ID=98765432
 
 ```bash
 # Module 01과 이후 Azure 모듈이 함께 사용할 Resource Group과 Key Vault를 준비합니다.
+# 동일한 이름을 재사용할 수 있도록 공통 Azure 리소스 이름을 변수로 만듭니다.
 SUFFIX="${SUFFIX:-$(openssl rand -hex 3)}"
 LOC="${LOC:-koreacentral}"
 RG="${RG:-rg-acarunner-$SUFFIX}"
 KEY_VAULT="${KEY_VAULT:-kvacarunner$SUFFIX}"
 GITHUB_APP_KEY_SECRET="${GITHUB_APP_KEY_SECRET:-github-app-private-key}"
 
+# 이후 모든 Azure 리소스를 함께 정리할 Resource Group을 먼저 만듭니다.
 az group create \
   --name "$RG" \
   --location "$LOC" \
   --output none
 
+# GitHub App private key를 보관할 RBAC 기반 Key Vault를 만듭니다.
 az keyvault create \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
@@ -368,6 +373,7 @@ az keyvault create \
   --bypass None \
   --output none
 
+# firewall과 RBAC 설정에 필요한 vault와 현재 사용자 식별자를 조회합니다.
 KEY_VAULT_ID=$(az keyvault show \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
@@ -379,11 +385,13 @@ KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=$(az ad signed-in-user show \
 read -rp "Local workstation public IPv4 CIDR (for example 203.0.113.10/32): " \
   KEY_VAULT_BOOTSTRAP_CIDR
 
+# PEM 업로드를 허용할 로컬 워크스테이션의 public IPv4 CIDR만 firewall에 추가합니다.
 az keyvault network-rule add \
   --name "$KEY_VAULT" \
   --ip-address "$KEY_VAULT_BOOTSTRAP_CIDR" \
   --output none
 
+# 현재 사용자에게 PEM 업로드에 필요한 임시 secret 관리 권한을 부여합니다.
 az role assignment create \
   --assignee-object-id "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID" \
   --assignee-principal-type User \
@@ -391,6 +399,7 @@ az role assignment create \
   --scope "$KEY_VAULT_ID" \
   --output none
 
+# Module 02에서 다시 사용할 bootstrap 값을 화면에 출력해 따로 기록합니다.
 printf '다음 값을 저장하세요: SUFFIX=%s RG=%s KEY_VAULT=%s\n' \
   "$SUFFIX" "$RG" "$KEY_VAULT"
 printf 'KEY_VAULT_BOOTSTRAP_CIDR=%s\nKEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=%s\n' \
@@ -417,16 +426,19 @@ KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=11111111-2222-3333-4444-555555555555
 ```bash
 # 로컬 PEM 파일을 화면에 출력하지 않고 Module 01에서 만든 Key Vault에 업로드합니다.
 set -euo pipefail
+# 로컬 Azure CLI에 로그인하고 Key Vault와 PEM 파일 경로를 입력합니다.
 az login
 read -rp "Azure subscription ID: " SUBSCRIPTION_ID
 read -rp "Key Vault name: " KEY_VAULT
 read -rp "GitHub App PEM file path: " GITHUB_APP_PRIVATE_KEY_FILE
 GITHUB_APP_KEY_SECRET="github-app-private-key"
 
+# 선택한 subscription을 고정하고 PEM 파일 권한을 현재 사용자 전용으로 제한합니다.
 az account set --subscription "$SUBSCRIPTION_ID"
 test -f "$GITHUB_APP_PRIVATE_KEY_FILE"
 chmod 600 "$GITHUB_APP_PRIVATE_KEY_FILE"
 
+# PEM 원문을 출력하지 않고 파일에서 Key Vault secret으로 직접 업로드합니다.
 az keyvault secret set \
   --vault-name "$KEY_VAULT" \
   --name "$GITHUB_APP_KEY_SECRET" \
@@ -467,6 +479,7 @@ verify_key_vault_app_installation() (
   local TEMP_PRIVATE_KEY_FILE now_epoch payload_json signing_input
   local app_jwt installation_owner required_command
 
+  # 인증에 필요한 로컬 명령이 모두 설치되어 있는지 먼저 확인합니다.
   for required_command in az openssl curl jq; do
     if ! command -v "$required_command" >/dev/null 2>&1; then
       printf 'ERROR: required command not found: %s\n' "$required_command" >&2
@@ -474,18 +487,21 @@ verify_key_vault_app_installation() (
     fi
   done
 
+  # Key Vault와 GitHub App 설치를 식별할 값을 로컬 터미널에서 입력합니다.
   read -rp "Azure subscription ID: " SUBSCRIPTION_ID
   read -rp "Key Vault name: " KEY_VAULT
   read -rp "GitHub App ID: " GITHUB_APP_ID
   read -rp "GitHub App Installation ID: " GITHUB_APP_INSTALLATION_ID
   GITHUB_APP_KEY_SECRET="github-app-private-key"
 
+  # App ID와 Installation ID가 GitHub에서 사용하는 양의 정수 형식인지 검사합니다.
   if [[ ! "$GITHUB_APP_ID" =~ ^[1-9][0-9]*$ ]] ||
     [[ ! "$GITHUB_APP_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]; then
     printf 'ERROR: App ID and Installation ID must be positive integers.\n' >&2
     return 1
   fi
 
+  # 임시 private key 파일을 만들고 함수 종료 시 secret과 JWT를 항상 정리합니다.
   az account set --subscription "$SUBSCRIPTION_ID"
   TEMP_PRIVATE_KEY_FILE="$(mktemp)"
   cleanup() {
@@ -494,6 +510,7 @@ verify_key_vault_app_installation() (
   }
   trap cleanup EXIT
 
+  # Key Vault secret을 보호된 임시 파일로 내려받아 JWT 서명에 사용합니다.
   az keyvault secret download \
     --vault-name "$KEY_VAULT" \
     --name "$GITHUB_APP_KEY_SECRET" \
@@ -502,10 +519,12 @@ verify_key_vault_app_installation() (
     --output none
   chmod 600 "$TEMP_PRIVATE_KEY_FILE"
 
+  # GitHub App JWT에 사용할 base64url 인코딩 함수를 정의합니다.
   base64url_encode() {
     openssl base64 -A | tr '+/' '-_' | tr -d '='
   }
 
+  # 현재 시간을 기준으로 10분 이내에 만료되는 GitHub App JWT payload를 만듭니다.
   now_epoch="$(date +%s)"
   printf -v payload_json '{"iat":%s,"exp":%s,"iss":%s}' \
     "$((now_epoch - 60))" "$((now_epoch + 540))" "$GITHUB_APP_ID"
@@ -514,12 +533,14 @@ verify_key_vault_app_installation() (
   ).$(
     printf '%s' "$payload_json" | base64url_encode
   )"
+  # Key Vault에서 받은 private key로 JWT에 RS256 서명합니다.
   app_jwt="${signing_input}.$(
     printf '%s' "$signing_input" |
       openssl dgst -binary -sha256 -sign "$TEMP_PRIVATE_KEY_FILE" |
       base64url_encode
   )"
 
+  # JWT로 Installation 정보를 조회하고 응답의 App ID가 입력값과 같은지 확인합니다.
   if ! installation_owner="$(
     curl -fsSL \
         -H "Accept: application/vnd.github+json" \
@@ -537,6 +558,7 @@ verify_key_vault_app_installation() (
     "$GITHUB_APP_ID" "$GITHUB_APP_INSTALLATION_ID" "$installation_owner"
 )
 
+# 검증 함수를 실행하고 완료 후 현재 shell에서 함수 정의를 제거합니다.
 verify_key_vault_app_installation &&
   unset -f verify_key_vault_app_installation
 ```

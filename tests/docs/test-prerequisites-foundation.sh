@@ -204,6 +204,18 @@ for text in \
   assert_contains "$step_five_section" "$text" 'module 01 step 5 App installation guidance missing'
 done
 
+step_six_section="$(
+  awk '
+    /^## 6\. / { in_section=1 }
+    /^## 7\. / { exit }
+    in_section { print }
+  ' "$PREREQ"
+)"
+assert_contains \
+  "$step_six_section" \
+  '# 입력한 식별자를 한 번에 출력해 GitHub 화면의 값과 비교합니다.' \
+  'module 01 step 6 must explain identifier output'
+
 step_seven_section="$(
   awk '
     /^## 7\. / { in_section=1 }
@@ -231,7 +243,17 @@ for text in \
   '### 7-L. Local workstation: GitHub App PEM 업로드' \
   'az keyvault secret set' \
   '--file "$GITHUB_APP_PRIVATE_KEY_FILE"' \
-  '--encoding utf-8'; do
+  '--encoding utf-8' \
+  '# 동일한 이름을 재사용할 수 있도록 공통 Azure 리소스 이름을 변수로 만듭니다.' \
+  '# 이후 모든 Azure 리소스를 함께 정리할 Resource Group을 먼저 만듭니다.' \
+  '# GitHub App private key를 보관할 RBAC 기반 Key Vault를 만듭니다.' \
+  '# firewall과 RBAC 설정에 필요한 vault와 현재 사용자 식별자를 조회합니다.' \
+  '# PEM 업로드를 허용할 로컬 워크스테이션의 public IPv4 CIDR만 firewall에 추가합니다.' \
+  '# 현재 사용자에게 PEM 업로드에 필요한 임시 secret 관리 권한을 부여합니다.' \
+  '# Module 02에서 다시 사용할 bootstrap 값을 화면에 출력해 따로 기록합니다.' \
+  '# 로컬 Azure CLI에 로그인하고 Key Vault와 PEM 파일 경로를 입력합니다.' \
+  '# 선택한 subscription을 고정하고 PEM 파일 권한을 현재 사용자 전용으로 제한합니다.' \
+  '# PEM 원문을 출력하지 않고 파일에서 Key Vault secret으로 직접 업로드합니다.'; do
   assert_contains "$step_seven_section" "$text" \
     'module 01 step 7 Key Vault bootstrap missing'
 done
@@ -256,7 +278,17 @@ for text in \
   'Authorization: Bearer $app_jwt' \
   '"https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID"' \
   'select(.app_id == $app_id)' \
-  'PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인'; do
+  'PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인' \
+  '# 인증에 필요한 로컬 명령이 모두 설치되어 있는지 먼저 확인합니다.' \
+  '# Key Vault와 GitHub App 설치를 식별할 값을 로컬 터미널에서 입력합니다.' \
+  '# App ID와 Installation ID가 GitHub에서 사용하는 양의 정수 형식인지 검사합니다.' \
+  '# 임시 private key 파일을 만들고 함수 종료 시 secret과 JWT를 항상 정리합니다.' \
+  '# Key Vault secret을 보호된 임시 파일로 내려받아 JWT 서명에 사용합니다.' \
+  '# GitHub App JWT에 사용할 base64url 인코딩 함수를 정의합니다.' \
+  '# 현재 시간을 기준으로 10분 이내에 만료되는 GitHub App JWT payload를 만듭니다.' \
+  '# Key Vault에서 받은 private key로 JWT에 RS256 서명합니다.' \
+  '# JWT로 Installation 정보를 조회하고 응답의 App ID가 입력값과 같은지 확인합니다.' \
+  '# 검증 함수를 실행하고 완료 후 현재 shell에서 함수 정의를 제거합니다.'; do
   assert_contains "$step_eight_section" "$text" \
     'module 01 step 8 stored-secret authentication missing'
 done
