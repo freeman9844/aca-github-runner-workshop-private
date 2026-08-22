@@ -12,6 +12,8 @@ RUN apt-get update \
       gnupg \
       jq \
       lsb-release \
+      openssl \
+      util-linux \
     && mkdir -p /etc/apt/keyrings \
     && curl --fail --silent --show-error --location \
       https://packages.microsoft.com/keys/microsoft.asc \
@@ -48,6 +50,9 @@ RUN az extension add --name containerapp --upgrade --version 0.3.55 --only-show-
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null
 WORKDIR /home/runner
+
+# container 시작 시 root wrapper가 secret을 보호하고 runner workflow만 non-root로 위임합니다.
+USER root
 
 # container 시작 시 entrypoint가 일회성 runner 등록을 마친 후 workflow 수신을 시작합니다.
 ENTRYPOINT ["/home/runner/entrypoint.sh"]
