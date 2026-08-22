@@ -521,23 +521,6 @@ unset KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID
 - 이 시점부터 Cloud Shell의 `az keyvault secret show` 같은 **data-plane** 조회도 `403`이 날 수 있습니다. service endpoint가 붙은 ACA subnet만 허용되도록 바뀐 것이므로 예상된 동작입니다.
 - bootstrap 권한 삭제 전에 `az keyvault show`와 `az role assignment list` 결과로 subnet rule과 세 가지 runtime 역할을 반드시 확인하세요.
 
-## 선택: Local workstation의 원본 PEM 삭제
-
-👁️ **설명**
-
-아래 단계는 **로컬 워크스테이션 Bash**에서 실행합니다. Module 01 upload용 원본 PEM 파일은 Module 02 검증이 끝난 뒤에만 삭제하세요.
-
-🟢 **실행**
-
-```bash
-# Module 02 검증이 끝난 뒤 로컬 워크스테이션의 원본 PEM 파일을 삭제합니다.
-set -euo pipefail
-read -rp "Original GitHub App PEM file path: " GITHUB_APP_PRIVATE_KEY_FILE
-test -f "$GITHUB_APP_PRIVATE_KEY_FILE"
-rm -- "$GITHUB_APP_PRIVATE_KEY_FILE"
-unset GITHUB_APP_PRIVATE_KEY_FILE
-```
-
 생성된 foundation 리소스는 텍스트 기준으로 다음 항목을 확인하면 됩니다.
 
 - Azure Container Registry
@@ -547,6 +530,10 @@ unset GITHUB_APP_PRIVATE_KEY_FILE
 - Key Vault
 - Managed Identity
 - Log Analytics workspace
+
+Azure Portal에서 Resource Group을 열면 Module 02에서 생성한 foundation 리소스를 한 화면에서 확인할 수 있습니다.
+
+![Azure Portal Resource Group의 Module 02 foundation 리소스](images/02-azure-portal-foundation-resources.png)
 
 ### 선택: foundation 변수 요약 출력
 

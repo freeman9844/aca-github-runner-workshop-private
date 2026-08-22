@@ -9,6 +9,7 @@ APP_SETTINGS_IMAGE="$ROOT/docs/images/01-github-app-settings-example.png"
 APP_INSTALL_TARGET_IMAGE="$ROOT/docs/images/01-github-app-install-target.png"
 APP_SELECT_REPOSITORY_IMAGE="$ROOT/docs/images/01-github-app-select-repository.png"
 KEY_VAULT_RESULT_IMAGE="$ROOT/docs/images/01-key-vault-secret-created.png"
+FOUNDATION_RESOURCES_IMAGE="$ROOT/docs/images/02-azure-portal-foundation-resources.png"
 GITHUB_APP_KEY_STORE="$ROOT/scripts/store-github-app-private-key.sh"
 GITHUB_APP_VERIFIER="$ROOT/scripts/verify-github-app-installation.sh"
 
@@ -39,6 +40,8 @@ assert_contains_multiline() {
 [[ -f "$APP_SELECT_REPOSITORY_IMAGE" ]] || fail "module 01 GitHub App repository selection image missing"
 [[ -f "$KEY_VAULT_RESULT_IMAGE" ]] || fail "module 01 Key Vault result image missing"
 [[ ! -x "$KEY_VAULT_RESULT_IMAGE" ]] || fail "module 01 Key Vault result image must not be executable"
+[[ -f "$FOUNDATION_RESOURCES_IMAGE" ]] || fail "module 02 Azure Portal foundation resources image missing"
+[[ ! -x "$FOUNDATION_RESOURCES_IMAGE" ]] || fail "module 02 Azure Portal foundation resources image must not be executable"
 [[ ! -e "$ROOT/docs/images/01-key-vault-secrets-list.png" ]] ||
   fail "obsolete module 01 Key Vault secrets list image must be removed"
 [[ ! -e "$ROOT/docs/images/01-key-vault-create-secret.png" ]] ||
@@ -680,8 +683,20 @@ for text in \
   assert_contains "$module_two_step_seven" "$text" \
     'module 02 step 7 Key Vault hardening missing'
 done
-assert_contains "$FOUNDATION_TEXT" '## 선택: Local workstation의 원본 PEM 삭제' \
-  'module 02 optional PEM deletion heading missing'
+for forbidden in \
+  '## 선택: Local workstation의 원본 PEM 삭제' \
+  'Original GitHub App PEM file path:' \
+  'rm -- "$GITHUB_APP_PRIVATE_KEY_FILE"'; do
+  if [[ "$FOUNDATION_TEXT" == *"$forbidden"* ]]; then
+    fail "module 02 must not include local PEM deletion guidance: $forbidden"
+  fi
+done
+for text in \
+  'Azure Portal에서 Resource Group을 열면 Module 02에서 생성한 foundation 리소스를 한 화면에서 확인할 수 있습니다.' \
+  '![Azure Portal Resource Group의 Module 02 foundation 리소스](images/02-azure-portal-foundation-resources.png)'; do
+  assert_contains "$FOUNDATION_TEXT" "$text" \
+    'module 02 Azure Portal resource reference missing'
+done
 for text in \
   '📋 **예상 출력**' \
   'Key Vault 조회 결과는 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`이어야 합니다.' \
@@ -732,7 +747,7 @@ assert_contains_multiline \
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \
   $'az keyvault show \\\n  --resource-group "$RG" \\\n  --name "$KEY_VAULT" \\\n  --query "{publicNetworkAccess:properties.publicNetworkAccess,defaultAction:properties.networkAcls.defaultAction,bypass:properties.networkAcls.bypass,vnetRules:properties.networkAcls.virtualNetworkRules[].{id:id,ignoreMissingVnetServiceEndpoint:ignoreMissingVnetServiceEndpoint}}" \\\n  --output json' \
-  'module 02 must validate the Key Vault firewall state before PEM deletion'
+  'module 02 must validate the Key Vault firewall state before bootstrap access removal'
 
 for forbidden in \
   '--value "$GITHUB_APP_PRIVATE_KEY"'; do
