@@ -78,6 +78,8 @@ for text in \
   'Actions' \
   'Administration' \
   'Read and write' \
+  '프로필 사진 → **Your organizations** → 대상 organization의 **Settings** → **Developer settings** → **GitHub Apps** → **New GitHub App**' \
+  '개인 계정의 **Settings → Applications → Authorized GitHub Apps** 화면에서는 organization-owned App을 만들 수 없습니다.' \
   'GITHUB_APP_ID' \
   'GITHUB_APP_INSTALLATION_ID' \
   '/settings/installations/' \

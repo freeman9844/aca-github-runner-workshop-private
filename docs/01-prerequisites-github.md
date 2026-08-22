@@ -191,7 +191,14 @@ private key PEM 파일을 조합해 installation access token을 발급합니다
 
 🟢 **실행**
 
-GitHub 웹 UI에서 **Settings → Developer settings → GitHub Apps → New GitHub App**으로 이동하고 아래 값을 사용합니다.
+개인 계정 Settings가 아니라 `aca-runner-lab` 저장소를 소유한 organization의
+Settings로 이동해야 합니다.
+
+1. GitHub 우측 상단의 프로필 사진을 선택합니다.
+2. 프로필 사진 → **Your organizations** → 대상 organization의 **Settings** → **Developer settings** → **GitHub Apps** → **New GitHub App** 순서로 이동합니다.
+3. 아래 값을 사용해 organization-owned App을 만듭니다.
+
+개인 계정의 **Settings → Applications → Authorized GitHub Apps** 화면에서는 organization-owned App을 만들 수 없습니다. 이 화면이 보이면 **Your organizations**로 돌아가 대상 organization의 Settings에서 다시 시작하세요.
 
 | 설정 | 값 |
 |------|----|
