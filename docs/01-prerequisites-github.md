@@ -269,6 +269,12 @@ Settings로 이동해야 합니다.
 - PEM 파일은 다음 모듈에서 `로컬 Azure CLI` 세션이 JWT 서명에 사용할 비밀입니다.
 - PEM 파일의 로컬 경로는 참가자 메모로만 유지하고 Cloud Shell 환경 변수로 추가하지 않습니다.
 
+> **참고 화면:** 아래 이미지는 `freejava98` organization에서
+> GitHub App 이름을 `aca-runner-lab-001`, Homepage URL을
+> `https://github.com/freejava98/aca-runner-lab`로 입력한 예시입니다.
+
+![freejava98 organization의 GitHub App 이름과 Homepage URL 설정 예시](images/01-github-app-settings-example.png)
+
 ## 6. Cloud Shell 변수로 GitHub App 식별자만 로드
 
 👁️ **설명**

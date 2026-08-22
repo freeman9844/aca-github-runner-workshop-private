@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PREREQ="$ROOT/docs/01-prerequisites-github.md"
 FOUNDATION="$ROOT/docs/02-azure-foundation.md"
 ORG_REPO_IMAGE="$ROOT/docs/images/01-github-organization-private-repository.png"
+APP_SETTINGS_IMAGE="$ROOT/docs/images/01-github-app-settings-example.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -28,6 +29,7 @@ assert_contains_multiline() {
 [[ -f "$PREREQ" ]] || fail "module 01 missing"
 [[ -f "$FOUNDATION" ]] || fail "module 02 missing"
 [[ -f "$ORG_REPO_IMAGE" ]] || fail "module 01 organization repository example image missing"
+[[ -f "$APP_SETTINGS_IMAGE" ]] || fail "module 01 GitHub App settings example image missing"
 
 PREREQ_TEXT="$(<"$PREREQ")"
 FOUNDATION_TEXT="$(<"$FOUNDATION")"
@@ -173,6 +175,18 @@ step_five_explanation_line="$(
   fail "module 01 step 5 free-account guide ordering markers missing"
 [[ "$step_five_line" -lt "$free_account_line" && "$free_account_line" -lt "$step_five_explanation_line" ]] ||
   fail "module 01 free-account guide must appear at the start of step 5"
+
+step_five_section="$(
+  awk '
+    /^## 5\. / { in_section=1 }
+    /^## 6\. / { exit }
+    in_section { print }
+  ' "$PREREQ"
+)"
+assert_contains \
+  "$step_five_section" \
+  '![freejava98 organization의 GitHub App 이름과 Homepage URL 설정 예시](images/01-github-app-settings-example.png)' \
+  'module 01 step 5 must reference the GitHub App settings example image'
 
 step_three_section="$(
   awk '
