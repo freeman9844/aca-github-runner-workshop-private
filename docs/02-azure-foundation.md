@@ -61,7 +61,7 @@ flowchart TB
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
-- Module 01에서 저장한 `SUFFIX`, 실제 `KEY_VAULT` 이름, bootstrap 접근 정보로 공통 이름 변수를 복원한다.
+- Module 01에서 저장한 `SUFFIX`, 원래 `SUBSCRIPTION_ID`, 실제 `KEY_VAULT` 이름, bootstrap 접근 정보로 공통 이름 변수를 복원한다.
 - External ACA Environment용 custom VNet, delegated ACA subnet, non-delegated Private Endpoint subnet을 각각 준비한다.
 - Azure Monitor 로그 대상으로 ACA Environment를 연결하고, Blob 전용 Private DNS를 구성한다.
 - ACR을 관리자 계정 없이 만들고 ARM authentication을 활성화한다.
@@ -85,9 +85,9 @@ flowchart TB
 
 👁️ **설명**
 
-Module 02는 Module 01에서 이미 만든 Resource Group과 Key Vault를 그대로 이어받습니다. Module 01에서 저장한 `SUFFIX`, 실제 `KEY_VAULT` 이름, bootstrap CIDR, bootstrap principal object ID를 복원한 뒤 나머지 리소스 이름을 같은 suffix에서 다시 계산합니다.
+Module 02는 Module 01에서 이미 만든 Resource Group과 Key Vault를 그대로 이어받습니다. Module 01에서 저장한 `SUFFIX`, 원래 `SUBSCRIPTION_ID`, 실제 `KEY_VAULT` 이름, bootstrap CIDR, bootstrap principal object ID를 복원한 뒤 같은 subscription으로 돌아가서 나머지 리소스 이름을 같은 suffix에서 다시 계산합니다.
 
-아래 `az keyvault show`가 실패하면 Module 01의 Key Vault bootstrap이 아직 끝나지 않은 상태입니다. 이 경우 새 suffix를 만들거나 두 번째 Key Vault를 만들지 말고, Module 01에서 저장한 값을 다시 확인한 뒤 같은 workshop 상태로 이어서 실행하세요.
+아래 `az keyvault show`가 실패하면 먼저 활성 subscription이 Module 01에서 저장한 값과 같은지 확인하세요. 그다음에도 실패하면 Module 01의 Key Vault bootstrap이 아직 끝나지 않은 상태입니다. 이 경우 새 suffix를 만들거나 두 번째 Key Vault를 만들지 말고, Module 01에서 저장한 값을 다시 확인한 뒤 같은 workshop 상태로 이어서 실행하세요.
 
 🟢 **실행**
 
@@ -95,6 +95,9 @@ Module 02는 Module 01에서 이미 만든 Resource Group과 Key Vault를 그대
 # Module 01에서 저장한 식별자를 복원하고 나머지 Azure 리소스 이름을 같은 suffix에서 파생합니다.
 if [[ -z "${SUFFIX:-}" ]]; then
   read -rp "Saved SUFFIX: " SUFFIX
+fi
+if [[ -z "${SUBSCRIPTION_ID:-}" ]]; then
+  read -rp "Saved subscription ID: " SUBSCRIPTION_ID
 fi
 if [[ -z "${KEY_VAULT:-}" ]]; then
   read -rp "Saved Key Vault name: " KEY_VAULT
@@ -129,6 +132,7 @@ UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
 
+az account set --subscription "$SUBSCRIPTION_ID"
 KEY_VAULT_ID=$(az keyvault show \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
@@ -147,8 +151,8 @@ SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3 STORAGE=stacarunnera
 
 ⚠️ **주의**
 
-- `SUFFIX`, `KEY_VAULT`, `KEY_VAULT_BOOTSTRAP_CIDR`, `KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID`에는 반드시 Module 01에서 저장한 값을 넣으세요.
-- `KEY_VAULT_ID` 조회가 실패하면 Module 01이 끝나지 않은 것입니다. 새 `SUFFIX`를 만들거나 다른 `KEY_VAULT` 이름으로 우회하지 마세요.
+- `SUFFIX`, `SUBSCRIPTION_ID`, `KEY_VAULT`, `KEY_VAULT_BOOTSTRAP_CIDR`, `KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID`에는 반드시 Module 01에서 저장한 값을 넣으세요.
+- `KEY_VAULT_ID` 조회가 실패하면 먼저 `SUBSCRIPTION_ID`가 맞는지 확인하고 `az account set --subscription "$SUBSCRIPTION_ID"`를 다시 실행하세요. 그다음에도 실패하면 Module 01이 끝나지 않은 것입니다. 새 `SUFFIX`를 만들거나 다른 `KEY_VAULT` 이름으로 우회하지 마세요.
 - `STORAGE`는 기본적으로 `stacarunner$SUFFIX`를 그대로 사용합니다. Storage 이름 충돌 복구가 발생한 경우에만 실제 `STORAGE` 값을 추가로 저장하세요.
 
 ## 2. Resource Group 확인과 Log Analytics workspace 만들기

@@ -292,14 +292,21 @@ module_two_step_one="$(
 )"
 for text in \
   'Module 01에서 저장한 `SUFFIX`' \
+  'if [[ -z "${SUBSCRIPTION_ID:-}" ]]; then' \
   'read -rp "Saved SUFFIX:' \
+  'read -rp "Saved subscription ID:' \
   'read -rp "Saved Key Vault name:' \
   'read -rp "Saved Key Vault bootstrap CIDR:' \
   'read -rp "Saved Key Vault bootstrap principal object ID:' \
+  'az account set --subscription "$SUBSCRIPTION_ID"' \
   'KEY_VAULT_ID=$(az keyvault show'; do
   assert_contains "$module_two_step_one" "$text" \
     'module 02 must restore Module 01 Key Vault values'
 done
+subscription_set_line="$(printf '%s\n' "$module_two_step_one" | grep -nF 'az account set --subscription "$SUBSCRIPTION_ID"' | head -n1 | cut -d: -f1)"
+keyvault_show_line="$(printf '%s\n' "$module_two_step_one" | grep -nF 'KEY_VAULT_ID=$(az keyvault show' | head -n1 | cut -d: -f1)"
+[[ -n "$subscription_set_line" && -n "$keyvault_show_line" && "$subscription_set_line" -lt "$keyvault_show_line" ]] ||
+  fail 'module 02 must select the saved subscription before az keyvault show'
 for text in \
   'Module 01에서 만든 Key Vault를 재사용한다.' \
   'Key Vault Private Endpoint와 runtime RBAC를 완성한다.'; do
@@ -350,6 +357,13 @@ for forbidden in \
   '## 8-L. Local workstation: GitHub App PEM 업로드'; do
   if [[ "$module_two_step_eight" == *"$forbidden"* ]]; then
     fail "module 02 step 8 still owns Module 01 bootstrap behavior: $forbidden"
+  fi
+done
+for forbidden in \
+  'az keyvault create' \
+  'az keyvault secret set'; do
+  if grep -F -- "$forbidden" "$FOUNDATION" >/dev/null; then
+    fail "module 02 must not duplicate Module 01 Key Vault bootstrap anywhere: $forbidden"
   fi
 done
 
