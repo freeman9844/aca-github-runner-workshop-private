@@ -1,6 +1,6 @@
 # Azure Container Apps GitHub Actions Runner 워크숍
 
-> Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해 **약 120분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 참가자는 organization-owned GitHub App 설치, runner image 빌드, **External ACA + Custom VNet + Blob·Key Vault Private Endpoint** foundation 배포, 병렬 workflow와 Log Analytics 검증, Managed Identity 기반 private Blob artifact 배포, 리소스 정리까지 한 흐름으로 완료합니다.
+> Azure Cloud Shell Bash와 GitHub 웹 UI를 사용해 **약 150분** 안에 `Private repository` 전용 **repository-scoped ephemeral runner**를 만들고, Azure Container Apps Event Job과 KEDA `github-runner` scaler로 **0 → N → 0** active executions를 관찰하는 핸즈온 워크숍입니다. 참가자는 organization-owned GitHub App 설치, runner image 빌드, **External ACA + Custom VNet + Blob·Key Vault Private Endpoint** foundation 배포, 병렬 workflow와 Log Analytics 검증, Managed Identity 기반 private Blob artifact 배포, 리소스 정리까지 한 흐름으로 완료합니다.
 
 ---
 
@@ -143,7 +143,7 @@ flowchart LR
 | 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-validation.md) | matrix 4개 Job의 `0 → N → 0`과 조건 기반 Log Analytics 수집 검증 | 20분 |
 | 06 | [Private Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 private Blob 업로드·다운로드와 checksum 검증 | 20분 |
 | 07 | [보안·제약·정리](docs/07-security-limitations-cleanup.md) | trusted private workflow 경계, App 제거, 보안 검토와 확인된 cleanup | 15분 |
-|  | **워크숍 합계** |  | **120분** |
+|  | **워크숍 합계** |  | **150분** |
 
 Module 05는 로그 수집이 늦을 때 최대 10분 동안 30초 간격으로 실제 유입을 확인합니다.
 
@@ -191,9 +191,9 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 | 3부 | 병렬 workflow 검증 + 로그 확인 | 20분 |
 | 4부 | Private Blob 배포 + checksum 검증 | 20분 |
 | 마무리 | 보안·제약 정리 + 리소스 삭제 | 15분 |
-| 합계 | 전체 워크숍 | 120분 |
+| 합계 | 전체 워크숍 | 150분 |
 
-> 리소스 그룹 삭제 요청은 120분 일정에 포함되지만, ACA managed environment의
+> 리소스 그룹 삭제 요청은 150분 일정에 포함되지만, ACA managed environment의
 > 비동기 삭제 완료는 워크숍 종료 후까지 이어질 수 있습니다.
 
 > ✅ **검증된 범위와 남은 전제** — 체크인된 자동 검증은 README/문서 계약과 스크립트 인터페이스를 확인합니다.
