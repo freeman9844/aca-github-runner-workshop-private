@@ -556,60 +556,6 @@ az containerapp job execution list \
 대기 Job 처리가 끝나면 active execution 수는 0이 됩니다. 완료 execution 이력은 남을 수 있습니다.
 ```
 
-## GitHub App 실패 검증 메모
-
-👁️ **설명**
-
-### KEDA authentication failure memo
-
-queued workflow가 생겼는데 runner가 뜨지 않으면 `applicationID`, `installationID`, `appKey`, `github-app-private-key` secretRef를 먼저 확인합니다. private key PEM은 읽지 말고 `az containerapp job show --query "properties.configuration.eventTriggerConfig.scale.rules"` 출력만 검증합니다. `GitHub App installation`이 `aca-runner-lab` repository에 유지되어 있는지도 함께 확인하고, `401`은 JWT clock skew 또는 installation token 문제로, `403`은 App 권한 또는 installation approval 문제로 분리해서 봅니다.
-
-### Key Vault resolution failure memo
-
-`github-app-private-key`가 resolve되지 않으면 KEDA auth와 분리해서 Key Vault 경로부터 확인합니다. `identityref`가 현재 Job의 UAMI를 가리키는지, 그 UAMI에 `Key Vault Secrets User`가 `$KEY_VAULT_ID` scope로 부여되어 있는지, `snet-aca-infra`에 `Microsoft.KeyVault` service endpoint가 있는지, Key Vault에 `$SUBNET_ID` subnet rule이 있는지, `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`이 유지되는지, `KEY_VAULT_SECRET_URI`가 기존 secret을 가리키는지 순서대로 봅니다. secret 값 자체는 읽지 말고 Key Vault reference와 service endpoint path만 검증합니다. Module 04 Key Vault reference synchronization/execution 성공이 acceptance gate입니다. workshop delivery 전에 같은 구독·정책 경계에서 live rehearsal로 직접 성공을 확인하세요. 이 경로는 저장소 테스트만으로 증명할 수 없습니다. 모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요. `defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.
-
-### Runner registration failure memo
-
-KEDA auth와 Key Vault resolution이 맞는데도 runner가 등록되지 않으면 registration token 단계로 좁혀 봅니다. 이 경우 `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지 확인하고, execution log에 GitHub API 오류가 나온 뒤 `Runner configured`가 누락되었는지 확인합니다.
-
-👁️ **설명**
-
-```bash
-# GitHub App scaler rule과 secretRef 매핑만 읽기 전용으로 점검합니다.
-az containerapp job show \
-  --name "$JOB" \
-  --resource-group "$RG" \
-  --query "properties.configuration.eventTriggerConfig.scale.rules" \
-  --output yaml
-```
-
-📋 **예상 출력**
-
-- `applicationID`, `installationID`, `appKey`가 보입니다.
-- `github-app-private-key` secretRef가 유지되어야 하고, `identityref`도 현재 UAMI를 가리켜야 합니다.
-- `GitHub App installation`이 `aca-runner-lab` repository에 설치된 상태여야 합니다.
-- `Key Vault Secrets User`, `Microsoft.KeyVault` service endpoint, Key Vault subnet rule, `publicNetworkAccess`, `defaultAction=Deny`, `bypass=None` 상태는 KEDA auth와 별개로 확인합니다.
-- `401`과 `403`은 서로 다른 복구 경로를 뜻합니다.
-
-## 10. GitHub Settings에서 permanent online runner가 남지 않았는지 확인
-
-👁️ **설명**
-
-ephemeral runner 워크숍의 핵심은 job이 끝난 뒤 runner가 계속 온라인 상태로 남지 않는 것입니다. Actions 실행 화면과 별개로 repository runner 목록도 반드시 확인합니다.
-
-🟢 **실행**
-
-GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
-
-📋 **예상 출력**
-
-- workflow가 모두 끝난 뒤에는 runner가 permanently online 상태로 남아 있지 않아야 합니다.
-- 일시적으로 offline record가 보일 수는 있지만, 장시간 고정된 online runner가 보이면 ephemeral 정리 흐름을 다시 확인해야 합니다.
-
-> **참고 화면:** 아래 화면처럼 **Self-hosted runners** 목록에 runner가 없으면 ephemeral runner가 workflow 종료 후 정상적으로 정리된 상태입니다.
-
-![GitHub Actions Self-hosted runners 목록이 비어 있는 정상 화면](images/05-github-actions-no-self-hosted-runners.png)
-
 ## 트러블슈팅
 
 | 증상 | 주요 원인 | 해결 방법 |

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DOC="$ROOT/docs/05-parallel-scale-validation.md"
 RUN_WORKFLOW_IMAGE="$ROOT/docs/images/05-github-actions-run-workflow.png"
+REMOVED_RUNNERS_IMAGE="$ROOT/docs/images/05-github-actions-no-self-hosted-runners.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -21,8 +22,23 @@ assert_contains() {
 [[ -f "$RUN_WORKFLOW_IMAGE" ]] || fail "module 05 GitHub Actions Run workflow image missing"
 [[ "$(sha256sum "$RUN_WORKFLOW_IMAGE" | cut -d' ' -f1)" == "8aed85c353ed49ca3e838c8255a0c52e6df6f0f87cb1f324c54aa4e4b71f767b" ]] ||
   fail "module 05 GitHub Actions Run workflow image is not the approved screenshot"
+[[ ! -e "$REMOVED_RUNNERS_IMAGE" ]] ||
+  fail "module 05 obsolete no-self-hosted-runners screenshot must be removed"
 
 DOC_TEXT="$(<"$DOC")"
+for removed_section in \
+  '## GitHub App 실패 검증 메모' \
+  '### KEDA authentication failure memo' \
+  '### Key Vault resolution failure memo' \
+  '### Runner registration failure memo' \
+  '## 10. GitHub Settings에서 permanent online runner가 남지 않았는지 확인'; do
+  if grep -F -- "$removed_section" "$DOC" >/dev/null; then
+    fail "module 05 still contains removed section: $removed_section"
+  fi
+done
+if grep -F -- 'images/05-github-actions-no-self-hosted-runners.png' "$DOC" >/dev/null; then
+  fail "module 05 still references the removed no-self-hosted-runners screenshot"
+fi
 
 step_four="$(
   awk '
@@ -136,15 +152,6 @@ for text in \
   assert_contains "$DOC_TEXT" "$text" 'module 05 GitHub App failure marker missing'
 done
 
-assert_contains "$DOC_TEXT" '### Key Vault resolution failure memo' 'module 05 key vault resolution memo missing'
-for text in \
-  'Module 04 Key Vault reference synchronization/execution 성공이 acceptance gate입니다.' \
-  'live rehearsal' \
-  '저장소 테스트만으로 증명할 수 없습니다.' \
-  '워크숍 delivery를 중단하고 환경별 platform path를 조사하세요.' \
-  '`defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.'; do
-  assert_contains "$DOC_TEXT" "$text" 'module 05 Key Vault caveat missing'
-done
 assert_contains "$DOC_TEXT" '`Runner configured`' 'module 05 configured lifecycle marker missing'
 assert_contains "$DOC_TEXT" '`Runner process exited`' 'module 05 exit lifecycle marker missing'
 

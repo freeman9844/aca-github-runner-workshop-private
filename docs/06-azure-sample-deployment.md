@@ -425,79 +425,16 @@ SHA-256: <64-hex-sha256>
 - `SHA-256`은 source file, downloaded file, blob metadata가 모두 같은 값이어야 합니다.
 - GitHub App bootstrap variable leak guard가 먼저 통과한 뒤 Azure login과 Blob data-plane step이 실행되어야 합니다.
 
-## 4. Blob checksum과 network boundary 결과 해석
+### 결과 해석
 
-👁️ **설명**
+- service endpoint는 Storage public DNS 이름을 그대로 사용하므로 DNS 해석 결과는 network proof가 아닙니다.
+- runner의 Blob data-plane success와 1단계의 control-plane 검증을 함께 확인해야 합니다. 즉 `Microsoft.Storage`, 같은 `SUBNET_ID`의 `virtualNetworkRules`, `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None` 상태에서 upload·download·metadata checksum 검증이 모두 성공해야 합니다.
+- GitHub App bootstrap variable 검사는 normal child-environment non-inheritance만 확인합니다. malicious code with access to the Job's managed identity/runtime boundary까지 격리한다고 해석하면 안 됩니다.
+- Cloud Shell은 control-plane만 확인합니다. Cloud Shell에서 같은 Blob data-plane 명령을 실행하면 403이 expected입니다. Storage key, SAS, public IP rule, `defaultAction=Allow`로 우회하지 마세요.
 
-이 workflow는 DNS proof를 수행하지 않습니다. service endpoint를 사용할 때 Storage DNS는 계속 public endpoint를 가리키므로, DNS 해석 결과로 network boundary를 주장하면 안 됩니다. 대신 다음 두 증거를 함께 읽어야 합니다.
+> **참고 화면:** 모든 workflow step이 성공하고, 마지막 step에서 Blob 경로와 SHA-256 결과가 출력된 GitHub Actions 실행 화면입니다. 화면의 run 번호, Storage account 이름, Blob 이름, checksum은 실행마다 달라집니다.
 
-1. runner 안에서 `az storage blob upload --auth-mode login`, `az storage blob download --auth-mode login`, `az storage blob show --auth-mode login`이 모두 성공했다.
-2. section 1과 section 5의 control-plane에서 `Microsoft.Storage`, `SUBNET_ID`, `virtualNetworkRules`, `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`가 확인됐다.
-
-같은 step은 Azure 입력값을 보기 전에 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`의 부재도 확인합니다. 이 검증이 증명하는 범위는 normal child-environment non-inheritance입니다. 즉 runner bootstrap에서 unset한 GitHub App 값이 일반 workflow step까지 자동 상속되지 않음을 보여 줍니다. 반대로 malicious code with access to the Job's managed identity/runtime boundary까지 격리해 준다고 주장하면 안 됩니다.
-
-업로드 artifact 내용에는 run identity가 들어갑니다.
-
-- `repository=$GITHUB_REPOSITORY`
-- `commit=$GITHUB_SHA`
-- `run_id=$GITHUB_RUN_ID`
-- `run_attempt=$GITHUB_RUN_ATTEMPT`
-- `actor=$GITHUB_ACTOR`
-
-이 파일은 `az storage blob upload --auth-mode login`으로만 올라가고, 곧바로 `az storage blob download --auth-mode login`으로 다시 받아 `sha256sum`을 비교합니다. workflow는 upload 시점의 SHA-256을 blob metadata에도 저장한 뒤 `az storage blob show --auth-mode login`으로 다시 읽어 local checksum과 일치하는지 확인합니다.
-
-📋 **예상 출력**
-
-- checksum이 다르면 workflow는 즉시 실패하며 `ERROR: Downloaded Blob checksum does not match the uploaded artifact.`를 출력해야 합니다.
-- Blob data-plane success와 control-plane firewall/subnet 검증을 함께 봐야 network proof가 됩니다.
-- Storage key, SAS, public IP rules, `defaultAction=Allow`로 우회하면 이 모듈의 증거가 무효가 됩니다.
-
-## 5. Cloud Shell과 Azure Portal에서 control-plane 확인
-
-👁️ **설명**
-
-Cloud Shell은 control-plane만 확인합니다. 실제 data-plane proof는 GitHub Actions runner 안에서만 수행해야 합니다. Cloud Shell에서 같은 Blob data-plane 명령을 실행하면 403이 expected이며, 이를 Storage key, SAS, public IP rule, `defaultAction=Allow`로 우회하면 안 됩니다.
-
-🟢 **실행**
-
-```bash
-# 1) subnet에 Microsoft.Storage service endpoint가 유지되는지 확인합니다.
-az network vnet subnet show \
-  --resource-group "$RG" \
-  --vnet-name "$VNET" \
-  --name "$INFRA_SUBNET" \
-  --query "{id:id,delegation:delegations[].serviceName,serviceEndpoints:serviceEndpoints[].service}" \
-  --output json
-
-# 2) Storage firewall, bypass, virtual network rules를 다시 확인합니다.
-az storage account show \
-  --resource-group "$RG" \
-  --name "$STORAGE" \
-  --query "{name:name,publicNetworkAccess:publicNetworkAccess,defaultAction:networkRuleSet.defaultAction,bypass:networkRuleSet.bypass,vnetRules:networkRuleSet.virtualNetworkRules[].{id:virtualNetworkResourceId,state:state},allowBlobPublicAccess:allowBlobPublicAccess,allowSharedKeyAccess:allowSharedKeyAccess}" \
-  --output json
-
-# 3) runner UAMI role assignment가 Storage scope에 유지되는지 확인합니다.
-az role assignment list \
-  --assignee "$UAMI_PID" \
-  --scope "$STORAGE_ID" \
-  --query "[?roleDefinitionName=='Storage Blob Data Contributor'].{role:roleDefinitionName,scope:scope}" \
-  --output table
-```
-
-Azure Portal에서는 아래 세 위치를 같은 실행 직후에 교차 확인합니다.
-
-1. **Virtual network → Subnets → snet-aca-infra → Service endpoints**
-2. **Storage account → Networking → Selected virtual networks and IP addresses**
-3. **Storage account → Access control (IAM)**
-
-📋 **예상 출력**
-
-- subnet 조회 결과에는 `Microsoft.Storage`가 남아 있어야 합니다.
-- `publicNetworkAccess`는 `Enabled`여야 합니다.
-- Storage 조회 결과는 `defaultAction=Deny`, `bypass=None`을 보여야 합니다.
-- `virtualNetworkRules` 안의 `id`는 `SUBNET_ID`와 같고 `state`는 `Succeeded`여야 합니다.
-- role assignment 표에는 `Storage Blob Data Contributor` 한 줄이 보여야 합니다.
-- Cloud Shell에서 같은 Blob data-plane 명령을 실행하면 403이 expected입니다.
+![GitHub Actions에서 VNet 제한 Blob workflow가 성공하고 Blob 결과를 출력한 화면](images/06-github-actions-workflow-result.png)
 
 ## 트러블슈팅
 
