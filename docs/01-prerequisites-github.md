@@ -254,12 +254,11 @@ Settings로 이동해야 합니다.
 | Repository access | **Only select repositories** |
 | Selected repository | `aca-runner-lab` |
 
-설치가 끝나면 아래 값을 기록합니다.
+App 생성이 끝나면 먼저 아래 값을 기록합니다.
 
 1. **App settings** 페이지에서 `App ID`를 기록합니다.
-2. 설치 상세 페이지 URL의 `/settings/installations/<installation-id>` 숫자 구간에서 `Installation ID`를 기록합니다.
-3. **Generate a private key**를 한 번만 실행해 PEM 파일을 다운로드합니다.
-4. 다운로드된 PEM 파일의 로컬 경로를 기록하되, 다음 모듈 전까지 Cloud Shell로 복사하지 않습니다.
+2. **Generate a private key**를 한 번만 실행해 PEM 파일을 다운로드합니다.
+3. 다운로드된 PEM 파일의 로컬 경로를 기록하되, 다음 모듈 전까지 Cloud Shell로 복사하지 않습니다.
 
 ⚠️ **주의**
 
@@ -274,6 +273,23 @@ Settings로 이동해야 합니다.
 > `https://github.com/freejava98/aca-runner-lab`로 입력한 예시입니다.
 
 ![freejava98 organization의 GitHub App 이름과 Homepage URL 설정 예시](images/01-github-app-settings-example.png)
+
+### GitHub App 설치와 Installation ID 확인
+
+Installation ID는 App을 생성한 시점에는 확인할 수 없으며, 만들어진 GitHub App을 Organization에 설치해야 생성됩니다. 설치 과정에서 App이 접근할 repository도 선택합니다.
+
+1. 생성한 GitHub App의 설정 화면 왼쪽 메뉴에서 **Install App**을 선택합니다.
+2. 설치 대상 Organization 옆의 **Install**을 선택합니다.
+
+![freejava98 organization에 GitHub App을 설치할 대상 선택 예시](images/01-github-app-install-target.png)
+
+3. **Repository access**에서 **Only select repositories**를 선택합니다.
+4. **Select repositories**에서 `aca-runner-lab` 하나를 선택합니다.
+5. 페이지 아래의 **Install**을 선택해 설치를 완료합니다.
+
+![Only select repositories에서 aca-runner-lab을 선택한 GitHub App 설치 예시](images/01-github-app-select-repository.png)
+
+설치가 완료되면 브라우저 주소가 `/settings/installations/<installation-id>` 형식으로 표시됩니다. 마지막 숫자가 **Installation ID**이므로 이후 단계에서 사용할 수 있도록 기록합니다.
 
 ## 6. Cloud Shell 변수로 GitHub App 식별자만 로드
 

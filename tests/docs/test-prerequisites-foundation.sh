@@ -6,6 +6,8 @@ PREREQ="$ROOT/docs/01-prerequisites-github.md"
 FOUNDATION="$ROOT/docs/02-azure-foundation.md"
 ORG_REPO_IMAGE="$ROOT/docs/images/01-github-organization-private-repository.png"
 APP_SETTINGS_IMAGE="$ROOT/docs/images/01-github-app-settings-example.png"
+APP_INSTALL_TARGET_IMAGE="$ROOT/docs/images/01-github-app-install-target.png"
+APP_SELECT_REPOSITORY_IMAGE="$ROOT/docs/images/01-github-app-select-repository.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -30,6 +32,8 @@ assert_contains_multiline() {
 [[ -f "$FOUNDATION" ]] || fail "module 02 missing"
 [[ -f "$ORG_REPO_IMAGE" ]] || fail "module 01 organization repository example image missing"
 [[ -f "$APP_SETTINGS_IMAGE" ]] || fail "module 01 GitHub App settings example image missing"
+[[ -f "$APP_INSTALL_TARGET_IMAGE" ]] || fail "module 01 GitHub App install target image missing"
+[[ -f "$APP_SELECT_REPOSITORY_IMAGE" ]] || fail "module 01 GitHub App repository selection image missing"
 
 PREREQ_TEXT="$(<"$PREREQ")"
 FOUNDATION_TEXT="$(<"$FOUNDATION")"
@@ -187,6 +191,17 @@ assert_contains \
   "$step_five_section" \
   '![freejava98 organization의 GitHub App 이름과 Homepage URL 설정 예시](images/01-github-app-settings-example.png)' \
   'module 01 step 5 must reference the GitHub App settings example image'
+for text in \
+  '### GitHub App 설치와 Installation ID 확인' \
+  'Installation ID는 App을 생성한 시점에는 확인할 수 없으며' \
+  '**Install App**' \
+  '**Only select repositories**' \
+  '`aca-runner-lab` 하나를 선택' \
+  '/settings/installations/<installation-id>' \
+  '![freejava98 organization에 GitHub App을 설치할 대상 선택 예시](images/01-github-app-install-target.png)' \
+  '![Only select repositories에서 aca-runner-lab을 선택한 GitHub App 설치 예시](images/01-github-app-select-repository.png)'; do
+  assert_contains "$step_five_section" "$text" 'module 01 step 5 App installation guidance missing'
+done
 
 step_three_section="$(
   awk '
