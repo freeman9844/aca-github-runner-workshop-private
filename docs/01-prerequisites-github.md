@@ -147,6 +147,11 @@ GitHub 웹 UI에서 organization 아래에 새 저장소를 만들고 아래 값
 - 실습 중 runner를 연결할 저장소는 이 `Private repository` 하나만 선택하세요.
 - 이후 단계에서 `GITHUB_OWNER`에는 organization 이름을 입력합니다.
 
+> **참고 화면:** 아래 이미지는 `freejava98` organization 아래에
+> Private `aca-runner-lab` 저장소를 만들고 README로 초기화한 예시입니다.
+
+![freejava98 organization의 Private aca-runner-lab 저장소 예시](images/01-github-organization-private-repository.png)
+
 ## 4. 워크숍 소스 저장소 clone
 
 👁️ **설명**
