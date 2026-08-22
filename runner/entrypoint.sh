@@ -120,7 +120,7 @@ create_runner_token() {
 }
 
 run_as_runner() {
-  exec runuser --preserve-environment -u runner -- "$@"
+  runuser --preserve-environment -u runner -- "$@"
 }
 
 # container 종료 시 fresh installation/removal token으로 ephemeral runner 등록 정보를 정리합니다.
@@ -166,9 +166,17 @@ cleanup_runner() {
 forward_signal() {
   local signal_name="$1"
   local exit_status="$2"
+  local child_pids=""
 
   if [[ -n "$runner_pid" ]]; then
-    kill -s "$signal_name" "$runner_pid" 2>/dev/null || true
+    child_pids="$(ps -o pid= --ppid "$runner_pid" | tr -d ' ' || true)"
+    if [[ -n "$child_pids" ]]; then
+      for child_pid in $child_pids; do
+        kill -s "$signal_name" "$child_pid" 2>/dev/null || true
+      done
+    else
+      kill -s "$signal_name" "$runner_pid" 2>/dev/null || true
+    fi
     wait "$runner_pid" 2>/dev/null || true
     runner_pid=""
   fi
