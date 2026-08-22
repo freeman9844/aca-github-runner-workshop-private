@@ -45,7 +45,7 @@ Task 2에서 만든 foundation은 custom VNet에 붙은 **External ACA Environme
 
 👁️ **설명**
 
-이 모듈은 모듈 02와 03의 출력값을 모두 사용합니다. Cloud Shell을 다시 열었다면 `SUFFIX`를 기준으로 Azure 리소스 이름과 조회형 변수들을 다시 채웁니다. `ACR`은 이름 충돌 복구가 있었다면 `SUFFIX`에서 유도되지 않는 별도 값이므로, 모듈 02에서 저장해 둔 실제 `ACR` 값을 그대로 입력하세요.
+이 모듈은 모듈 02와 03의 출력값을 모두 사용합니다. Cloud Shell을 다시 열었다면 Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, Module 02에서 저장한 실제 `ACR` 이름을 기준으로 Azure 리소스 이름과 조회형 변수들을 다시 채웁니다. `ACR`과 `STORAGE`는 이름 충돌 복구가 있었다면 `SUFFIX`에서 유도되지 않는 별도 값이므로, Module 02에서 저장해 둔 실제 값을 그대로 입력하세요.
 
 🟢 **실행**
 
@@ -77,14 +77,14 @@ UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
 
-# Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+# Module 02에서 Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
 read -rp "Saved Storage account name if changed (press Enter to keep ${STORAGE}): " SAVED_STORAGE
 if [[ -n "$SAVED_STORAGE" ]]; then
   STORAGE="$SAVED_STORAGE"
 fi
 unset SAVED_STORAGE
 
-# Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+# Module 01에서 Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
 read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
 if [[ -n "$SAVED_KEY_VAULT" ]]; then
   KEY_VAULT="$SAVED_KEY_VAULT"
@@ -129,7 +129,7 @@ JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 STORAGE=stacarunnera1b2c3 ACR_S
 
 👁️ **설명**
 
-Cloud Shell 세션이 재시작되면 GitHub owner/repository와 GitHub App 식별자도 사라집니다. 하지만 private key PEM 자체는 다시 입력하지 않습니다. 모듈 02/Task 3에서 만든 `KEY_VAULT`, `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_SECRET_URI`, `UAMI_RID`를 그대로 사용하고, 이 모듈에서는 KEDA와 runner bootstrap이 사용할 non-secret 식별자만 복원합니다.
+Cloud Shell 세션이 재시작되면 GitHub owner/repository와 GitHub App 식별자도 사라집니다. 하지만 private key PEM 자체는 다시 입력하지 않습니다. Module 01에서 만든 Key Vault와 Module 02에서 완성한 private access, `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_SECRET_URI`, `UAMI_RID`를 그대로 사용합니다. 이 모듈에서는 KEDA와 runner bootstrap이 사용할 non-secret 식별자만 복원합니다.
 
 🟢 **실행**
 
@@ -379,7 +379,7 @@ GitHub 저장소의 **Settings → Actions → Runners**를 열어봅니다. wor
 | workflow는 성공했지만 현재 execution이 900초 뒤 `Failed`가 됨 | 다른 Event Job이 동일한 repository와 `aca-runner` label을 감시하며 workflow Job을 먼저 가져감 | 1단계의 `az containerapp job list` query를 다시 실행합니다. 다른 Job이 보이면 해당 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 현재 Job을 다시 만듭니다. |
 | execution이 바로 실패하며 image pull 오류가 남 | UAMI의 `AcrPull` 전파 지연 또는 registry identity 설정 누락 | `az role assignment list --assignee "$UAMI_PID" --scope "$ACR_ID" --query "[].roleDefinitionName" --output tsv`로 `AcrPull`을 확인하고, Job 정의에 `--mi-user-assigned "$UAMI_RID"`와 `--registry-identity "$UAMI_RID"`가 모두 들어갔는지 다시 봅니다. |
 | execution이 곧바로 인증 오류로 끝남 | runner registration 단계에서 private key PEM이 손상되었거나 disabled/deleted key를 참조함 | `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지 확인합니다. PEM을 다시 업로드했다면 이 워크숍 Job만 삭제 후 재생성해 Key Vault reference를 새 값으로 다시 resolve합니다. |
-| execution 시작 직후 Key Vault reference 오류가 남거나 secret을 읽지 못함 | UAMI의 Key Vault secret get 권한, private endpoint/DNS, 또는 Key Vault reference authorization 문제 | 모듈 02/Task 3의 Key Vault access assignment가 유지되는지 확인하고, `KEY_VAULT_SECRET_URI`가 실제 secret URI인지, ACA Environment가 `privatelink.vaultcore.azure.net`을 해석할 수 있는지, `identityref:$UAMI_RID`가 현재 Job identity와 일치하는지 다시 점검합니다. |
+| execution 시작 직후 Key Vault reference 오류가 남거나 secret을 읽지 못함 | UAMI의 Key Vault secret get 권한, private endpoint/DNS, 또는 Key Vault reference authorization 문제 | Module 01의 secret 업로드와 Module 02의 Key Vault Private Endpoint, Private DNS, `Key Vault Secrets User` 역할을 순서대로 확인합니다. `KEY_VAULT_SECRET_URI`가 실제 secret URI인지, ACA Environment가 `privatelink.vaultcore.azure.net`을 해석할 수 있는지, `identityref:$UAMI_RID`가 현재 Job identity와 일치하는지도 다시 점검합니다. |
 | execution은 생기지만 registration token 발급 또는 runner 등록에서 401/404가 남 | GitHub App queue polling은 성공했지만 runner bootstrap이 repository registration 단계에서 실패함 | `az containerapp job execution list --name "$JOB" --resource-group "$RG" --output table`로 execution 생성 여부를 먼저 확인해 KEDA polling 성공 여부를 분리하고, 그 뒤 execution log에서 runner registration API 오류를 확인합니다. 이 경우 `GH_URL`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY` env 연결을 다시 검토합니다. |
 | `unrecognized arguments` 또는 help와 문서가 다름 | Cloud Shell의 containerapp extension 버전이 워크숍 기준과 다름 | 모듈 01의 `az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors`를 다시 실행하고 `az version`으로 버전을 확인한 뒤 명령을 재시도합니다. |
 | 사용자 지정 NSG/UDR/Firewall 적용 후 execution이 생성되지 않거나 image pull/log 조회가 동시에 실패함 | GitHub API, ACR, Azure identity, ARM, Azure Monitor로 가는 public outbound가 차단됨 | 워크숍 기본값은 outbound를 열어 둔 External ACA Environment입니다. 조직 정책으로 NSG, UDR, Azure Firewall, forced tunneling, ACR Private Endpoint를 추가했다면 GitHub API, ACR, Azure identity, ARM, Azure Monitor 대상이 허용되는지 먼저 검증하고 다시 시도합니다. |

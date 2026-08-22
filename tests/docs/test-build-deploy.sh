@@ -70,6 +70,8 @@ done
 
 assert_contains "$IMAGE_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 'missing module 03 optional recovery heading'
 assert_contains "$JOB_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 'missing module 04 optional recovery heading'
+assert_contains "$IMAGE_TEXT" 'Module 01에서 저장한 `SUFFIX`' 'module 03 must identify Module 01 as the suffix source'
+assert_contains "$JOB_TEXT" 'Module 01에서 만든 Key Vault와 Module 02에서 완성한 private access' 'module 04 must describe split Key Vault ownership'
 
 for obsolete in \
   '저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 모듈 02의 Azure 변수들을 복구한다.'; do

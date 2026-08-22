@@ -48,6 +48,8 @@ if [[ "$workflow_block" != "$WORKFLOW_TEXT" ]]; then
   fail "module 06 workflow disclosure must byte-match samples/azure-sample-deploy-workflow.yml"
 fi
 
+assert_contains "$DOC_TEXT" 'Module 01에서 저장한 `SUFFIX`' 'module 06 must identify Module 01 as the suffix source'
+
 for text in \
   'Storage Blob Data Contributor' \
   'GITHUB_APP_ID' \

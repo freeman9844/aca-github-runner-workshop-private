@@ -27,7 +27,7 @@
 
 👁️ **설명**
 
-Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 모듈 02에서 기록해 둔 `SUFFIX`와 실제 `ACR` 이름이 있으면 동일한 리소스 이름과 조회형 변수들을 다시 복구할 수 있습니다. `ACR`은 이름 충돌 복구가 있었다면 `SUFFIX`에서 유도되지 않는 별도 값이므로, 모듈 02에서 저장해 둔 실제 `ACR` 값을 그대로 입력하세요.
+Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 이때 Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, Module 02에서 저장한 실제 `ACR` 이름을 사용해 같은 리소스를 복구합니다. `ACR`과 `STORAGE`는 이름 충돌 복구가 있었다면 `SUFFIX`에서 유도되지 않는 별도 값이므로, Module 02에서 저장해 둔 실제 값을 그대로 입력하세요. `KEY_VAULT`도 Module 01에서 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 사용하세요.
 
 🟢 **실행**
 
@@ -61,14 +61,14 @@ UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
 
-# Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+# Module 02에서 Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
 read -rp "Saved Storage account name if changed (press Enter to keep ${STORAGE}): " SAVED_STORAGE
 if [[ -n "$SAVED_STORAGE" ]]; then
   STORAGE="$SAVED_STORAGE"
 fi
 unset SAVED_STORAGE
 
-# Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+# Module 01에서 Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
 read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
 if [[ -n "$SAVED_KEY_VAULT" ]]; then
   KEY_VAULT="$SAVED_KEY_VAULT"

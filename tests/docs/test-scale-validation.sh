@@ -33,6 +33,7 @@ assert_contains "$recovery_section" 'read -rp "Saved GITHUB_APP_ID:' 'module 05 
 assert_contains "$recovery_section" 'read -rp "Saved GITHUB_APP_INSTALLATION_ID:' 'module 05 GitHub App installation ID recovery prompt missing'
 assert_contains "$recovery_section" 'GITHUB_APP_ID=' 'module 05 GitHub App ID restore missing'
 assert_contains "$recovery_section" 'GITHUB_APP_INSTALLATION_ID=' 'module 05 GitHub App installation ID restore missing'
+assert_contains "$recovery_section" 'Module 01에서 저장한 `SUFFIX`' 'module 05 must identify Module 01 as the suffix source'
 
 for text in \
   '## 0. 세션 재연결 시 변수 복구 (선택)' \
