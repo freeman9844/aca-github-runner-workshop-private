@@ -347,6 +347,9 @@ GITHUB_APP_INSTALLATION_ID=98765432
 
 ```bash
 # Module 01과 이후 Azure 모듈이 함께 사용할 Resource Group과 Key Vault를 준비합니다.
+# Azure 명령이 실패하면 후속 명령을 실행하지 않고 즉시 중단합니다.
+set -euo pipefail
+
 # 동일한 이름을 재사용할 수 있도록 공통 Azure 리소스 이름을 변수로 만듭니다.
 SUFFIX="${SUFFIX:-$(openssl rand -hex 3)}"
 LOC="${LOC:-koreacentral}"
@@ -361,13 +364,13 @@ az group create \
   --output none
 
 # GitHub App private key를 보관할 RBAC 기반 Key Vault를 만듭니다.
+# Purge protection은 사용하지 않으며, Azure API가 false 명시를 거부하므로 --enable-purge-protection 옵션은 생략합니다.
 az keyvault create \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
   --location "$LOC" \
   --enable-rbac-authorization true \
   --retention-days 7 \
-  --enable-purge-protection false \
   --public-network-access Enabled \
   --default-action Deny \
   --bypass None \

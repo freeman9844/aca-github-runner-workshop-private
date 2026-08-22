@@ -130,7 +130,6 @@ for text in \
   'az keyvault create' \
   '--enable-rbac-authorization true' \
   '--retention-days 7' \
-  '--enable-purge-protection false' \
   '--default-action Deny' \
   'Key Vault Secrets Officer' \
   'az keyvault secret set' \
@@ -223,6 +222,24 @@ step_seven_section="$(
     in_section { print }
   ' "$PREREQ"
 )"
+step_seven_cloud_shell="$(
+  awk '
+    /^### 7-C\. / { in_section=1 }
+    /^### 7-L\. / { exit }
+    in_section { print }
+  ' "$PREREQ"
+)"
+assert_contains \
+  "$step_seven_cloud_shell" \
+  'set -euo pipefail' \
+  'module 01 step 7-C must stop after an Azure command failure'
+assert_contains \
+  "$step_seven_cloud_shell" \
+  'Azure API가 false 명시를 거부하므로 --enable-purge-protection 옵션은 생략합니다.' \
+  'module 01 step 7-C must explain why purge protection false is omitted'
+if [[ "$step_seven_cloud_shell" == *'--enable-purge-protection false'* ]]; then
+  fail 'module 01 step 7-C must not send irreversible purge protection as false'
+fi
 for text in \
   '## 7. Key Vault 만들기와 GitHub App private key 업로드' \
   '### 7-C. Cloud Shell: Key Vault bootstrap' \
