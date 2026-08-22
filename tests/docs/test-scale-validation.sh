@@ -20,6 +20,20 @@ assert_contains() {
 
 DOC_TEXT="$(<"$DOC")"
 
+recovery_section="$(
+  awk '
+    BEGIN { in_section = 0 }
+    /^## 0\. 세션 재연결 시 변수 복구 \(선택\)$/ { in_section = 1; next }
+    /^## 1\./ { if (in_section) exit }
+    in_section { print }
+  ' "$DOC"
+)"
+
+assert_contains "$recovery_section" 'read -rp "Saved GITHUB_APP_ID:' 'module 05 GitHub App ID recovery prompt missing'
+assert_contains "$recovery_section" 'read -rp "Saved GITHUB_APP_INSTALLATION_ID:' 'module 05 GitHub App installation ID recovery prompt missing'
+assert_contains "$recovery_section" 'GITHUB_APP_ID=' 'module 05 GitHub App ID restore missing'
+assert_contains "$recovery_section" 'GITHUB_APP_INSTALLATION_ID=' 'module 05 GitHub App installation ID restore missing'
+
 for text in \
   '## 0. 세션 재연결 시 변수 복구 (선택)' \
   'INFRA_SUBNET="snet-aca-infra"' \
@@ -47,10 +61,17 @@ for text in \
   'appKey' \
   'GitHub App installation' \
   'Key Vault' \
+  'identityref' \
+  'Key Vault Secrets User' \
+  'publicNetworkAccess' \
+  'Private DNS' \
+  'private endpoint' \
   '401' \
   '403'; do
   assert_contains "$DOC_TEXT" "$text" 'module 05 GitHub App failure marker missing'
 done
+
+assert_contains "$DOC_TEXT" '### Key Vault resolution failure memo' 'module 05 key vault resolution memo missing'
 
 for obsolete in \
   'Fine-grained PAT' \

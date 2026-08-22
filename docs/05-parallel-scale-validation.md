@@ -27,6 +27,8 @@
 # 저장한 suffix와 실제 ACR 이름으로 scale validation에 필요한 foundation 값을 복원합니다.
 read -rp "Saved SUFFIX: " SUFFIX
 read -rp "Saved ACR name: " ACR
+read -rp "Saved GITHUB_APP_ID: " GITHUB_APP_ID
+read -rp "Saved GITHUB_APP_INSTALLATION_ID: " GITHUB_APP_INSTALLATION_ID
 
 LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
@@ -75,6 +77,8 @@ KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY
 
 printf 'RG=%s\nLOG=%s\nJOB=%s\nSTORAGE=%s\nKEY_VAULT=%s\nLOG_ID=%s\n' \
   "$RG" "$LOG" "$JOB" "$STORAGE" "$KEY_VAULT" "$LOG_ID"
+printf 'GITHUB_APP_ID=%s\nGITHUB_APP_INSTALLATION_ID=%s\n' \
+  "$GITHUB_APP_ID" "$GITHUB_APP_INSTALLATION_ID"
 ```
 
 📋 **예상 출력**
@@ -502,7 +506,17 @@ az containerapp job execution list \
 
 👁️ **설명**
 
+### KEDA authentication failure memo
+
 queued workflow가 생겼는데 runner가 뜨지 않으면 `applicationID`, `installationID`, `appKey`, `github-app-private-key` secretRef를 먼저 확인합니다. private key PEM은 읽지 말고 `az containerapp job show --query "properties.configuration.eventTriggerConfig.scale.rules"` 출력만 검증합니다. `GitHub App installation`이 `aca-runner-lab` repository에 유지되어 있는지도 함께 확인하고, `401`은 JWT clock skew 또는 installation token 문제로, `403`은 App 권한 또는 installation approval 문제로 분리해서 봅니다.
+
+### Key Vault resolution failure memo
+
+`github-app-private-key`가 resolve되지 않으면 KEDA auth와 분리해서 Key Vault 경로부터 확인합니다. `identityref`가 현재 Job의 UAMI를 가리키는지, 그 UAMI에 `Key Vault Secrets User`가 vault scope로 부여되어 있는지, vault의 Private DNS와 private endpoint가 `privatelink.vaultcore.azure.net`을 실제 private IP로 해석하는지, `publicNetworkAccess`가 `Disabled`라 private path만 허용되는지 순서대로 봅니다. secret 값 자체는 읽지 말고 Key Vault reference와 network path만 검증합니다.
+
+### Runner registration failure memo
+
+KEDA auth와 Key Vault resolution이 맞는데도 runner가 등록되지 않으면 registration token 단계로 좁혀 봅니다. 이 경우 `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지, execution log에서 `Requesting registration token` 다음에 `Runner configured`가 나오는지 확인합니다.
 
 🟢 **실행**
 
@@ -517,8 +531,9 @@ az containerapp job show \
 📋 **예상 출력**
 
 - `applicationID`, `installationID`, `appKey`가 보입니다.
-- `github-app-private-key` secretRef가 유지되어야 합니다.
+- `github-app-private-key` secretRef가 유지되어야 하고, `identityref`도 현재 UAMI를 가리켜야 합니다.
 - `GitHub App installation`이 `aca-runner-lab` repository에 설치된 상태여야 합니다.
+- `Key Vault Secrets User`, Private DNS/private endpoint, `publicNetworkAccess` 상태는 KEDA auth와 별개로 확인합니다.
 - `401`과 `403`은 서로 다른 복구 경로를 뜻합니다.
 
 ## 10. GitHub Settings에서 permanent online runner가 남지 않았는지 확인
@@ -545,6 +560,7 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
 | GitHub job이 계속 queued 상태로 남음 | GitHub App이 `aca-runner-lab` repository에 설치되지 않았거나, `applicationID`/`installationID`가 틀렸거나, workflow label이 다름 | GitHub App installation이 선택한 `aca-runner-lab` repository에 남아 있는지 확인하고, `az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.configuration.eventTriggerConfig.scale.rules"`에서 `githubApiURL=https://api.github.com`, `owner`, `runnerScope=repo`, `repos=$GITHUB_REPO`, `labels=aca-runner`, `noDefaultLabels=true`, `targetWorkflowQueueLength=1`, `applicationID`, `installationID`, `appKey -> github-app-private-key`가 모두 정확한지 다시 확인합니다. |
+| `github-app-private-key`가 resolve되지 않음 | `identityref`가 잘못되었거나 UAMI의 Key Vault 권한 또는 private DNS/private endpoint 경로가 깨짐 | `az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.configuration.secrets"`와 Key Vault 설정을 함께 확인해 `github-app-private-key=keyvaultref:...,identityref:$UAMI_RID`가 유지되는지, UAMI에 `Key Vault Secrets User`가 있는지, vault `publicNetworkAccess=Disabled`와 `privatelink.vaultcore.azure.net` DNS가 같은 private endpoint를 가리키는지 다시 검증합니다. |
 | `ContainerAppJobsExecutionNotFound`와 `execution - replicas`가 표시됨 | `EXECUTION`이 비어 있으며, 흔히 기존 workflow가 default label을 계속 요구해 KEDA가 queued Job을 세지 못한 상태 | GitHub workflow를 최신 sample 전체로 교체해 `runs-on: [aca-runner]`로 만들고, 기존 queued run을 취소한 뒤 다시 실행합니다. ACA execution이 생성된 후 6단계의 `EXECUTION=$(...)` 블록부터 다시 실행합니다. |
 | workflow hostname의 suffix가 현재 `$SUFFIX`와 다르거나 현재 execution이 timeout됨 | 다른 Event Job이 같은 repository와 `aca-runner` label을 감시함 | 모듈 04의 중복 watcher query로 이전 Job을 찾습니다. 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 다시 실행합니다. |
 | Running execution이 항상 1개만 보임 | polling 타이밍상 동시에 관찰하지 못했거나 Azure quota/시작 지연이 있음 | 먼저 GitHub에서 네 job이 모두 생성되었는지 확인하고, 30~90초 동안 같은 `Running` query를 반복합니다. 네 개가 항상 한 번에 보여야 한다고 가정하지 마세요. |
