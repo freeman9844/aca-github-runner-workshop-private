@@ -179,6 +179,12 @@ printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111
         )
 
         base_env = os.environ.copy()
+        for variable_name in (
+            "GITHUB_APP_ID",
+            "GITHUB_APP_INSTALLATION_ID",
+            "GITHUB_APP_PRIVATE_KEY",
+        ):
+            base_env.pop(variable_name, None)
         base_env.update(
             {
                 "PATH": f"{bin_dir}:{base_env['PATH']}",
