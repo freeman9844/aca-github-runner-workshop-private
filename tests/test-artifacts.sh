@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW="$ROOT/samples/azure-sample-deploy-workflow.yml"
+GITIGNORE="$ROOT/.gitignore"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -10,6 +11,19 @@ fail() {
 }
 
 [[ -f "$WORKFLOW" ]] || fail "sample deploy workflow missing"
+[[ -f "$GITIGNORE" ]] || fail ".gitignore missing"
+
+for ignored_path in \
+  '.copilot/' \
+  '.superpowers/' \
+  'docs/superpowers/'; do
+  grep -Fx -- "$ignored_path" "$GITIGNORE" >/dev/null ||
+    fail "internal artifact path is not ignored: $ignored_path"
+done
+
+TRACKED_IGNORED="$(git -C "$ROOT" ls-files -ci --exclude-standard)"
+[[ -z "$TRACKED_IGNORED" ]] ||
+  fail $'ignored internal artifacts are still tracked:\n'"$TRACKED_IGNORED"
 
 for text in \
   'name: ACA Runner VNet-Restricted Blob Deploy' \

@@ -1,4 +1,5 @@
-# Agent and worktree artifacts
+# Internal agent, planning, and worktree artifacts
+.copilot/
 .worktrees/
 .superpowers/
 docs/superpowers/
