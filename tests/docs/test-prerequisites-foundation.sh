@@ -120,12 +120,21 @@ assert_contains_multiline \
   $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --all \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\' || scope==\'$KEY_VAULT_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
   'module 02 must verify ACR_ID, STORAGE_ID, and KEY_VAULT_ID scopes'
 
+assert_contains_multiline \
+  "$FOUNDATION_TEXT" \
+  $'az network private-dns record-set a show \\\n  --resource-group "$RG" \\\n  --zone-name "$KEY_VAULT_DNS_ZONE" \\\n  --name "$KEY_VAULT" \\\n  --query "aRecords[].ipv4Address" \\\n  --output tsv' \
+  'module 02 must validate the Key Vault private DNS A record before PEM deletion'
+
 for forbidden in \
   '--value "$GITHUB_APP_PRIVATE_KEY"'; do
   if grep -F -- "$forbidden" "$FOUNDATION" >/dev/null; then
     fail "PEM value must not appear in module 02: $forbidden"
   fi
 done
+
+last_public_network_access="$(grep -oE -- '--public-network-access (Enabled|Disabled)' "$FOUNDATION" | tail -n1 || true)"
+[[ "$last_public_network_access" == '--public-network-access Disabled' ]] || \
+  fail "final --public-network-access occurrence must be Disabled"
 
 assert_contains \
   "$FOUNDATION_TEXT" \

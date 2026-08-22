@@ -549,6 +549,13 @@ az network private-endpoint show \
   --query "{status:privateLinkServiceConnections[0].privateLinkServiceConnectionState.status,subnet:subnet.id}" \
   --output json
 
+az network private-dns record-set a show \
+  --resource-group "$RG" \
+  --zone-name "$KEY_VAULT_DNS_ZONE" \
+  --name "$KEY_VAULT" \
+  --query "aRecords[].ipv4Address" \
+  --output tsv
+
 az role assignment list \
   --assignee "$UAMI_PID" \
   --all \
@@ -560,6 +567,7 @@ az role assignment list \
 
 - `publicNetworkAccess`는 `Disabled`여야 합니다.
 - Private Endpoint status는 `Approved`여야 합니다.
+- Private DNS A record 조회 결과에는 Key Vault Private Endpoint의 private IPv4가 보여야 합니다.
 - 역할 목록에 `AcrPull`, `Storage Blob Data Contributor`, `Key Vault Secrets User`가 모두 `ServicePrincipal` 유형으로 보여야 합니다.
 
 ## 8-L2. Local workstation: 검증 후 PEM 파일 삭제 (로컬 Azure CLI 전용)
