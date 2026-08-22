@@ -58,23 +58,37 @@ unset SAVED_KEY_VAULT
 
 # Azure CLI context를 원래 workshop subscription으로 되돌린 뒤 식별자를 조회합니다.
 az account set --subscription "$SUBSCRIPTION_ID"
-STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
-UAMI_PID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query principalId   --output tsv)
-UAMI_CLIENT_ID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query clientId   --output tsv)
-SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$INFRA_SUBNET"   --query id   --output tsv)
-KEY_VAULT_ID=$(az keyvault show   --resource-group "$RG"   --name "$KEY_VAULT"   --query id   --output tsv)
+STORAGE_ID=$(az storage account show \
+  --resource-group "$RG" \
+  --name "$STORAGE" \
+  --query id \
+  --output tsv)
+UAMI_PID=$(az identity show \
+  --resource-group "$RG" \
+  --name "$UAMI" \
+  --query principalId \
+  --output tsv)
+UAMI_CLIENT_ID=$(az identity show \
+  --resource-group "$RG" \
+  --name "$UAMI" \
+  --query clientId \
+  --output tsv)
+SUBNET_ID=$(az network vnet subnet show \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$INFRA_SUBNET" \
+  --query id \
+  --output tsv)
+KEY_VAULT_ID=$(az keyvault show \
+  --resource-group "$RG" \
+  --name "$KEY_VAULT" \
+  --query id \
+  --output tsv)
 KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
 export SUFFIX LOC RG ENV VNET INFRA_SUBNET STORAGE STORAGE_CONTAINER KEY_VAULT GITHUB_APP_KEY_SECRET ACR UAMI SUBSCRIPTION_ID STORAGE_ID UAMI_PID UAMI_CLIENT_ID SUBNET_ID KEY_VAULT_ID KEY_VAULT_SECRET_URI
-printf 'RG=%s
-ENV=%s
-STORAGE=%s
-STORAGE_CONTAINER=%s
-UAMI=%s
-UAMI_CLIENT_ID=%s
-SUBNET_ID=%s
-KEY_VAULT=%s
-'   "$RG" "$ENV" "$STORAGE" "$STORAGE_CONTAINER" "$UAMI" "$UAMI_CLIENT_ID" "$SUBNET_ID" "$KEY_VAULT"
+printf 'RG=%s\nENV=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID=%s\nSUBNET_ID=%s\nKEY_VAULT=%s\n' \
+  "$RG" "$ENV" "$STORAGE" "$STORAGE_CONTAINER" "$UAMI" "$UAMI_CLIENT_ID" "$SUBNET_ID" "$KEY_VAULT"
 ```
 
 📋 **예상 출력**
@@ -117,13 +131,26 @@ External ACA Job은 ingress를 지원하지 않으며, 이 workflow는 inbound r
 
 ```bash
 # subnet의 Microsoft.Storage service endpoint를 확인합니다.
-az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$INFRA_SUBNET"   --query "{id:id,delegation:delegations[].serviceName,serviceEndpoints:serviceEndpoints[].service}"   --output json
+az network vnet subnet show \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$INFRA_SUBNET" \
+  --query "{id:id,delegation:delegations[].serviceName,serviceEndpoints:serviceEndpoints[].service}" \
+  --output json
 
 # Storage firewall, bypass, virtual network rules, public/shared-key 차단 상태를 확인합니다.
-az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query "{name:name,publicNetworkAccess:publicNetworkAccess,defaultAction:networkRuleSet.defaultAction,bypass:networkRuleSet.bypass,vnetRules:networkRuleSet.virtualNetworkRules[].{id:virtualNetworkResourceId,state:state},allowBlobPublicAccess:allowBlobPublicAccess,allowSharedKeyAccess:allowSharedKeyAccess}"   --output json
+az storage account show \
+  --resource-group "$RG" \
+  --name "$STORAGE" \
+  --query "{name:name,publicNetworkAccess:publicNetworkAccess,defaultAction:networkRuleSet.defaultAction,bypass:networkRuleSet.bypass,vnetRules:networkRuleSet.virtualNetworkRules[].{id:virtualNetworkResourceId,state:state},allowBlobPublicAccess:allowBlobPublicAccess,allowSharedKeyAccess:allowSharedKeyAccess}" \
+  --output json
 
 # runner UAMI가 Storage Blob Data Contributor를 정확히 Storage account scope에서 갖는지 확인합니다.
-az role assignment list   --assignee "$UAMI_PID"   --scope "$STORAGE_ID"   --query "[?roleDefinitionName=='Storage Blob Data Contributor'].{role:roleDefinitionName,scope:scope}"   --output table
+az role assignment list \
+  --assignee "$UAMI_PID" \
+  --scope "$STORAGE_ID" \
+  --query "[?roleDefinitionName=='Storage Blob Data Contributor'].{role:roleDefinitionName,scope:scope}" \
+  --output table
 ```
 
 📋 **예상 출력**
@@ -383,13 +410,26 @@ Cloud Shell은 control-plane만 확인합니다. 실제 data-plane proof는 GitH
 
 ```bash
 # 1) subnet에 Microsoft.Storage service endpoint가 유지되는지 확인합니다.
-az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$INFRA_SUBNET"   --query "{id:id,delegation:delegations[].serviceName,serviceEndpoints:serviceEndpoints[].service}"   --output json
+az network vnet subnet show \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$INFRA_SUBNET" \
+  --query "{id:id,delegation:delegations[].serviceName,serviceEndpoints:serviceEndpoints[].service}" \
+  --output json
 
 # 2) Storage firewall, bypass, virtual network rules를 다시 확인합니다.
-az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query "{name:name,publicNetworkAccess:publicNetworkAccess,defaultAction:networkRuleSet.defaultAction,bypass:networkRuleSet.bypass,vnetRules:networkRuleSet.virtualNetworkRules[].{id:virtualNetworkResourceId,state:state},allowBlobPublicAccess:allowBlobPublicAccess,allowSharedKeyAccess:allowSharedKeyAccess}"   --output json
+az storage account show \
+  --resource-group "$RG" \
+  --name "$STORAGE" \
+  --query "{name:name,publicNetworkAccess:publicNetworkAccess,defaultAction:networkRuleSet.defaultAction,bypass:networkRuleSet.bypass,vnetRules:networkRuleSet.virtualNetworkRules[].{id:virtualNetworkResourceId,state:state},allowBlobPublicAccess:allowBlobPublicAccess,allowSharedKeyAccess:allowSharedKeyAccess}" \
+  --output json
 
 # 3) runner UAMI role assignment가 Storage scope에 유지되는지 확인합니다.
-az role assignment list   --assignee "$UAMI_PID"   --scope "$STORAGE_ID"   --query "[?roleDefinitionName=='Storage Blob Data Contributor'].{role:roleDefinitionName,scope:scope}"   --output table
+az role assignment list \
+  --assignee "$UAMI_PID" \
+  --scope "$STORAGE_ID" \
+  --query "[?roleDefinitionName=='Storage Blob Data Contributor'].{role:roleDefinitionName,scope:scope}" \
+  --output table
 ```
 
 Azure Portal에서는 아래 세 위치를 같은 실행 직후에 교차 확인합니다.

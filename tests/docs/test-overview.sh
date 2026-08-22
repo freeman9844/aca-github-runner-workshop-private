@@ -86,6 +86,13 @@ require '> 리소스 그룹 삭제 요청은 150분 일정에 포함되지만' '
 require '이 워크숍은 Fine-grained PAT를 사용하지 않습니다.' 'README must explicitly state Fine-grained PAT is not used'
 require '- [ ] GitHub App이 `aca-runner-lab` repository에만 설치되어 있습니다.' 'README completion checklist typo or contract mismatch'
 require 'GitHub App installation 또는 권한 변경은 organization 보안 정책에 따라 owner 승인 또는 재승인이 필요할 수 있습니다.' 'README missing GitHub App approval caveat'
+for text in \
+  'Module 04의 Key Vault reference synchronization/execution을 workshop delivery 전 live rehearsal로 직접 성공시켜야 합니다.' \
+  '저장소 테스트만으로 증명할 수 없습니다.' \
+  '모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요.' \
+  '`defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.'; do
+  require "$text" 'README missing Key Vault service-endpoint caveat'
+done
 
 module_total_check="$(
   awk -F'|' '

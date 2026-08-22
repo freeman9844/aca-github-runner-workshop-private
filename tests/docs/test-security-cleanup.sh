@@ -38,6 +38,14 @@ for text in \
   assert_contains "$DOC_TEXT" "$text" 'module 07 service endpoint security marker missing'
 done
 
+for text in \
+  'if [[ "$ROTATION_CIDR" != */32 ]]; then' \
+  'ERROR: Rotation CIDR must end with /32. Received:' \
+  'exit 1' \
+  '--output none'; do
+  assert_contains "$DOC_TEXT" "$text" 'module 07 rotation guard marker missing'
+done
+
 for obsolete in \
   'snet-private-endpoints' \
   'privatelink.blob.core.windows.net' \
@@ -73,6 +81,7 @@ must_appear_in_order(
     "새 GitHub App private key",
     "Key Vault Secrets Officer",
     "현재 참가자 IP",
+    'if [[ "$ROTATION_CIDR" != */32 ]]; then',
     "새 Key Vault secret version",
     "App JWT",
     "installation token",

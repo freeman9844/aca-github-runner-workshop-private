@@ -69,6 +69,15 @@ for text in \
   assert_contains "$JOB_TEXT" "$text" 'module 04 service endpoint marker missing'
 done
 
+for text in \
+  'Module 04 Key Vault reference synchronization/execution 성공이 acceptance gate입니다.' \
+  'live rehearsal' \
+  '저장소 테스트만으로 증명할 수 없습니다.' \
+  '모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요.' \
+  '`defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.'; do
+  assert_contains "$JOB_TEXT" "$text" 'module 04 Key Vault service-endpoint caveat missing'
+done
+
 assert_contains "$IMAGE_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 'missing module 03 optional recovery heading'
 assert_contains "$JOB_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 'missing module 04 optional recovery heading'
 assert_contains "$IMAGE_TEXT" 'Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, Module 02에서 저장한 실제 `ACR` 이름을 사용해 같은 리소스를 복구합니다.' 'module 03 must preserve Module 01 Key Vault ownership and Module 02 ACR ownership'

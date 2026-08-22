@@ -630,6 +630,7 @@ for text in \
   'Key Vault Secrets User' \
   'az keyvault network-rule add' \
   '--subnet "$SUBNET_ID"' \
+  '--output none' \
   '--public-network-access Enabled' \
   '--default-action Deny' \
   '--bypass None' \
@@ -641,6 +642,13 @@ for text in \
 done
 assert_contains "$FOUNDATION_TEXT" '## 선택: Local workstation의 원본 PEM 삭제' \
   'module 02 optional PEM deletion heading missing'
+for text in \
+  '📋 **예상 출력**' \
+  'Key Vault 조회 결과는 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`이어야 합니다.' \
+  '`AcrPull`, `Storage Blob Data Contributor`, `Key Vault Secrets User`가 각각 `ACR_ID`, `STORAGE_ID`, `KEY_VAULT_ID` scope로 보여야 합니다.'; do
+  assert_contains "$module_two_step_seven" "$text" \
+    'module 02 step 7 expected-output explanation missing'
+done
 
 for forbidden in \
   'KEY_VAULT_BOOTSTRAP_CIDR' \
@@ -675,6 +683,11 @@ assert_contains_multiline \
   "$FOUNDATION_TEXT" \
   $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --all \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\' || scope==\'$KEY_VAULT_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
   'module 02 must verify ACR_ID, STORAGE_ID, and KEY_VAULT_ID scopes'
+
+assert_contains_multiline \
+  "$FOUNDATION_TEXT" \
+  $'az keyvault network-rule add \\\n  --resource-group "$RG" \\\n  --name "$KEY_VAULT" \\\n  --subnet "$SUBNET_ID" \\\n  --output none' \
+  'module 02 must add the Key Vault subnet rule without noisy output'
 
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \

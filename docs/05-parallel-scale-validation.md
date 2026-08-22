@@ -504,7 +504,7 @@ queued workflow가 생겼는데 runner가 뜨지 않으면 `applicationID`, `ins
 
 ### Key Vault resolution failure memo
 
-`github-app-private-key`가 resolve되지 않으면 KEDA auth와 분리해서 Key Vault 경로부터 확인합니다. `identityref`가 현재 Job의 UAMI를 가리키는지, 그 UAMI에 `Key Vault Secrets User`가 `$KEY_VAULT_ID` scope로 부여되어 있는지, `snet-aca-infra`에 `Microsoft.KeyVault` service endpoint가 있는지, Key Vault에 `$SUBNET_ID` subnet rule이 있는지, `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`이 유지되는지, `KEY_VAULT_SECRET_URI`가 기존 secret을 가리키는지 순서대로 봅니다. secret 값 자체는 읽지 말고 Key Vault reference와 service endpoint path만 검증합니다.
+`github-app-private-key`가 resolve되지 않으면 KEDA auth와 분리해서 Key Vault 경로부터 확인합니다. `identityref`가 현재 Job의 UAMI를 가리키는지, 그 UAMI에 `Key Vault Secrets User`가 `$KEY_VAULT_ID` scope로 부여되어 있는지, `snet-aca-infra`에 `Microsoft.KeyVault` service endpoint가 있는지, Key Vault에 `$SUBNET_ID` subnet rule이 있는지, `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`이 유지되는지, `KEY_VAULT_SECRET_URI`가 기존 secret을 가리키는지 순서대로 봅니다. secret 값 자체는 읽지 말고 Key Vault reference와 service endpoint path만 검증합니다. Module 04 Key Vault reference synchronization/execution 성공이 acceptance gate입니다. workshop delivery 전에 같은 구독·정책 경계에서 live rehearsal로 직접 성공을 확인하세요. 이 경로는 저장소 테스트만으로 증명할 수 없습니다. 모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요. `defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.
 
 ### Runner registration failure memo
 

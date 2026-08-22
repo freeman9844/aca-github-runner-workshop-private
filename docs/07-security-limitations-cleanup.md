@@ -162,12 +162,17 @@ Cloud Shell은 workshop ACA subnet 밖에 있으므로 data-plane `403`이 정�
 ```bash
 read -rp "Current public IPv4 CIDR for rotation (for example 203.0.113.10/32): " \
   ROTATION_CIDR
-[[ "$ROTATION_CIDR" == */32 ]]
+if [[ "$ROTATION_CIDR" != */32 ]]; then
+  printf 'ERROR: Rotation CIDR must end with /32. Received: %s\n' \
+    "$ROTATION_CIDR" >&2
+  exit 1
+fi
 
 az keyvault network-rule add \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
-  --ip-address "$ROTATION_CIDR"
+  --ip-address "$ROTATION_CIDR" \
+  --output none
 ```
 
 4. 로컬 Azure CLI에서 `az keyvault secret set --file`로 PEM을 업로드해 **새 Key Vault secret version** URI를 저장합니다.

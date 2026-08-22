@@ -70,6 +70,14 @@ for text in \
 done
 
 assert_contains "$DOC_TEXT" '### Key Vault resolution failure memo' 'module 05 key vault resolution memo missing'
+for text in \
+  'Module 04 Key Vault reference synchronization/execution 성공이 acceptance gate입니다.' \
+  'live rehearsal' \
+  '저장소 테스트만으로 증명할 수 없습니다.' \
+  '워크숍 delivery를 중단하고 환경별 platform path를 조사하세요.' \
+  '`defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.'; do
+  assert_contains "$DOC_TEXT" "$text" 'module 05 Key Vault caveat missing'
+done
 assert_contains "$DOC_TEXT" '`Runner configured`' 'module 05 configured lifecycle marker missing'
 assert_contains "$DOC_TEXT" '`Runner process exited`' 'module 05 exit lifecycle marker missing'
 

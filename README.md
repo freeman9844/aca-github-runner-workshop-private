@@ -163,6 +163,7 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 - [ ] Key Vault가 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None` 상태입니다.
 - [ ] Key Vault에는 ACA subnet만 허용하는 subnet rule이 있습니다.
 - [ ] UAMI에 Key Vault scope의 `Key Vault Secrets User` 역할이 할당되어 있습니다.
+- [ ] Module 04의 Key Vault reference synchronization/execution을 workshop delivery 전 live rehearsal로 직접 성공시켜야 합니다.
 - [ ] KEDA scaler에 `applicationID`, `installationID`, `appKey=github-app-private-key` metadata와 auth가 올바르게 연결됩니다.
 - [ ] workflow에 App 변수(`GITHUB_APP_ID` 등)가 직접 노출되지 않습니다.
 - [ ] matrix 4개 Job이 모두 성공합니다.
@@ -197,6 +198,10 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 > ephemeral runner 종료, Log Analytics 수집, 리소스 그룹 삭제 계약을 기준으로 문서와 스크립트를 유지합니다.
 > live validation은 참가자 구독의 ACA subnet service endpoint, Storage/Key Vault firewall rule, Storage data-plane RBAC 상태에 따라 Module 06 절차를 직접 재실행해야 하며,
 > Cloud Shell에서 Step 6/7 data-plane `403`이 보이는 것은 예상된 control-plane-only 확인 결과입니다.
+> Module 04의 Key Vault reference synchronization/execution을 workshop delivery 전 live rehearsal로 직접 성공시켜야 합니다.
+> 이 경로는 Microsoft 문서화가 제한적이어서 저장소 테스트만으로 증명할 수 없습니다.
+> 모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요.
+> `defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.
 > GitHub App installation 또는 권한 변경은 organization 보안 정책에 따라 owner 승인 또는 재승인이 필요할 수 있습니다.
 
 ---

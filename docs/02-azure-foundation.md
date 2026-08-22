@@ -440,7 +440,8 @@ az role assignment create \
 az keyvault network-rule add \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
-  --subnet "$SUBNET_ID"
+  --subnet "$SUBNET_ID" \
+  --output none
 
 az keyvault update \
   --resource-group "$RG" \
@@ -470,6 +471,12 @@ az role assignment delete \
   --scope "$KEY_VAULT_ID"
 unset KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID
 ```
+
+📋 **예상 출력**
+
+- Key Vault 조회 결과는 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`이어야 합니다.
+- `vnetRules`에는 현재 `SUBNET_ID`가 보여야 합니다.
+- `AcrPull`, `Storage Blob Data Contributor`, `Key Vault Secrets User`가 각각 `ACR_ID`, `STORAGE_ID`, `KEY_VAULT_ID` scope로 보여야 합니다.
 
 ⚠️ **주의**
 
