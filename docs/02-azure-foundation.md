@@ -85,7 +85,7 @@ flowchart TB
 
 👁️ **설명**
 
-Module 02는 Module 01에서 이미 만든 Resource Group과 Key Vault를 그대로 이어받습니다. Module 01에서 저장한 `SUFFIX`, 원래 `SUBSCRIPTION_ID`, 실제 `KEY_VAULT` 이름, bootstrap CIDR, bootstrap principal object ID를 복원한 뒤 같은 subscription으로 돌아가서 나머지 리소스 이름을 같은 suffix에서 다시 계산합니다.
+Module 02는 Module 01에서 이미 만든 Resource Group과 Key Vault를 그대로 이어받습니다. Module 01에서 저장한 `SUFFIX`, 원래 `SUBSCRIPTION_ID`, 실제 `KEY_VAULT` 이름, bootstrap principal object ID를 복원한 뒤 같은 subscription으로 돌아가서 나머지 리소스 이름을 같은 suffix에서 다시 계산합니다.
 
 아래 `az keyvault show`가 실패하면 먼저 활성 subscription이 Module 01에서 저장한 값과 같은지 확인하세요. 그다음에도 실패하면 Module 01의 Key Vault bootstrap이 아직 끝나지 않은 상태입니다. 이 경우 새 suffix를 만들거나 두 번째 Key Vault를 만들지 말고, Module 01에서 저장한 값을 다시 확인한 뒤 같은 workshop 상태로 이어서 실행하세요.
 
@@ -101,9 +101,6 @@ if [[ -z "${SUBSCRIPTION_ID:-}" ]]; then
 fi
 if [[ -z "${KEY_VAULT:-}" ]]; then
   read -rp "Saved Key Vault name: " KEY_VAULT
-fi
-if [[ -z "${KEY_VAULT_BOOTSTRAP_CIDR:-}" ]]; then
-  read -rp "Saved Key Vault bootstrap CIDR: " KEY_VAULT_BOOTSTRAP_CIDR
 fi
 if [[ -z "${KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID:-}" ]]; then
   read -rp "Saved Key Vault bootstrap principal object ID: " \
@@ -151,7 +148,7 @@ SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3 STORAGE=stacarunnera
 
 ⚠️ **주의**
 
-- `SUFFIX`, `SUBSCRIPTION_ID`, `KEY_VAULT`, `KEY_VAULT_BOOTSTRAP_CIDR`, `KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID`에는 반드시 Module 01에서 저장한 값을 넣으세요.
+- `SUFFIX`, `SUBSCRIPTION_ID`, `KEY_VAULT`, `KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID`에는 반드시 Module 01에서 저장한 값을 넣으세요.
 - `KEY_VAULT_ID` 조회가 실패하면 먼저 `SUBSCRIPTION_ID`가 맞는지 확인하고 `az account set --subscription "$SUBSCRIPTION_ID"`를 다시 실행하세요. 그다음에도 실패하면 Module 01이 끝나지 않은 것입니다. 새 `SUFFIX`를 만들거나 다른 `KEY_VAULT` 이름으로 우회하지 마세요.
 - `STORAGE`는 기본적으로 `stacarunner$SUFFIX`를 그대로 사용합니다. Storage 이름 충돌 복구가 발생한 경우에만 실제 `STORAGE` 값을 추가로 저장하세요.
 
@@ -508,7 +505,7 @@ az network private-endpoint dns-zone-group create \
   --zone-name vault \
   --output none
 
-# UAMI runtime access를 부여하고 bootstrap public access를 제거합니다.
+# UAMI runtime access를 부여하고 bootstrap 사용자 권한과 public access를 제거합니다.
 az role assignment create \
   --assignee-object-id "$UAMI_PID" \
   --assignee-principal-type ServicePrincipal \
@@ -526,11 +523,7 @@ az role assignment delete \
   --assignee "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID" \
   --role "Key Vault Secrets Officer" \
   --scope "$KEY_VAULT_ID"
-az keyvault network-rule remove \
-  --name "$KEY_VAULT" \
-  --ip-address "$KEY_VAULT_BOOTSTRAP_CIDR" \
-  --output none
-unset KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID KEY_VAULT_BOOTSTRAP_CIDR
+unset KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID
 
 # Key Vault URI를 저장하고 control-plane 상태를 검증합니다.
 KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
@@ -571,7 +564,7 @@ az role assignment list \
 ⚠️ **주의**
 
 - 이 단계는 Module 01이 이미 만든 Key Vault와 secret만 사용합니다. vault 생성이나 secret 재업로드 명령을 다시 실행하지 마세요.
-- `az role assignment delete`와 `az keyvault network-rule remove`가 끝나면 bootstrap public access는 제거된 상태여야 합니다.
+- `az role assignment delete`와 `az keyvault update --public-network-access Disabled`가 끝나면 bootstrap 사용자 권한과 public access는 제거된 상태여야 합니다.
 
 ## 8-L. Local workstation: private access 검증 후 원본 PEM 삭제
 

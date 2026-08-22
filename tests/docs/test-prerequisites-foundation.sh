@@ -237,9 +237,20 @@ assert_contains \
   "$step_seven_cloud_shell" \
   'Azure API가 false 명시를 거부하므로 --enable-purge-protection 옵션은 생략합니다.' \
   'module 01 step 7-C must explain why purge protection false is omitted'
+assert_contains \
+  "$step_seven_cloud_shell" \
+  '--default-action Allow' \
+  'module 01 step 7-C must temporarily allow public network access for workshop testing'
 if [[ "$step_seven_cloud_shell" == *'--enable-purge-protection false'* ]]; then
   fail 'module 01 step 7-C must not send irreversible purge protection as false'
 fi
+for forbidden in \
+  'KEY_VAULT_BOOTSTRAP_CIDR' \
+  'az keyvault network-rule add'; do
+  if [[ "$step_seven_cloud_shell" == *"$forbidden"* ]]; then
+    fail "module 01 step 7-C must not require a workstation CIDR: $forbidden"
+  fi
+done
 for text in \
   '## 7. Key Vault 만들기와 GitHub App private key 업로드' \
   '### 7-C. Cloud Shell: Key Vault bootstrap' \
@@ -253,9 +264,8 @@ for text in \
   'az keyvault create' \
   '--enable-rbac-authorization true' \
   '--public-network-access Enabled' \
-  '--default-action Deny' \
+  '--default-action Allow' \
   'KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=$(az ad signed-in-user show' \
-  'KEY_VAULT_BOOTSTRAP_CIDR' \
   'Key Vault Secrets Officer' \
   '### 7-L. Local workstation: GitHub App PEM 업로드' \
   'az keyvault secret set' \
@@ -264,8 +274,7 @@ for text in \
   '# 동일한 이름을 재사용할 수 있도록 공통 Azure 리소스 이름을 변수로 만듭니다.' \
   '# 이후 모든 Azure 리소스를 함께 정리할 Resource Group을 먼저 만듭니다.' \
   '# GitHub App private key를 보관할 RBAC 기반 Key Vault를 만듭니다.' \
-  '# firewall과 RBAC 설정에 필요한 vault와 현재 사용자 식별자를 조회합니다.' \
-  '# PEM 업로드를 허용할 로컬 워크스테이션의 public IPv4 CIDR만 firewall에 추가합니다.' \
+  '# RBAC 설정에 필요한 vault와 현재 사용자 식별자를 조회합니다.' \
   '# 현재 사용자에게 PEM 업로드에 필요한 임시 secret 관리 권한을 부여합니다.' \
   '# Module 02에서 다시 사용할 bootstrap 값을 화면에 출력해 따로 기록합니다.' \
   '# 로컬 Azure CLI에 로그인하고 Key Vault와 PEM 파일 경로를 입력합니다.' \
@@ -345,7 +354,6 @@ for text in \
   'read -rp "Saved SUFFIX:' \
   'read -rp "Saved subscription ID:' \
   'read -rp "Saved Key Vault name:' \
-  'read -rp "Saved Key Vault bootstrap CIDR:' \
   'read -rp "Saved Key Vault bootstrap principal object ID:' \
   'az account set --subscription "$SUBSCRIPTION_ID"' \
   'KEY_VAULT_ID=$(az keyvault show'; do
@@ -364,6 +372,9 @@ for text in \
 done
 if [[ "$module_two_step_one" == *'SUFFIX="$(openssl rand -hex 3)"'* ]]; then
   fail "module 02 must not generate a new suffix"
+fi
+if [[ "$module_two_step_one" == *'KEY_VAULT_BOOTSTRAP_CIDR'* ]]; then
+  fail 'module 02 must not restore a Key Vault bootstrap CIDR'
 fi
 
 module_two_step_two="$(
@@ -394,11 +405,17 @@ for text in \
   '--public-network-access Disabled' \
   '--assignee "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID"' \
   '--role "Key Vault Secrets Officer"' \
-  '--ip-address "$KEY_VAULT_BOOTSTRAP_CIDR"' \
   'KEY_VAULT_SECRET_URI=' \
   '## 8-L. Local workstation: private access 검증 후 원본 PEM 삭제'; do
   assert_contains "$module_two_step_eight" "$text" \
     'module 02 step 8 Key Vault hardening missing'
+done
+for forbidden in \
+  'KEY_VAULT_BOOTSTRAP_CIDR' \
+  'az keyvault network-rule remove'; do
+  if [[ "$module_two_step_eight" == *"$forbidden"* ]]; then
+    fail "module 02 step 8 must not remove a nonexistent CIDR rule: $forbidden"
+  fi
 done
 for forbidden in \
   'az keyvault create' \

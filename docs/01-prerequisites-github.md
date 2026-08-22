@@ -339,7 +339,9 @@ GITHUB_APP_INSTALLATION_ID=98765432
 
 이 단계에서는 Module 01과 이후 Azure 모듈이 함께 사용할 Resource Group, Key Vault,
 비밀 이름을 준비합니다. Cloud Shell에서는 공유 Azure 식별자와 Key Vault를 만들고,
-방화벽은 로컬 워크스테이션의 public IPv4 CIDR 하나만 허용합니다.
+테스트 편의를 위해 public network access를 임시 허용합니다. Secret 작업은 RBAC 권한이
+있는 사용자만 수행할 수 있으며, Module 02에서 Private Endpoint를 만든 뒤 public access를
+비활성화합니다.
 
 ### 7-C. Cloud Shell: Key Vault bootstrap
 
@@ -372,11 +374,11 @@ az keyvault create \
   --enable-rbac-authorization true \
   --retention-days 7 \
   --public-network-access Enabled \
-  --default-action Deny \
+  --default-action Allow \
   --bypass None \
   --output none
 
-# firewall과 RBAC 설정에 필요한 vault와 현재 사용자 식별자를 조회합니다.
+# RBAC 설정에 필요한 vault와 현재 사용자 식별자를 조회합니다.
 KEY_VAULT_ID=$(az keyvault show \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
@@ -385,14 +387,6 @@ KEY_VAULT_ID=$(az keyvault show \
 KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=$(az ad signed-in-user show \
   --query id \
   --output tsv)
-read -rp "Local workstation public IPv4 CIDR (for example 203.0.113.10/32): " \
-  KEY_VAULT_BOOTSTRAP_CIDR
-
-# PEM 업로드를 허용할 로컬 워크스테이션의 public IPv4 CIDR만 firewall에 추가합니다.
-az keyvault network-rule add \
-  --name "$KEY_VAULT" \
-  --ip-address "$KEY_VAULT_BOOTSTRAP_CIDR" \
-  --output none
 
 # 현재 사용자에게 PEM 업로드에 필요한 임시 secret 관리 권한을 부여합니다.
 az role assignment create \
@@ -405,16 +399,14 @@ az role assignment create \
 # Module 02에서 다시 사용할 bootstrap 값을 화면에 출력해 따로 기록합니다.
 printf '다음 값을 저장하세요: SUFFIX=%s RG=%s KEY_VAULT=%s\n' \
   "$SUFFIX" "$RG" "$KEY_VAULT"
-printf 'KEY_VAULT_BOOTSTRAP_CIDR=%s\nKEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=%s\n' \
-  "$KEY_VAULT_BOOTSTRAP_CIDR" "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID"
+printf 'KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=%s\n' \
+  "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID"
 ```
 
 📋 **예상 출력**
 
 ```text
-Local workstation public IPv4 CIDR (for example 203.0.113.10/32): 203.0.113.10/32
 다음 값을 저장하세요: SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 KEY_VAULT=kvacarunnera1b2c3
-KEY_VAULT_BOOTSTRAP_CIDR=203.0.113.10/32
 KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=11111111-2222-3333-4444-555555555555
 ```
 
