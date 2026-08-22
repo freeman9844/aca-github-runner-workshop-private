@@ -38,6 +38,7 @@ assert_contains_multiline() {
 [[ -f "$APP_INSTALL_TARGET_IMAGE" ]] || fail "module 01 GitHub App install target image missing"
 [[ -f "$APP_SELECT_REPOSITORY_IMAGE" ]] || fail "module 01 GitHub App repository selection image missing"
 [[ -f "$KEY_VAULT_RESULT_IMAGE" ]] || fail "module 01 Key Vault result image missing"
+[[ ! -x "$KEY_VAULT_RESULT_IMAGE" ]] || fail "module 01 Key Vault result image must not be executable"
 [[ ! -e "$ROOT/docs/images/01-key-vault-secrets-list.png" ]] ||
   fail "obsolete module 01 Key Vault secrets list image must be removed"
 [[ ! -e "$ROOT/docs/images/01-key-vault-create-secret.png" ]] ||
