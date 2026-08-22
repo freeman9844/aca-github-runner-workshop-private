@@ -6,11 +6,10 @@
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
-- 저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 모듈 02의 Azure 변수들을 복구한다.
-- `runner/Dockerfile`과 `runner/entrypoint.sh`의 핵심 동작을 이해한다.
-- 로컬 정적 검사를 먼저 실행해 runner 스크립트 품질을 확인한다.
-- ACR Tasks의 `az acr build`로 cloud build를 수행한다.
-- ACR 태그와 보안 설정을 확인해 다음 모듈 입력값을 검증한다.
+- `runner/Dockerfile`과 `runner/entrypoint.sh`를 검토하고 정적 검사를 실행한다.
+- ACR Tasks의 `az acr build`로 runner image를 빌드하고 ACR에 게시한다.
+- ACR image tag와 보안 설정을 확인해 Module 04 입력값을 검증한다.
+- Cloud Shell 세션을 재연결한 경우에만 선택적 복구 절차로 Module 02 변수를 다시 구성한다.
 
 ## 태그 범례
 
@@ -321,7 +320,7 @@ base image의 runner version·digest와 문서의 `IMAGE="github-actions-runner:
 
 👁️ **설명**
 
-TDD 흐름상 배포 문서를 쓰기 전에 현재 runner artifact가 기대한 상태인지 확인합니다. `entrypoint.sh` 문법, entrypoint 테스트, 문서/샘플 artifact 검사를 순서대로 돌리면 build 원인과 문서 원인을 분리하기 쉽습니다.
+TDD 흐름상 image build 전에 현재 runner source와 workshop artifact 계약을 확인합니다. `entrypoint.sh` 문법과 동작 테스트는 runner startup behavior를 검증하고, artifact 검사는 checked-in workflow sample 계약을 검증합니다. 두 검증을 분리하면 runner source 문제와 workflow artifact 문제를 구분할 수 있습니다.
 
 🟢 **실행**
 
@@ -337,7 +336,7 @@ bash tests/test-artifacts.sh
 
 - `bash -n runner/entrypoint.sh`는 출력 없이 종료됩니다.
 - `bash tests/runner/test-entrypoint.sh`는 `PASS: entrypoint behavior`를 출력합니다.
-- `bash tests/test-artifacts.sh`는 `PASS: runner image and workflow artifacts`를 출력합니다.
+- `bash tests/test-artifacts.sh`는 `PASS: workflow artifacts contract`를 출력합니다.
 
 ## 3. ACR Tasks로 runner image 빌드
 

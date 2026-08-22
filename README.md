@@ -6,7 +6,7 @@
 
 ## 빠른 시작
 
-1. Azure Portal에서 **Cloud Shell Bash**를 엽니다.
+1. Azure Portal에서 **Cloud Shell**을 엽니다. 처음 Cloud Shell을 사용하는 경우 **Mount storage account**를 선택해 영구 스토리지를 연결한 뒤 Bash를 엽니다. 임시 **No storage account required** 세션은 재연결 시 clone과 작업 파일이 유지되지 않으므로 이 워크숍의 기본 경로로 사용하지 않습니다.
 2. 다음 명령으로 Public workshop source를 고정 경로에 clone합니다. Public workshop source는 GitHub CLI 로그인 없이 clone할 수 있습니다.
 
 ```bash
