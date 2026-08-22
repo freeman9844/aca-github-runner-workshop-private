@@ -568,7 +568,7 @@ PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인: App 123456
 | Enterprise Managed User 계정에서 App 설치가 차단됨 | organization 또는 enterprise 정책이 사용자 주도 App 설치를 막음 | 설치 화면에 `Install is prohibited`가 표시되면 organization 관리자에게 App 설치 또는 승인 절차를 요청합니다. |
 | App ID 또는 Installation ID가 일치하지 않음 | 다른 organization, 다른 App, 다른 설치 URL을 참고함 | App settings 페이지의 `App ID`와 설치 상세 URL의 `/settings/installations/<installation-id>` 숫자를 다시 확인하고 6단계 입력 블록을 다시 실행합니다. |
 | PEM 파일을 Cloud Shell에 올렸거나 저장소에 추가하려고 함 | 비밀 저장 위치를 잘못 선택함 | Cloud Shell 업로드와 commit을 즉시 중단하고, 로컬 워크스테이션에만 새 private key를 다시 생성합니다. 이전 파일은 안전하게 폐기하고 Git staging area와 히스토리에 남지 않았는지 확인합니다. |
-| `az keyvault create`가 이름 중복 오류를 반환함 | `KEY_VAULT` 이름은 전역 고유인데 이미 사용 중 | `KEY_VAULT="kvacarunner$(openssl rand -hex 5)"`로 vault 이름만 바꾸고 7-C를 다시 실행한 뒤 실제 이름을 저장합니다. |
+| Key Vault 생성이 이름 중복 오류를 반환함 | `KEY_VAULT` 이름은 전역 고유인데 이미 사용 중 | `KEY_VAULT="kvacarunner$(openssl rand -hex 5)"`로 vault 이름만 바꾸고 7-C를 다시 실행한 뒤 실제 이름을 저장합니다. |
 | local PEM 업로드 또는 step 8 secret download가 `403 Forbidden`으로 실패함 | workstation CIDR이 다르거나 `Key Vault Secrets Officer` RBAC가 아직 전파되지 않음 | 로컬에서 `curl -s https://ifconfig.me`를 확인하고 firewall CIDR을 수정하거나 최대 2분 기다린 뒤 다시 실행합니다. |
 | step 8이 GitHub `401` 또는 `404`로 실패함 | App ID, Installation ID, 또는 Key Vault에 저장된 PEM이 서로 다른 GitHub App에 속함 | 5단계 App settings와 installation URL을 다시 확인하고 같은 App의 PEM을 7-L에서 다시 업로드합니다. |
 | Storage Account, Private Endpoint 또는 Key Vault 생성에서 `MissingSubscriptionRegistration`이 발생함 | `Microsoft.Storage` 또는 `Microsoft.KeyVault` provider가 아직 등록되지 않음 | 2단계의 `az provider register -n Microsoft.Storage --wait`와 `az provider register -n Microsoft.KeyVault --wait`를 다시 실행하고 등록 완료 후 다시 시도합니다. |
