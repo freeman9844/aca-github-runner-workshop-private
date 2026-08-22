@@ -40,6 +40,22 @@ if grep -F -- 'images/05-github-actions-no-self-hosted-runners.png' "$DOC" >/dev
   fail "module 05 still references the removed no-self-hosted-runners screenshot"
 fi
 
+step_three="$(
+  awk '
+    /^## 3\. / { in_section=1 }
+    /^## 4\. / { exit }
+    in_section { print }
+  ' "$DOC"
+)"
+assert_contains "$step_three" \
+  '![GitHub Actions에서 Run workflow 메뉴를 연 화면](images/05-github-actions-run-workflow.png)' \
+  'module 05 step 3 Run workflow screenshot missing'
+run_workflow_image_line="$(printf '%s\n' "$step_three" | grep -nF 'images/05-github-actions-run-workflow.png' | head -n1 | cut -d: -f1)"
+expected_output_line="$(printf '%s\n' "$step_three" | grep -nF '📋 **예상 출력**' | head -n1 | cut -d: -f1)"
+[[ -n "$run_workflow_image_line" && -n "$expected_output_line" &&
+   "$run_workflow_image_line" -lt "$expected_output_line" ]] ||
+  fail "module 05 step 3 Run workflow screenshot must appear immediately after execution guidance"
+
 step_four="$(
   awk '
     /^## 4\. / { in_section=1 }
@@ -47,31 +63,15 @@ step_four="$(
     in_section { print }
   ' "$DOC"
 )"
-assert_contains "$step_four" \
-  '![GitHub Actions에서 Run workflow 메뉴를 연 화면](images/05-github-actions-run-workflow.png)' \
-  'module 05 step 4 Run workflow screenshot missing'
-run_workflow_image_line="$(printf '%s\n' "$step_four" | grep -nF 'images/05-github-actions-run-workflow.png' | head -n1 | cut -d: -f1)"
-expected_output_line="$(printf '%s\n' "$step_four" | grep -nF '📋 **예상 출력**' | head -n1 | cut -d: -f1)"
-[[ -n "$run_workflow_image_line" && -n "$expected_output_line" &&
-   "$run_workflow_image_line" -lt "$expected_output_line" ]] ||
-  fail "module 05 step 4 Run workflow screenshot must appear immediately after execution guidance"
-
-step_five="$(
-  awk '
-    /^## 5\. / { in_section=1 }
-    /^## 6\. / { exit }
-    in_section { print }
-  ' "$DOC"
-)"
 assert_contains \
-  "$step_five" \
+  "$step_four" \
   $'job-ghrunner-717094-c5jhk  Running   2026-08-22T14:40:22+00:00\njob-ghrunner-717094-db6km  Running   2026-08-22T14:40:22+00:00\njob-ghrunner-717094-jkjx4  Running   2026-08-22T14:40:22+00:00\njob-ghrunner-717094-v2rz4  Running   2026-08-22T14:40:22+00:00' \
-  'module 05 step 5 expected output must use the verified four-execution example'
+  'module 05 step 4 expected output must use the verified four-execution example'
 
-step_seven="$(
+step_six="$(
   awk '
-    /^## 7\. / { in_section=1 }
-    /^## 8\. / { exit }
+    /^## 6\. / { in_section=1 }
+    /^## 7\. / { exit }
     in_section { print }
   ' "$DOC"
 )"
@@ -84,23 +84,23 @@ for text in \
   'Cloud Shell 세션은 유지됩니다.' \
   'trap - INT' \
   'unset -f wait_for_containerapp_console_logs'; do
-  assert_contains "$step_seven" "$text" \
-    'module 05 step 7 interruption-safe wait handling missing'
+  assert_contains "$step_six" "$text" \
+    'module 05 step 6 interruption-safe wait handling missing'
 done
-if [[ "$step_seven" == *'exit 1'* ]]; then
-  fail 'module 05 step 7 must not exit the interactive Cloud Shell session'
+if [[ "$step_six" == *'exit 1'* ]]; then
+  fail 'module 05 step 6 must not exit the interactive Cloud Shell session'
 fi
-job_filter_count="$(printf '%s\n' "$step_seven" | grep -cF "| where JobName == '\$JOB'" || true)"
+job_filter_count="$(printf '%s\n' "$step_six" | grep -cF "| where JobName == '\$JOB'" || true)"
 [[ "$job_filter_count" -eq 3 ]] ||
-  fail "module 05 step 7 must apply the same JobName filter to wait, aggregate, and detail queries"
-assert_contains "$step_seven" \
+  fail "module 05 step 6 must apply the same JobName filter to wait, aggregate, and detail queries"
+assert_contains "$step_six" \
   'resource-specific `ContainerAppConsoleLogs`의 `JobName` 열로 현재 ACA Job 로그만 조회합니다.' \
-  'module 05 step 7 must explain the resource-specific JobName filter'
-if [[ "$step_seven" == *"ContainerGroupName startswith '\$EXECUTION'"* ]]; then
-  fail 'module 05 step 7 must not depend on one possibly stale execution prefix'
+  'module 05 step 6 must explain the resource-specific JobName filter'
+if [[ "$step_six" == *"ContainerGroupName startswith '\$EXECUTION'"* ]]; then
+  fail 'module 05 step 6 must not depend on one possibly stale execution prefix'
 fi
-if [[ "$step_seven" == *'TimeGenerated > ago(30m)'* ]]; then
-  fail 'module 05 step 7 detail query must use the same two-hour window as ingestion checks'
+if [[ "$step_six" == *'TimeGenerated > ago(30m)'* ]]; then
+  fail 'module 05 step 6 detail query must use the same two-hour window as ingestion checks'
 fi
 
 recovery_section="$(
@@ -112,20 +112,47 @@ recovery_section="$(
   ' "$DOC"
 )"
 
-assert_contains "$recovery_section" 'read -rp "Saved GITHUB_APP_ID:' 'module 05 GitHub App ID recovery prompt missing'
-assert_contains "$recovery_section" 'read -rp "Saved GITHUB_APP_INSTALLATION_ID:' 'module 05 GitHub App installation ID recovery prompt missing'
-assert_contains "$recovery_section" 'GITHUB_APP_ID=' 'module 05 GitHub App ID restore missing'
-assert_contains "$recovery_section" 'GITHUB_APP_INSTALLATION_ID=' 'module 05 GitHub App installation ID restore missing'
-assert_contains "$recovery_section" 'Module 01에서 저장한 `SUFFIX`를 그대로 사용하고, Module 02에서 이름 충돌 복구로 변경한 실제 ACR 또는 Storage 이름이 있으면 해당 값을 복원합니다.' 'module 05 must preserve Module 02 ownership of collision-recovered ACR or Storage names'
+for text in \
+  'read -rp "Saved SUFFIX: " SUFFIX' \
+  'RG="rg-acarunner-$SUFFIX"' \
+  'LOG="log-acarunner-$SUFFIX"' \
+  'JOB="job-ghrunner-$SUFFIX"' \
+  'LOG_ID=$(az monitor log-analytics workspace show'; do
+  assert_contains "$recovery_section" "$text" \
+    'module 05 minimal recovery contract missing'
+done
+
+for removed_text in \
+  'Saved ACR name' \
+  'Saved GITHUB_APP_ID' \
+  'Saved GITHUB_APP_INSTALLATION_ID' \
+  'Saved Storage account name if changed' \
+  'Saved Key Vault name if changed' \
+  'STORAGE_ID=$(az storage account show' \
+  'KEY_VAULT_ID=$(az keyvault show'; do
+  if printf '%s\n' "$recovery_section" | grep -F -- "$removed_text" >/dev/null; then
+    fail "module 05 recovery still restores unused state: $removed_text"
+  fi
+done
+
+for heading in \
+  '## 1. 샘플 workflow를 Cloud Shell에서 열고 GitHub 웹 UI로 생성' \
+  '## 2. 실행 전 baseline 이력과 active execution 0 상태 확인' \
+  '## 3. GitHub Actions에서 `ACA Runner Scale Test`를 수동 실행' \
+  '## 4. 첫 30~90초 동안 Running execution만 반복 조회' \
+  '## 5. 가장 최근 execution을 잡아 CLI 로그 확인' \
+  '## 6. Log Analytics에서 resource-specific `ContainerAppConsoleLogs`를 KQL로 확인' \
+  '## 7. GitHub에서 네 개 Job 성공과 runner hostname 차이 확인' \
+  '## 8. Running execution이 다시 0으로 돌아오는지 확인'; do
+  assert_contains "$DOC_TEXT" "$heading" 'module 05 compact heading sequence missing'
+done
+
+if grep -F -- '## 2. matrix 4 Job 전체 YAML 확인' "$DOC" >/dev/null; then
+  fail 'module 05 still duplicates the checked-in workflow YAML'
+fi
 
 for text in \
   '## 0. 세션 재연결 시 변수 복구 (선택)' \
-  'INFRA_SUBNET="snet-aca-infra"' \
-  'SUBNET_ID=$(az network vnet subnet show' \
-  'STORAGE="stacarunner$SUFFIX"' \
-  'STORAGE_CONTAINER="runner-artifacts"' \
-  'STORAGE_ID=$(az storage account show' \
-  'KEY_VAULT_ID=$(az keyvault show' \
   'Microsoft.Storage' \
   'Microsoft.KeyVault' \
   'AZURE_STORAGE_ACCOUNT' \

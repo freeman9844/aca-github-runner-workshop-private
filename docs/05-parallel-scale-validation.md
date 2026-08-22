@@ -19,58 +19,25 @@
 
 👁️ **설명**
 
-같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼거나 다른 브라우저/탭으로 다시 들어왔다면, Module 01에서 저장한 `SUFFIX`를 그대로 사용하고, Module 02에서 이름 충돌 복구로 변경한 실제 ACR 또는 Storage 이름이 있으면 해당 값을 복원합니다. 여기서는 새 suffix를 만들지 말고, 처음 실습에 사용한 값을 다시 넣어야 기존 Job/Log Analytics 조회가 정확히 이어집니다.
+같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼거나 다른 브라우저/탭으로 다시 들어왔다면, Module 01에서 저장한 `SUFFIX`를 그대로 다시 넣어 scale validation에 필요한 Job과 Log Analytics 값만 복원합니다. 여기서는 새 suffix를 만들지 말고, 처음 실습에 사용한 값을 다시 넣어야 기존 Job/Log Analytics 조회가 정확히 이어집니다.
 
 🟢 **실행**
 
 ```bash
-# 저장한 suffix와 실제 ACR 이름으로 scale validation에 필요한 foundation 값을 복원합니다.
+# 저장한 suffix로 scale validation에 필요한 Job과 Log Analytics 값을 복원합니다.
 read -rp "Saved SUFFIX: " SUFFIX
-read -rp "Saved ACR name: " ACR
-read -rp "Saved GITHUB_APP_ID: " GITHUB_APP_ID
-read -rp "Saved GITHUB_APP_INSTALLATION_ID: " GITHUB_APP_INSTALLATION_ID
-
-LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
-ENV="env-acarunner-$SUFFIX"
-VNET="vnet-acarunner-$SUFFIX"
-INFRA_SUBNET="snet-aca-infra"
 JOB="job-ghrunner-$SUFFIX"
-STORAGE="stacarunner$SUFFIX"
-STORAGE_CONTAINER="runner-artifacts"
-KEY_VAULT="kvacarunner$SUFFIX"
-GITHUB_APP_KEY_SECRET="github-app-private-key"
-
-# Module 02에서 Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
-read -rp "Saved Storage account name if changed (press Enter to keep ${STORAGE}): " SAVED_STORAGE
-if [[ -n "$SAVED_STORAGE" ]]; then
-  STORAGE="$SAVED_STORAGE"
-fi
-unset SAVED_STORAGE
-
-# Module 01에서 Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
-read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
-if [[ -n "$SAVED_KEY_VAULT" ]]; then
-  KEY_VAULT="$SAVED_KEY_VAULT"
-fi
-unset SAVED_KEY_VAULT
-
-# Log Analytics, ACA subnet, Storage, Key Vault를 다시 조회하고 복구한 값을 출력합니다.
-LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
-SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$INFRA_SUBNET"   --query id   --output tsv)
-STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
-KEY_VAULT_ID=$(az keyvault show \
+LOG_ID=$(az monitor log-analytics workspace show \
   --resource-group "$RG" \
-  --name "$KEY_VAULT" \
-  --query id \
+  --workspace-name "$LOG" \
+  --query customerId \
   --output tsv)
-KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
-printf 'RG=%s\nLOG=%s\nJOB=%s\nSTORAGE=%s\nKEY_VAULT=%s\nLOG_ID=%s\n' \
-  "$RG" "$LOG" "$JOB" "$STORAGE" "$KEY_VAULT" "$LOG_ID"
-printf 'GITHUB_APP_ID=%s\nGITHUB_APP_INSTALLATION_ID=%s\n' \
-  "$GITHUB_APP_ID" "$GITHUB_APP_INSTALLATION_ID"
+export SUFFIX RG LOG JOB LOG_ID
+printf 'RG=%s\nLOG=%s\nJOB=%s\nLOG_ID=%s\n' \
+  "$RG" "$LOG" "$JOB" "$LOG_ID"
 ```
 
 📋 **예상 출력**
@@ -122,70 +89,7 @@ KEDA scaler가 해당 queued Job을 세지 않습니다. 이 경우 workflow는 
 - Cloud Shell에는 workflow YAML 전체가 출력됩니다.
 - GitHub에는 `.github/workflows/aca-runner-scale-test.yml`가 새로 생기고 workflow 이름이 **ACA Runner Scale Test**로 보입니다.
 
-## 2. matrix 4 Job 전체 YAML 확인
-
-👁️ **설명**
-
-아래는 GitHub에 저장한 workflow 전체입니다. 주석을 따라 수동 실행 방식, matrix 4개, runner label, 실행 시간 확보 단계가 어떻게 연결되는지 확인합니다.
-
-🟢 **실행**
-
-GitHub에 저장한 workflow 또는 Cloud Shell 출력과 아래 YAML을 비교합니다.
-
-```yaml
-# GitHub Actions 화면에 표시할 workflow 이름입니다.
-name: ACA Runner Scale Test
-
-# 수동 실행으로만 scale test를 시작합니다.
-on:
-  workflow_dispatch:
-
-jobs:
-  # 이 job 하나가 matrix 값에 따라 네 개의 GitHub job으로 확장됩니다.
-  parallel-runner:
-    # Actions 화면에는 Worker 1부터 Worker 4까지 표시됩니다.
-    name: Worker ${{ matrix.worker }}
-
-    # 모듈 04에서 등록한 aca-runner custom label만 요구합니다.
-    runs-on: [aca-runner]
-
-    # runner 기동이나 workflow가 비정상적으로 지연될 때 무한 대기하지 않습니다.
-    timeout-minutes: 10
-
-    strategy:
-      # 한 Worker가 실패해도 나머지 Worker를 취소하지 않아 전체 scale 결과를 확인할 수 있습니다.
-      fail-fast: false
-      matrix:
-        # queued job 네 개를 만들어 KEDA의 0 → N scale-out을 관찰합니다.
-        worker: [1, 2, 3, 4]
-
-    steps:
-      # 각 Worker가 실행된 runner hostname과 시작 시간을 기록합니다.
-      - name: Show runner identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "worker=${{ matrix.worker }}"
-          echo "hostname=$(hostname)"
-          echo "started_at=$(date --utc --iso-8601=seconds)"
-
-      # 여러 execution이 동시에 Running 상태가 되는 구간을 관찰할 시간을 확보합니다.
-      - name: Hold the runner for scale observation
-        shell: bash
-        run: |
-          set -euo pipefail
-          sleep 45
-          echo "completed_at=$(date --utc --iso-8601=seconds)"
-```
-
-📋 **예상 출력**
-
-- `workflow_dispatch`가 있으면 GitHub Actions 화면에서 **Run workflow** 버튼으로 수동 실행할 수 있습니다.
-- `worker: [1, 2, 3, 4]`가 보이면 matrix가 네 개의 GitHub job을 생성합니다.
-- `runs-on: [aca-runner]`가 보이면 default self-hosted label이 아니라 모듈 04의 custom label만 요구합니다.
-- `sleep 45`는 네 execution이 겹치는 구간을 관찰할 시간을 확보합니다.
-
-## 3. 실행 전 baseline 이력과 active execution 0 상태 확인
+## 2. 실행 전 baseline 이력과 active execution 0 상태 확인
 
 👁️ **설명**
 
@@ -211,7 +115,7 @@ az containerapp job execution list \
 - 이 단계에서는 **active execution이 0인 상태가 정상**입니다.
 - 즉, history는 남을 수 있지만 현재 처리 중인 execution이 없다는 점을 먼저 구분해야 합니다.
 
-## 4. GitHub Actions에서 `ACA Runner Scale Test`를 수동 실행
+## 3. GitHub Actions에서 `ACA Runner Scale Test`를 수동 실행
 
 👁️ **설명**
 
@@ -234,7 +138,7 @@ GitHub repository에서 **Actions → ACA Runner Scale Test → Run workflow**�
 
 ![GitHub Actions에서 네 개 matrix Job이 queued 상태인 화면](images/05-github-actions-queued-matrix.png)
 
-## 5. 첫 30~90초 동안 Running execution만 반복 조회
+## 4. 첫 30~90초 동안 Running execution만 반복 조회
 
 👁️ **설명**
 
@@ -271,7 +175,7 @@ job-ghrunner-717094-v2rz4  Running   2026-08-22T14:40:22+00:00
 - polling 타이밍과 startup timing 때문에 네 execution이 동시에 보이지 않아도 정상입니다.
 - 중요한 검증 포인트는 queued GitHub job에 맞춰 active execution이 늘어났다가 나중에 다시 0으로 돌아오는지입니다.
 
-## 6. 가장 최근 execution을 잡아 CLI 로그 확인
+## 5. 가장 최근 execution을 잡아 CLI 로그 확인
 
 👁️ **설명**
 
@@ -306,7 +210,7 @@ fi
 📋 **예상 출력**
 
 - 최신 execution 이름이 `job-ghrunner-<suffix>-...` 같은 형식으로 `EXECUTION` 변수에 들어갑니다.
-- `ERROR: Container Apps Job execution이 없습니다.`가 보이면 7단계로 진행하지 말고 GitHub workflow가 `runs-on: [aca-runner]`인지 수정한 뒤 workflow를 다시 실행합니다.
+- `ERROR: Container Apps Job execution이 없습니다.`가 보이면 6단계로 진행하지 말고 GitHub workflow가 `runs-on: [aca-runner]`인지 수정한 뒤 workflow를 다시 실행합니다.
 - 조회 시점에 따라 GitHub Actions worker가 bash step을 준비하고 실행하는 내부
   로그가 다음과 같이 보일 수 있습니다.
 
@@ -327,10 +231,10 @@ fi
 
 - timestamp, 임시 script UUID, PID와 repository 작업 경로는 실행마다 달라집니다.
 - `--tail 100` 구간에 따라 `Runner configured`, `Runner process exited`가
-  보이지 않을 수 있습니다. lifecycle marker는 7단계의
+  보이지 않을 수 있습니다. lifecycle marker는 6단계의
   Log Analytics 조회로 다시 확인합니다.
 
-## 7. Log Analytics에서 resource-specific `ContainerAppConsoleLogs`를 KQL로 확인
+## 6. Log Analytics에서 resource-specific `ContainerAppConsoleLogs`를 KQL로 확인
 
 👁️ **설명**
 
@@ -445,7 +349,7 @@ else
   if (( LOG_WAIT_STATUS == 130 )); then
     printf 'INFO: Log Analytics 대기를 중단했습니다. Cloud Shell 세션은 유지됩니다.\n'
   else
-    printf 'ERROR: 문제를 해결한 뒤 7단계의 첫 번째 실행 블록만 다시 실행하세요.\n' >&2
+    printf 'ERROR: 문제를 해결한 뒤 6단계의 첫 번째 실행 블록만 다시 실행하세요.\n' >&2
   fi
   unset LOG_WAIT_STATUS
 fi
@@ -497,7 +401,7 @@ az monitor log-analytics query \
 - CLI에서 확인한 execution을 포함해 같은 ACA Job에서 생성된 메시지를 Azure Monitor 쪽에서도 재확인할 수 있습니다.
 - GitHub Actions는 성공했지만 결과가 비어 있으면 `LOG_ID`, diagnostic setting, `JobName` 값을 다시 확인하고 몇 분 뒤 같은 query를 재실행합니다.
 
-## 8. GitHub에서 네 개 Job 성공과 runner hostname 차이 확인
+## 7. GitHub에서 네 개 Job 성공과 runner hostname 차이 확인
 
 👁️ **설명**
 
@@ -520,7 +424,7 @@ GitHub Actions 실행 화면에서 `Worker 1` ~ `Worker 4` 로그를 열고 `Sho
 
 ![GitHub Actions에서 Worker 1은 성공했고 Worker 4는 아직 진행 중인 중간 상태 화면](images/05-github-actions-successful-matrix.png)
 
-## 9. Running execution이 다시 0으로 돌아오는지 확인
+## 8. Running execution이 다시 0으로 돌아오는지 확인
 
 👁️ **설명**
 
@@ -554,7 +458,7 @@ az containerapp job execution list \
 |------|-----------|-----------|
 | GitHub job이 계속 queued 상태로 남음 | GitHub App이 `aca-runner-lab` repository에 설치되지 않았거나, `applicationID`/`installationID`가 틀렸거나, workflow label이 다름 | GitHub App installation이 선택한 `aca-runner-lab` repository에 남아 있는지 확인하고, `az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.configuration.eventTriggerConfig.scale.rules"`에서 `githubApiURL=https://api.github.com`, `owner`, `runnerScope=repo`, `repos=$GITHUB_REPO`, `labels=aca-runner`, `noDefaultLabels=true`, `targetWorkflowQueueLength=1`, `applicationID`, `installationID`, `appKey -> github-app-private-key`가 모두 정확한지 다시 확인합니다. |
 | `github-app-private-key`가 resolve되지 않음 | `identityref`가 잘못되었거나 UAMI의 Key Vault 권한 또는 service endpoint/subnet rule 경로가 깨짐 | `az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.configuration.secrets"`와 Key Vault 설정을 함께 확인해 `github-app-private-key=keyvaultref:...,identityref:$UAMI_RID`가 유지되는지, UAMI에 `Key Vault Secrets User`가 있는지, `snet-aca-infra`에 `Microsoft.KeyVault` service endpoint가 있는지, Key Vault가 `$SUBNET_ID` rule과 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`를 유지하는지 다시 검증합니다. |
-| `ContainerAppJobsExecutionNotFound`와 `execution - replicas`가 표시됨 | `EXECUTION`이 비어 있으며, 흔히 기존 workflow가 default label을 계속 요구해 KEDA가 queued Job을 세지 못한 상태 | GitHub workflow를 최신 sample 전체로 교체해 `runs-on: [aca-runner]`로 만들고, 기존 queued run을 취소한 뒤 다시 실행합니다. ACA execution이 생성된 후 6단계의 `EXECUTION=$(...)` 블록부터 다시 실행합니다. |
+| `ContainerAppJobsExecutionNotFound`와 `execution - replicas`가 표시됨 | `EXECUTION`이 비어 있으며, 흔히 기존 workflow가 default label을 계속 요구해 KEDA가 queued Job을 세지 못한 상태 | GitHub workflow를 최신 sample 전체로 교체해 `runs-on: [aca-runner]`로 만들고, 기존 queued run을 취소한 뒤 다시 실행합니다. ACA execution이 생성된 후 5단계의 `EXECUTION=$(...)` 블록부터 다시 실행합니다. |
 | workflow hostname의 suffix가 현재 `$SUFFIX`와 다르거나 현재 execution이 timeout됨 | 다른 Event Job이 같은 repository와 `aca-runner` label을 감시함 | 모듈 04의 중복 watcher query로 이전 Job을 찾습니다. 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 다시 실행합니다. |
 | Running execution이 항상 1개만 보임 | polling 타이밍상 동시에 관찰하지 못했거나 Azure quota/시작 지연이 있음 | 먼저 GitHub에서 네 job이 모두 생성되었는지 확인하고, 30~90초 동안 같은 `Running` query를 반복합니다. 네 개가 항상 한 번에 보여야 한다고 가정하지 마세요. |
 | `az containerapp job logs show`에 아직 로그가 거의 없음 | execution 시작 직후라 runner bootstrap 로그가 아직 수집되지 않음 | 10~20초 정도 기다렸다가 같은 `EXECUTION`으로 다시 조회하고, 필요하면 가장 최근 execution 이름을 다시 잡아 확인합니다. |
