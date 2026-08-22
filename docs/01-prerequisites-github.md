@@ -1,6 +1,6 @@
 # 01. GitHub 사전 준비
 
-> Azure Cloud Shell Bash에서 구독, GitHub `Private repository`, Fine-grained personal access token을 준비하고 다음 모듈에서 재사용할 `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_PAT`를 검증합니다.
+> Azure Cloud Shell Bash에서 구독, 조직이 소유한 GitHub `Private repository`, organization GitHub App 식별자를 준비하고 다음 모듈에서 재사용할 `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`를 검증합니다.
 
 ## 목표
 
@@ -9,9 +9,9 @@
 - Cloud Shell을 Bash와 영구 스토리지로 처음 설정한다.
 - Cloud Shell에서 실습에 사용할 Azure 구독을 선택한다.
 - Azure Container Apps 관련 CLI extension과 provider 등록 상태를 맞춘다.
-- `aca-runner-lab` 이름의 `Private repository`를 준비한다.
-- `aca-runner-lab`에만 접근 가능한 Fine-grained personal access token을 준비한다.
-- `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_PAT`를 안전하게 로드하고 GitHub API로 검증한다.
+- 조직이 소유한 `aca-runner-lab` 이름의 `Private repository`를 준비한다.
+- `aca-runner-lab` 하나에만 설치된 organization GitHub App을 준비한다.
+- `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`를 Cloud Shell에 안전하게 로드하고, private key PEM 파일은 로컬 워크스테이션에만 보관한다.
 
 ## 태그 범례
 
@@ -89,12 +89,12 @@ az account show --query "{Name:name,SubscriptionId:id,State:state}" -o table
 
 이 워크숍은 Azure Container Apps Job, Azure Container Registry, Azure Monitor,
 Log Analytics뿐 아니라 External ACA Environment용 Virtual Network,
-delegated subnet, Blob Private Endpoint, Private DNS, Storage Account를 함께
+delegated subnet, Blob Private Endpoint, Private DNS, Storage Account, Key Vault를 함께
 사용합니다. 따라서 Cloud Shell에서 필요한 extension과 resource provider를
 먼저 준비합니다. `Microsoft.Network`는 VNet, subnet, Private Endpoint,
 Private DNS를 위해 필요하고, `Microsoft.ContainerService`는 ACA custom VNet
 infrastructure provisioning에, `Microsoft.Storage`는 Storage Account와 Blob
-Private Endpoint 생성에 필요합니다. `--upgrade`를 함께 지정해야 이전 버전의
+Private Endpoint 생성에, `Microsoft.KeyVault`는 GitHub App private key를 보관할 Key Vault 생성에 필요합니다. `--upgrade`를 함께 지정해야 이전 버전의
 `containerapp` extension이 이미 설치된 Cloud Shell에서도 워크숍 기준 버전
 `0.3.55`로 실제 교체됩니다.
 
@@ -103,44 +103,49 @@ Private Endpoint 생성에 필요합니다. `--upgrade`를 함께 지정해야 �
 ```bash
 # ACA 명령 형식을 workshop 기준에 맞추기 위해 containerapp extension 버전을 고정합니다.
 az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
-# VNet, ACA, ACR, Storage, Log Analytics와 diagnostic setting 생성에 필요한 provider를 등록합니다.
+# VNet, ACA, ACR, Storage, Key Vault, Log Analytics와 diagnostic setting 생성에 필요한 provider를 등록합니다.
 az provider register -n Microsoft.Network --wait
 az provider register -n Microsoft.App --wait
 az provider register -n Microsoft.ContainerService --wait
 az provider register -n Microsoft.ContainerRegistry --wait
 az provider register -n Microsoft.Storage --wait
+az provider register -n Microsoft.KeyVault --wait
 az provider register -n Microsoft.OperationalInsights --wait
 az provider register -n Microsoft.Insights --wait
 ```
 
 📋 **예상 출력**
 
-- 일곱 provider 등록 명령과 extension 갱신이 오류 없이 종료됩니다.
+- 여덟 provider 등록 명령과 extension 갱신이 오류 없이 종료됩니다.
 - `--wait`를 사용했으므로 provider 상태가 `Registered`가 될 때까지 반환하지 않습니다.
-- Storage Account 또는 Private Endpoint 생성에서 MissingSubscriptionRegistration이 발생하면 Microsoft.Storage 등록 상태를 확인합니다.
+- Storage Account, Private Endpoint 또는 Key Vault 생성에서 `MissingSubscriptionRegistration`이 발생하면 `Microsoft.Storage`와 `Microsoft.KeyVault` 등록 상태를 확인합니다.
 
-## 3. GitHub에서 실습용 `Private repository` 만들기
+## 3. GitHub에서 조직 소유 실습용 `Private repository` 만들기
 
 👁️ **설명**
 
 이 실습은 queued workflow Job을 self-hosted runner가 처리하므로 반드시 `Private repository`에서만 진행합니다. Public repository는 신뢰하지 않는 코드 실행 위험이 있으므로 사용하지 않습니다.
 
+이 모듈의 전제는 **조직이 소유한 `aca-runner-lab` private repository와 해당 조직이 소유한 GitHub App**입니다. 개인 계정 저장소가 아니라 GitHub organization 아래에 lab 저장소를 만들고, 같은 organization에서 App을 생성·설치·삭제할 수 있는 계정을 사용해야 합니다.
+
 `aca-runner-lab`은 미리 존재하는 저장소가 아니라 이 단계에서 참가자가 새로 만드는 **실습용 repository**입니다. 워크숍 문서와 runner 소스가 들어 있는 workshop repository와는 별개의 저장소이며, 이후 workflow 실행, KEDA queue 감시, self-hosted runner 등록 대상은 모두 `aca-runner-lab`입니다.
 
 🟢 **실행**
 
-GitHub 웹 UI에서 새 저장소를 만들고 아래 값을 사용합니다.
+GitHub 웹 UI에서 organization 아래에 새 저장소를 만들고 아래 값을 사용합니다.
 
 | 설정 | 값 |
 |------|----|
+| Owner | GitHub organization (`Organization owner` 권한 필요) |
 | Repository name | `aca-runner-lab` |
 | Visibility | **Private** |
 | Initialize this repository with | `README` 파일 생성 |
 
 ⚠️ **주의**
 
-- 실습 저장소는 개인 계정 또는 조직 어느 쪽에 만들어도 되지만, 이후 단계에서 `GITHUB_OWNER`를 직접 입력하므로 특정 owner 이름을 문서에 하드코딩하지 않습니다.
+- 이 단계는 organization에 App을 설치할 수 있는 계정이 필요합니다. 저장소 생성자에게 최소한 `Organization owner` 또는 동등한 App 관리 권한이 있어야 합니다.
 - 실습 중 runner를 연결할 저장소는 이 `Private repository` 하나만 선택하세요.
+- 이후 단계에서 `GITHUB_OWNER`에는 organization 이름을 입력합니다.
 
 ## 4. 워크숍 소스 저장소 clone
 
@@ -162,8 +167,8 @@ cd ~/aca-github-runner-workshop
 ls
 ```
 
-Public workshop source clone과 lab Fine-grained PAT는 서로 다른 흐름입니다.
-5단계의 PAT는 Public source clone에 사용하지 않고, `aca-runner-lab` queue
+Public workshop source clone과 organization GitHub App 준비는 서로 다른 흐름입니다.
+5단계에서 생성하는 App은 Public source clone에 사용하지 않고, `aca-runner-lab` queue
 감시와 runner 등록에만 사용합니다.
 
 📋 **예상 출력**
@@ -176,171 +181,135 @@ Public workshop source clone과 lab Fine-grained PAT는 서로 다른 흐름입�
 - `samples`
 - `tests`
 
-## 5. Fine-grained PAT 만들기
+## 5. 조직 GitHub App 만들기
 
 👁️ **설명**
 
-Fine-grained personal access token (PAT)을 사용해 GitHub App 설치 없이
-repository-scoped 인증을 구성합니다.
+이 워크숍은 개인 사용자 토큰 대신 organization GitHub App 설치를 사용합니다.
+다음 모듈에서는 Cloud Shell의 비밀이 아닌 식별자와 로컬 워크스테이션에만 남겨 둔
+private key PEM 파일을 조합해 installation access token을 발급합니다.
 
-> **운영 환경 권장**
->
-> 이 워크숍은 설정 단계를 줄이고 GitHub App 설치가 제한된 계정도 실습할 수
-> 있도록 Fine-grained PAT를 사용합니다. 실제 운영 환경에서는 사용자 계정에
-> 종속된 PAT보다 설치 범위와 권한을 명확히 제한할 수 있고 단기 installation
-> token을 사용하는 **GitHub App 방식이 권장됩니다**.
+🟢 **실행**
 
-GitHub에서 **Settings → Developer settings → Personal access tokens →
-Fine-grained tokens → Generate new token**으로 이동합니다.
+GitHub 웹 UI에서 **Settings → Developer settings → GitHub Apps → New GitHub App**으로 이동하고 아래 값을 사용합니다.
 
-| 항목 | 값 |
-|---|---|
-| Token name | `aca-runner-lab` |
-| Resource owner | `aca-runner-lab`을 소유한 user 또는 organization |
-| Expiration | **30 days** |
-| Repository access | **Only select repositories** |
-| Selected repository | `aca-runner-lab` |
+| 설정 | 값 |
+|------|----|
+| App owner | `aca-runner-lab` 저장소를 소유한 동일한 organization |
+| GitHub App name | `aca-runner-lab-<unique-suffix>` |
+| Homepage URL | `https://github.com/<organization>/aca-runner-lab` |
+| Callback URL | 비워 둠 |
+| Webhook | 비활성화 |
+| User authorization callback URL | 비워 둠 |
+| Request user authorization (OAuth) | 비활성화 |
+
+다음으로 **Repository permissions**를 정확히 아래 표와 같이 설정합니다.
 
 | Permission | Access |
 |---|---|
+| Metadata | Read-only |
 | Actions | Read-only |
 | Administration | Read and write |
-| Metadata | Read-only |
 
-아래 GitHub 설정 화면처럼 **Only select repositories**에서 실습용
-`aca-runner-lab` 저장소만 선택하고, 표에 명시된 최소 권한을 설정합니다.
-화면의 Resource owner와 계정 이름은 예시이므로 자신의 GitHub 사용자 또는
-organization을 선택하세요.
+그다음 App을 설치할 때 아래 값을 사용합니다.
 
-![GitHub Fine-grained PAT 저장소와 권한 설정 예시](images/01-github-fine-grained-pat-settings.png)
+| 설정 | 값 |
+|---|---|
+| Install target | `aca-runner-lab` 저장소를 소유한 organization |
+| Repository access | **Only select repositories** |
+| Selected repository | `aca-runner-lab` |
 
-- Enterprise Managed User는 개인 계정 GitHub App 설치가 금지될 수 있으므로
-  이 워크숍은 App 설치를 요구하지 않습니다.
-- organization 정책이 Fine-grained PAT 승인을 요구하면 승인 완료 후 다음
-  단계로 진행합니다.
-- enterprise 정책이 PAT 생성을 금지하면 관리자의 정책 변경 또는 승인 없이
-  이 인증 경로를 진행할 수 없습니다.
+설치가 끝나면 아래 값을 기록합니다.
 
-## 6. Cloud Shell 변수로 PAT 안전하게 로드
+1. **App settings** 페이지에서 `App ID`를 기록합니다.
+2. 설치 상세 페이지 URL의 `/settings/installations/<installation-id>` 숫자 구간에서 `Installation ID`를 기록합니다.
+3. **Generate a private key**를 한 번만 실행해 PEM 파일을 다운로드합니다.
+4. 다운로드된 PEM 파일의 로컬 경로를 기록하되, 다음 모듈 전까지 Cloud Shell로 복사하지 않습니다.
+
+⚠️ **주의**
+
+- Homepage URL은 반드시 private lab repository URL인 `https://github.com/<organization>/aca-runner-lab`이어야 합니다.
+- `Only select repositories`를 유지하고 반드시 `aca-runner-lab` 하나만 선택합니다.
+- private key PEM 파일은 로컬 워크스테이션에만 보관하고 Cloud Shell에 업로드하거나 Git에 commit하지 않습니다.
+- PEM 파일은 다음 모듈에서 `로컬 Azure CLI` 세션이 JWT 서명에 사용할 비밀입니다.
+- PEM 파일의 로컬 경로는 참가자 메모로만 유지하고 Cloud Shell 환경 변수로 추가하지 않습니다.
+
+## 6. Cloud Shell 변수로 GitHub App 식별자만 로드
 
 👁️ **설명**
 
-다음 모듈에서는 owner, repository, PAT를 그대로 재사용합니다. PAT 입력
-프롬프트는 화면에 값을 에코하지 않고, 셸 히스토리에는 사용자가 실행한
-명령문 자체만 남습니다. 토큰은 명령행 텍스트, 로그, 스크린샷, 파일에
-붙여넣지 마세요.
+다음 모듈에서는 owner, repository, App ID, Installation ID를 Cloud Shell에서 그대로 재사용합니다.
+이 단계에서는 비밀이 아닌 식별자만 입력합니다. PEM 파일 경로와 파일 내용은 Cloud Shell에 복사하지 않습니다.
 
 🟢 **실행**
 
 ```bash
-# GitHub API 대상 owner와 private lab repository 이름을 shell-local 변수로 입력받습니다.
-read -rp "GitHub owner: " GITHUB_OWNER
+# 다음 모듈에서 사용할 GitHub App의 비밀이 아닌 식별자를 입력합니다.
+read -rp "GitHub organization: " GITHUB_OWNER
 read -rp "Private repository name: " GITHUB_REPO
-
-# PAT를 다시 출력하지 않고 비어 있지 않은 값이 들어올 때까지 안전하게 입력받습니다.
-GITHUB_PAT=
-until [[ -n "$GITHUB_PAT" ]]; do
-  read -rsp "Fine-grained PAT: " GITHUB_PAT
-  printf '\n'
-  [[ -n "$GITHUB_PAT" ]] ||
-    printf 'ERROR: Fine-grained PAT cannot be empty. Try again.\n' >&2
-done
-
-# secret 값 대신 설정 여부만 표시해 GitHub 입력 세 가지가 준비됐는지 확인합니다.
-printf 'GITHUB_OWNER=%s\nGITHUB_REPO=%s\nGITHUB_PAT=%s\n' \
-  "$GITHUB_OWNER" \
-  "$GITHUB_REPO" \
-  "${GITHUB_PAT:+SET}"
+read -rp "GitHub App ID: " GITHUB_APP_ID
+read -rp "GitHub App Installation ID: " GITHUB_APP_INSTALLATION_ID
+printf 'GITHUB_OWNER=%s\nGITHUB_REPO=%s\nGITHUB_APP_ID=%s\nGITHUB_APP_INSTALLATION_ID=%s\n' \
+  "$GITHUB_OWNER" "$GITHUB_REPO" "$GITHUB_APP_ID" "$GITHUB_APP_INSTALLATION_ID"
 ```
 
 📋 **예상 출력**
 
 ```text
-GitHub owner: freeman9844
+GitHub organization: contoso
 Private repository name: aca-runner-lab
-Fine-grained PAT:
-GITHUB_OWNER=freeman9844
+GitHub App ID: 1234567
+GitHub App Installation ID: 98765432
+GITHUB_OWNER=contoso
 GITHUB_REPO=aca-runner-lab
-GITHUB_PAT=SET
+GITHUB_APP_ID=1234567
+GITHUB_APP_INSTALLATION_ID=98765432
 ```
 
-- PAT 원문은 출력하지 않고 `GITHUB_PAT=SET`만 보여야 합니다.
-- 이후 같은 Cloud Shell 세션에서 세 변수를 그대로 재사용할 수 있습니다.
+- `GITHUB_OWNER`는 개인 계정이 아니라 organization 이름이어야 합니다.
+- 이 단계에서는 PEM 원문이나 경로를 출력하지 않습니다.
+- 이후 같은 Cloud Shell 세션에서 네 변수를 그대로 재사용할 수 있습니다.
 
-## 7. 저장소·Actions·runner administration 권한 검증
+## 7. 다음 모듈 입력값 점검
 
 👁️ **설명**
 
-저장소 메타데이터 읽기, GitHub Actions 읽기, self-hosted runner 등록 토큰
-생성 권한을 순서대로 확인합니다. 검증 과정에서 발급되는 짧은 수명의 runner
-registration token은 화면에 출력하지 않고 바로 폐기하며, `GITHUB_PAT`는
-module 04에서 재사용할 수 있도록 현재 Cloud Shell 세션에 그대로 유지합니다.
+다음 모듈은 Cloud Shell에 저장한 네 개의 식별자와 로컬 워크스테이션에만 남겨 둔 PEM 파일을 함께 사용합니다.
+Cloud Shell에서는 식별자만 유지하고, PEM 파일 검증과 JWT 서명은 로컬 Azure CLI 또는 로컬 워크스테이션 셸에서 수행합니다.
 
 🟢 **실행**
 
-```bash
-# PAT를 command line 인수에 직접 노출하지 않도록 임시 Authorization header를 만듭니다.
-printf -v PAT_AUTH_HEADER '%s: %s %s' \
-  'Authorization' 'Bearer' "$GITHUB_PAT"
+아래 항목을 모두 확인합니다.
 
-# 선택한 repository에 접근할 수 있는지 metadata API로 먼저 확인합니다.
-curl --fail --silent --show-error \
-  --header 'Accept: application/vnd.github+json' \
-  --header "$PAT_AUTH_HEADER" \
-  --header 'X-GitHub-Api-Version: 2026-03-10' \
-  "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO" |
-  jq --exit-status '.private == true' >/dev/null
-printf 'Repository access: OK\n'
-
-# queued workflow를 읽는 데 필요한 Actions read 권한을 확인합니다.
-curl --fail --silent --show-error \
-  --header 'Accept: application/vnd.github+json' \
-  --header "$PAT_AUTH_HEADER" \
-  --header 'X-GitHub-Api-Version: 2026-03-10' \
-  "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runs?per_page=1" |
-  jq --exit-status '.total_count >= 0' >/dev/null
-printf 'Actions read: OK\n'
-
-# ephemeral runner token을 발급할 administration 권한을 실제 POST 요청으로 확인합니다.
-curl --fail --silent --show-error --request POST \
-  --header 'Accept: application/vnd.github+json' \
-  --header "$PAT_AUTH_HEADER" \
-  --header 'X-GitHub-Api-Version: 2026-03-10' \
-  "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners/registration-token" |
-  jq --exit-status '.token | type == "string" and length > 0' >/dev/null
-printf 'Runner administration: OK\n'
-
-# 검증이 끝나면 PAT가 포함된 임시 header 변수를 즉시 제거합니다.
-unset PAT_AUTH_HEADER
-```
+- `GITHUB_OWNER`가 organization 이름인지 확인합니다.
+- `GITHUB_REPO`가 `aca-runner-lab`인지 확인합니다.
+- `GITHUB_APP_ID`가 App settings 페이지의 값과 일치하는지 확인합니다.
+- `GITHUB_APP_INSTALLATION_ID`가 `/settings/installations/` URL의 숫자와 일치하는지 확인합니다.
+- PEM 파일이 로컬 워크스테이션의 안전한 경로에만 존재하는지 확인합니다.
+- PEM 파일 경로 메모가 로컬 워크스테이션 또는 `로컬 Azure CLI` 세션에서만 접근 가능한지 확인합니다.
+- Cloud Shell 업로드, 메신저 전송, Git commit, 저장소 체크인을 하지 않았는지 확인합니다.
 
 📋 **예상 출력**
 
-```text
-Repository access: OK
-Actions read: OK
-Runner administration: OK
-```
+이 단계는 체크리스트 확인 단계입니다. 별도 명령 출력 대신 다음 상태를 만족하면 됩니다.
 
-- 첫 번째 GET은 private repository 메타데이터 접근을 검증합니다.
-- 두 번째 GET은 GitHub Actions 읽기 권한을 검증합니다.
-- 마지막 POST는 runner registration token 생성 권한만 확인하고, 반환된 token은
-  표시하지 않은 채 버립니다.
-- 검증 뒤 `PAT_AUTH_HEADER`는 `unset`하고 `GITHUB_PAT`만 현재 세션에 남깁니다.
+- Cloud Shell에는 `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`만 남아 있습니다.
+- PEM 파일은 로컬 워크스테이션 또는 `로컬 Azure CLI` 세션에서만 접근할 수 있습니다.
+- GitHub App 설치 범위는 `aca-runner-lab` 한 개 저장소로 제한되어 있습니다.
 
 ## 트러블슈팅
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
 | Public workshop source clone 네트워크 또는 URL 오류 | Cloud Shell의 GitHub 연결이 차단되었거나 clone URL 대신 브라우저 URL을 사용함. | 브라우저에서 `https://github.com/freeman9844/aca-github-runner-workshop-private/tree/master` 접근 여부를 확인합니다. 브라우저의 `/tree/master` URL은 접근 확인용이며 clone URL이 아닙니다. clone에는 `https://github.com/freeman9844/aca-github-runner-workshop-private.git`을 사용합니다. organization 방화벽이나 proxy가 `github.com` HTTPS 연결을 차단한다면 네트워크 정책을 먼저 확인합니다. |
-| 목적지 `~/aca-github-runner-workshop`이 이미 존재하거나 예상과 다른 clone destination | 고정 목적지에 기존 디렉터리가 있거나 workshop source를 다른 경로에 clone함. | 기존 디렉터리는 삭제하지 마세요. 올바른 workshop clone이면 `cd ~/aca-github-runner-workshop`으로 계속합니다. 다른 내용이면 별도 이름이나 위치로 옮겨 보존한 뒤, 4단계의 `.git` clone URL과 정확한 목적지 `~/aca-github-runner-workshop`을 사용해 다시 clone합니다. |
-| `401 Unauthorized` | copied token is wrong, expired, or revoked. | GitHub에서 토큰 값을 다시 복사하거나 새 Fine-grained PAT를 발급한 뒤 6단계 입력 블록을 다시 실행합니다. |
-| `403 Forbidden` | organization approval is pending or enterprise policy blocks Fine-grained PAT use. | organization approval 상태를 확인하고, enterprise 정책 제한이 있으면 관리자 승인 또는 정책 변경 후 다시 시도합니다. |
-| Repository check failure | wrong resource owner or selected repository. | Token의 Resource owner와 Selected repository가 `aca-runner-lab`인지 다시 확인하고, `GITHUB_OWNER`와 `GITHUB_REPO` 입력값도 함께 점검합니다. |
-| Actions check failure | Actions permission is not read-only or higher. | Fine-grained PAT permission에서 Actions를 `Read-only` 이상으로 수정한 뒤 다시 검증합니다. |
-| Runner administration failure | Administration is not read and write. | Fine-grained PAT permission에서 Administration을 `Read and write`로 수정한 뒤 다시 검증합니다. |
-| Empty variable after reconnect | rerun the non-echoing input block. | Cloud Shell 세션이 바뀌면 export가 유지되지 않으므로 6단계의 non-echoing 입력 블록을 다시 실행합니다. |
-| Storage Account 또는 Private Endpoint 생성에서 MissingSubscriptionRegistration이 발생함 | `Microsoft.Storage` provider가 아직 등록되지 않음 | 2단계의 `az provider register -n Microsoft.Storage --wait`를 다시 실행하고 등록 완료 후 다시 시도합니다. |
+| App 생성 또는 설치 메뉴가 보이지 않음 | 현재 계정에 organization App 생성 권한이 없음 | organization의 `Organization owner` 또는 GitHub App 관리 권한이 있는 계정으로 다시 로그인하거나, 권한을 위임받은 뒤 5단계를 다시 진행합니다. |
+| Installation approval pending | organization 정책상 새 App 설치에 승인이 필요함 | organization 관리자가 App 설치를 승인할 때까지 기다린 뒤 설치 상태를 다시 확인합니다. |
+| 잘못된 저장소 범위에 App을 설치함 | `Only select repositories` 대신 전체 organization 또는 다른 저장소를 선택함 | App 설치 페이지로 돌아가 `Only select repositories`를 다시 선택하고 `aca-runner-lab` 하나만 남기도록 재설치하거나 설치 범위를 수정합니다. |
+| runner registration 단계에서 권한 부족 오류가 발생함 | App에 `Administration` 권한이 `Read and write`로 설정되지 않음 | App의 **Repository permissions**에서 `Administration`을 `Read and write`로 수정한 뒤 설치를 새로 고치고 다음 모듈을 다시 진행합니다. |
+| Enterprise Managed User 계정에서 App 설치가 차단됨 | organization 또는 enterprise 정책이 사용자 주도 App 설치를 막음 | 설치 화면에 `Install is prohibited`가 표시되면 organization 관리자에게 App 설치 또는 승인 절차를 요청합니다. |
+| App ID 또는 Installation ID가 일치하지 않음 | 다른 organization, 다른 App, 다른 설치 URL을 참고함 | App settings 페이지의 `App ID`와 설치 상세 URL의 `/settings/installations/<installation-id>` 숫자를 다시 확인하고 6단계 입력 블록을 다시 실행합니다. |
+| PEM 파일을 Cloud Shell에 올렸거나 저장소에 추가하려고 함 | 비밀 저장 위치를 잘못 선택함 | Cloud Shell 업로드와 commit을 즉시 중단하고, 로컬 워크스테이션에만 새 private key를 다시 생성합니다. 이전 파일은 안전하게 폐기하고 Git staging area와 히스토리에 남지 않았는지 확인합니다. |
+| Storage Account, Private Endpoint 또는 Key Vault 생성에서 `MissingSubscriptionRegistration`이 발생함 | `Microsoft.Storage` 또는 `Microsoft.KeyVault` provider가 아직 등록되지 않음 | 2단계의 `az provider register -n Microsoft.Storage --wait`와 `az provider register -n Microsoft.KeyVault --wait`를 다시 실행하고 등록 완료 후 다시 시도합니다. |
 
 ---
 

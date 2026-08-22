@@ -33,6 +33,21 @@ ALL_TEXT="$PREREQ_TEXT
 $FOUNDATION_TEXT"
 
 for text in \
+  'Microsoft.KeyVault' \
+  'Organization owner' \
+  'GitHub Apps' \
+  'aca-runner-lab' \
+  'Only select repositories' \
+  'Metadata' \
+  'Read-only' \
+  'Actions' \
+  'Administration' \
+  'Read and write' \
+  'GITHUB_APP_ID' \
+  'GITHUB_APP_INSTALLATION_ID' \
+  '/settings/installations/' \
+  'Install is prohibited' \
+  '로컬 Azure CLI' \
   'Microsoft.Storage' \
   'PE_SUBNET="snet-private-endpoints"' \
   'PE_SUBNET_ID=$(az network vnet subnet show' \
@@ -66,6 +81,16 @@ for text in \
   assert_contains "$ALL_TEXT" "$text" 'missing foundation marker'
 done
 
+assert_contains \
+  "$PREREQ_TEXT" \
+  '조직이 소유한 `aca-runner-lab` private repository와 해당 조직이 소유한 GitHub App' \
+  'module 01 must require organization-owned repository and app'
+
+assert_contains \
+  "$PREREQ_TEXT" \
+  'private key PEM 파일은 로컬 워크스테이션에만 보관하고 Cloud Shell에 업로드하거나 Git에 commit하지 않습니다.' \
+  'module 01 must forbid PEM upload or commit'
+
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \
   $'az role assignment create \\\n  --assignee-object-id "$UAMI_PID" \\\n  --assignee-principal-type ServicePrincipal \\\n  --role "Storage Blob Data Contributor" \\\n  --scope "$STORAGE_ID" \\\n  --output none' \
@@ -97,6 +122,10 @@ if grep -F '이전 버전의 워크숍에서 만든 기본 네트워크 또는 i
 fi
 
 for obsolete in \
+  'Fine-grained personal access token' \
+  'GITHUB_PAT' \
+  'Personal access tokens' \
+  '01-github-fine-grained-pat-settings.png' \
   '--internal-only ''true' \
   'az storage account network-rule add' \
   'ENV_DEFAULT_''DOMAIN' \
