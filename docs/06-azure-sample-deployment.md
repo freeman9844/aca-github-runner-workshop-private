@@ -41,6 +41,11 @@ STORAGE_CONTAINER="runner-artifacts"
 STORAGE_PE="pe-blob-$SUFFIX"
 STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
 STORAGE_DNS_LINK="link-blob-$SUFFIX"
+KEY_VAULT="kvacarunner$SUFFIX"
+KEY_VAULT_PE="pe-kv-$SUFFIX"
+KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"
+KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"
+GITHUB_APP_KEY_SECRET="github-app-private-key"
 PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 UAMI="id-acarunner-$SUFFIX"
 
@@ -50,6 +55,13 @@ if [[ -n "$SAVED_STORAGE" ]]; then
   STORAGE="$SAVED_STORAGE"
 fi
 unset SAVED_STORAGE
+
+# Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
+if [[ -n "$SAVED_KEY_VAULT" ]]; then
+  KEY_VAULT="$SAVED_KEY_VAULT"
+fi
+unset SAVED_KEY_VAULT
 
 # Azure CLI context를 원래 workshop subscription으로 되돌린 뒤 식별자를 조회합니다.
 az account set --subscription "$SUBSCRIPTION_ID"
@@ -74,10 +86,16 @@ PE_SUBNET_ID=$(az network vnet subnet show \
   --name "$PE_SUBNET" \
   --query id \
   --output tsv)
+KEY_VAULT_ID=$(az keyvault show \
+  --resource-group "$RG" \
+  --name "$KEY_VAULT" \
+  --query id \
+  --output tsv)
+KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
-export SUFFIX LOC RG ENV VNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK PRIVATE_ENDPOINT_CIDR ACR UAMI SUBSCRIPTION_ID STORAGE_ID UAMI_PID UAMI_CLIENT_ID PE_SUBNET_ID
-printf 'RG=%s\nENV=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID=%s\nPRIVATE_ENDPOINT_CIDR=%s\n' \
-  "$RG" "$ENV" "$STORAGE" "$STORAGE_CONTAINER" "$UAMI" "$UAMI_CLIENT_ID" "$PRIVATE_ENDPOINT_CIDR"
+export SUFFIX LOC RG ENV VNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK KEY_VAULT KEY_VAULT_PE KEY_VAULT_DNS_ZONE KEY_VAULT_DNS_LINK GITHUB_APP_KEY_SECRET PRIVATE_ENDPOINT_CIDR ACR UAMI SUBSCRIPTION_ID STORAGE_ID UAMI_PID UAMI_CLIENT_ID PE_SUBNET_ID KEY_VAULT_ID KEY_VAULT_SECRET_URI
+printf 'RG=%s\nENV=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID=%s\nKEY_VAULT=%s\nPRIVATE_ENDPOINT_CIDR=%s\n' \
+  "$RG" "$ENV" "$STORAGE" "$STORAGE_CONTAINER" "$UAMI" "$UAMI_CLIENT_ID" "$KEY_VAULT" "$PRIVATE_ENDPOINT_CIDR"
 ```
 
 📋 **예상 출력**
@@ -188,6 +206,8 @@ sed -n '1,220p' samples/azure-sample-deploy-workflow.yml
 4. workflow name이 **ACA Runner Private Blob Deploy**인지 확인하고 기본 브랜치에 commit합니다.
 5. 이 repository가 `private repository`인지, 그리고 workflow 편집 권한이 `trusted workflow authors`에게만 있는지 다시 확인합니다.
 
+`Validate runner inputs` step은 Azure 변수 확인보다 먼저 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`가 workflow environment로 전달되지 않았는지 검사합니다. 하나라도 보이면 `ERROR: GitHub App bootstrap variable reached the workflow environment.` prefix와 함께 즉시 실패해야 합니다.
+
 <details>
 <summary>aca-runner-private-blob.yml 전체 내용 보기</summary>
 
@@ -209,6 +229,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          for variable_name in \
+            GITHUB_APP_ID \
+            GITHUB_APP_INSTALLATION_ID \
+            GITHUB_APP_PRIVATE_KEY; do
+            if [[ -n "${!variable_name:-}" ]]; then
+              printf 'ERROR: GitHub App bootstrap variable reached the workflow environment: %s\n' \
+                "$variable_name" >&2
+              exit 1
+            fi
+          done
+
           for variable in \
             AZURE_CLIENT_ID \
             AZURE_SUBSCRIPTION_ID \
@@ -396,6 +427,8 @@ SHA-256: <64-hex-sha256>
 👁️ **설명**
 
 runner는 `AZURE_STORAGE_ACCOUNT.blob.core.windows.net`를 조회하지만, 실제 이름 해석은 `privatelink.blob.core.windows.net` Private DNS zone을 통해 private IP로 돌아와야 합니다. workflow는 `getent ahostsv4`로 모든 IPv4를 수집한 뒤 Python `ipaddress`로 `AZURE_PRIVATE_ENDPOINT_CIDR` 포함 여부를 검사합니다. shell prefix 비교를 쓰지 않는 이유는 CIDR이 `/24` 외 다른 크기로 바뀌어도 같은 검증을 유지하기 위해서입니다.
+
+같은 step은 Azure 입력값을 보기 전에 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`의 부재도 확인합니다. 이 검증이 증명하는 범위는 normal child-environment non-inheritance입니다. 즉 runner bootstrap에서 unset한 GitHub App 값이 일반 workflow step까지 자동 상속되지 않음을 보여 줍니다. 반대로 malicious code with access to the Job's managed identity/runtime boundary까지 격리해 준다고 주장하면 안 됩니다.
 
 업로드 artifact 내용에는 run identity가 들어갑니다.
 

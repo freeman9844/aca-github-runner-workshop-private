@@ -12,6 +12,10 @@ fail() {
 [[ -f "$WORKFLOW" ]] || fail "sample deploy workflow missing"
 
 for text in \
+  'GITHUB_APP_ID' \
+  'GITHUB_APP_INSTALLATION_ID' \
+  'GITHUB_APP_PRIVATE_KEY' \
+  'ERROR: GitHub App bootstrap variable reached the workflow environment:' \
   'AZURE_STORAGE_ACCOUNT' \
   'AZURE_STORAGE_CONTAINER' \
   'AZURE_PRIVATE_ENDPOINT_CIDR' \

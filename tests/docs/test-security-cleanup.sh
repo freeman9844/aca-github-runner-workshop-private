@@ -21,22 +21,72 @@ assert_contains() {
 DOC_TEXT="$(<"$DOC")"
 
 for text in \
-  'Storage public network default deny' \
-  'Blob Private Endpoint' \
-  'Private DNS zone' \
-  'Storage Blob Data Contributor' \
-  'delegated ACA subnet과 Private Endpoint subnet을 분리'; do
+  'GitHub App' \
+  'Key Vault' \
+  'Key Vault Secrets User' \
+  'trusted workflow authors' \
+  'fork pull request' \
+  'token broker' \
+  '새 GitHub App private key' \
+  '새 Key Vault secret version' \
+  '기존 GitHub App private key' \
+  'az containerapp job delete' \
+  'GitHub App installation' \
+  'workshop 전용 GitHub App' \
+  'public network access' \
+  'ResourceGroupNotFound'; do
   assert_contains "$DOC_TEXT" "$text" 'module 07 missing cleanup marker'
 done
 
 for obsolete in \
-  'sample app' \
-  'internal ''Environment' \
-  'same ''Environment' \
-  'internal ''ingress'; do
+  'PAT rotation' \
+  'Fine-grained PAT' \
+  'unset GITHUB_PAT' \
+  'PAT를 revoke'; do
   if grep -F -- "$obsolete" "$DOC" >/dev/null; then
-    fail "module 07 still uses old internal-ACA language: $obsolete"
+    fail "module 07 still uses obsolete PAT guidance: $obsolete"
   fi
 done
+
+python3 - "$DOC" <<'PY'
+from pathlib import Path
+import sys
+
+doc = Path(sys.argv[1]).read_text(encoding="utf-8")
+
+def must_appear_in_order(*phrases: str) -> None:
+    start = 0
+    for phrase in phrases:
+        index = doc.find(phrase, start)
+        if index == -1:
+            raise SystemExit(f"FAIL: module 07 missing ordered phrase: {phrase}")
+        start = index + len(phrase)
+
+must_appear_in_order(
+    "새 GitHub App private key",
+    "Key Vault Secrets Officer",
+    "public network access",
+    "새 Key Vault secret version",
+    "App JWT",
+    "installation token",
+    "exact new version URI",
+    "successful KEDA/runner execution",
+    "remove the IP rule",
+    "기존 GitHub App private key",
+    "unversioned URI",
+    "local PEM file",
+)
+
+must_appear_in_order(
+    "az containerapp job delete",
+    "online/busy/stale runner",
+    "GitHub App installation",
+    "workshop 전용 GitHub App",
+    "Azure resource group",
+    "ResourceGroupNotFound",
+    'az keyvault purge --name "$KEY_VAULT" --location "$LOC"',
+    "local PEM",
+)
+PY
 
 printf 'PASS: security cleanup doc\n'

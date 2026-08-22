@@ -5,10 +5,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 bash -n runner/entrypoint.sh
+bash tests/runner/test-dockerfile.sh
 bash tests/runner/test-entrypoint.sh
 bash tests/test-artifacts.sh
 bash tests/docs/test-overview.sh
 bash tests/docs/test-prerequisites-foundation.sh
+bash tests/docs/test-runner-image.sh
 bash tests/docs/test-build-deploy.sh
 bash tests/docs/test-scale-validation.sh
 bash tests/docs/test-azure-sample-deployment.sh
@@ -57,28 +59,26 @@ if grep -RInE "$placeholder_pattern" README.md docs runner samples tests; then
   exit 1
 fi
 
-github_app_configuration_pattern='GITHUB_APP_ID|GITHUB_APP_INSTALLATION_ID|GITHUB_APP_PRIVATE_KEY|applicationID=|installationID=|appKey=|github-app-private-key|/app/installations/|github_app_jwt|openssl dgst'
-if grep -RInE "$github_app_configuration_pattern" "${core_workshop_paths[@]}"; then
-  echo 'FAIL: GitHub App workshop configuration found' >&2
+# Reject PAT operational patterns in core workshop paths.
+# Prose that explains PAT is not used (e.g. "PAT를 사용하지 않습니다") is permitted.
+pat_operational_pattern='GITHUB_PAT|personalAccessToken=|personal-access-token=|secretref:personal-access-token|Fine-grained personal access token'
+if grep -RInE "$pat_operational_pattern" "${core_workshop_paths[@]}"; then
+  echo 'FAIL: PAT operational pattern found in workshop paths' >&2
   exit 1
 fi
 
 for text in \
-  'GITHUB_PAT' \
-  'github_pat="$GITHUB_PAT"' \
-  'unset GITHUB_PAT'; do
-  grep -F -- "$text" runner/entrypoint.sh >/dev/null || {
-    printf 'FAIL: runner entrypoint missing %s\n' "$text" >&2
-    exit 1
-  }
-done
-
-for text in \
-  'personalAccessToken=personal-access-token' \
-  'personal-access-token=$GITHUB_PAT' \
-  'GITHUB_PAT=secretref:personal-access-token'; do
-  grep -F -- "$text" docs/04-event-job-keda.md >/dev/null || {
-    printf 'FAIL: module 04 missing %s\n' "$text" >&2
+  'GITHUB_APP_ID' \
+  'GITHUB_APP_INSTALLATION_ID' \
+  'GITHUB_APP_PRIVATE_KEY' \
+  '/app/installations/' \
+  'applicationID=' \
+  'installationID=' \
+  'appKey=github-app-private-key' \
+  'github-app-private-key=keyvaultref:' \
+  'privatelink.vaultcore.azure.net'; do
+  grep -RF -- "$text" "${core_workshop_paths[@]}" >/dev/null || {
+    printf 'FAIL: missing GitHub App configuration: %s\n' "$text" >&2
     exit 1
   }
 done

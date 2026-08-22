@@ -51,6 +51,11 @@ STORAGE_CONTAINER="runner-artifacts"
 STORAGE_PE="pe-blob-$SUFFIX"
 STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
 STORAGE_DNS_LINK="link-blob-$SUFFIX"
+KEY_VAULT="kvacarunner$SUFFIX"
+KEY_VAULT_PE="pe-kv-$SUFFIX"
+KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"
+KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"
+GITHUB_APP_KEY_SECRET="github-app-private-key"
 PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
@@ -62,6 +67,13 @@ if [[ -n "$SAVED_STORAGE" ]]; then
   STORAGE="$SAVED_STORAGE"
 fi
 unset SAVED_STORAGE
+
+# Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
+if [[ -n "$SAVED_KEY_VAULT" ]]; then
+  KEY_VAULT="$SAVED_KEY_VAULT"
+fi
+unset SAVED_KEY_VAULT
 
 # workspace, Environment, ACR, Storage, subscription과 Resource Group ID를 Azure에서 다시 조회합니다.
 LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
@@ -80,17 +92,25 @@ UAMI_RID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query 
 UAMI_PID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query principalId   --output tsv)
 UAMI_CLIENT_ID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query clientId   --output tsv)
 
+# Key Vault resource ID와 secret URI를 복원합니다.
+KEY_VAULT_ID=$(az keyvault show \
+  --resource-group "$RG" \
+  --name "$KEY_VAULT" \
+  --query id \
+  --output tsv)
+KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
+
 # 다음 명령과 모듈이 같은 값을 사용하도록 복구한 변수를 현재 shell에 export합니다.
-export SUFFIX LOC RG LOG ENV VNET INFRA_SUBNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK PRIVATE_ENDPOINT_CIDR ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID VNET_ID PE_SUBNET_ID STORAGE_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
+export SUFFIX LOC RG LOG ENV VNET INFRA_SUBNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK KEY_VAULT KEY_VAULT_PE KEY_VAULT_DNS_ZONE KEY_VAULT_DNS_LINK GITHUB_APP_KEY_SECRET PRIVATE_ENDPOINT_CIDR ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID VNET_ID PE_SUBNET_ID STORAGE_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID KEY_VAULT_ID KEY_VAULT_SECRET_URI
 
 # 복구한 suffix, 실제 ACR 이름, Storage 이름과 image tag를 출력해 session 상태를 확인합니다.
-printf 'SUFFIX=%s ACR=%s STORAGE=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$STORAGE" "$IMAGE"
+printf 'SUFFIX=%s ACR=%s STORAGE=%s KEY_VAULT=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$STORAGE" "$KEY_VAULT" "$IMAGE"
 ```
 
 📋 **예상 출력**
 
 ```text
-SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 STORAGE=stacarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
+SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 STORAGE=stacarunnera1b2c3 KEY_VAULT=kvacarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
 ```
 
 `ACR` 값은 위 형식이 기본값일 뿐이며, 모듈 02에서 이름 충돌 복구를 했다면 입력한 실제 `ACR` 값이 그대로 출력되어야 합니다. `STORAGE`도 이름 충돌 복구가 있었다면 저장해 둔 실제 값으로 출력되어야 정상입니다.
@@ -102,8 +122,9 @@ SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 STORAGE=stacarunnera1b2c3 IMAGE=github-acti
 👁️ **설명**
 
 이 모듈의 빌드 입력은 아래의 실제 `runner/Dockerfile`과
-`runner/entrypoint.sh`입니다. 각 파일의 주석을 따라 이미지 구성, PAT 격리,
-일회성 runner 등록과 cleanup 흐름을 확인합니다.
+`runner/entrypoint.sh`입니다. 각 파일의 주석을 따라 root wrapper와 non-root
+workflow 경계, GitHub App JWT → installation token → runner token 교환,
+그리고 종료 후 fresh cleanup credential 흐름을 확인합니다.
 
 <details>
 <summary><code>runner/Dockerfile</code> 실제 파일 내용 보기</summary>
@@ -113,17 +134,21 @@ SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 STORAGE=stacarunnera1b2c3 IMAGE=github-acti
 FROM ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
 
 ARG AZURE_CLI_VERSION=2.89.1-1~noble
+ENV AZURE_EXTENSION_DIR=/opt/azure/cliextensions
 
 USER root
 
 # GitHub API 호출·JSON 처리와 Azure 배포에 필요한 도구 및 고정 버전 Azure CLI를 설치합니다.
-RUN apt-get update \
+RUN printf 'APT::Sandbox::User "root";\n' >/etc/apt/apt.conf.d/99rootless-build \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
       gnupg \
       jq \
       lsb-release \
+      openssl \
+      util-linux \
     && mkdir -p /etc/apt/keyrings \
     && curl --fail --silent --show-error --location \
       https://packages.microsoft.com/keys/microsoft.asc \
@@ -145,21 +170,23 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends azure-cli="$AZURE_CLI_VERSION" \
     && gpasswd --delete runner sudo \
     && gpasswd --delete runner docker \
+    && gpasswd --delete runner users \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99rootless-build
 
 # workflow가 등록·정리 로직을 바꾸지 못하도록 entrypoint를 root 소유의 읽기·실행 전용 파일로 배치합니다.
 COPY --chown=root:root entrypoint.sh /home/runner/entrypoint.sh
 RUN chmod 0555 /home/runner/entrypoint.sh
 
-# sudo와 docker 그룹 권한을 제거한 non-root runner 사용자로 이후 명령과 workflow를 실행합니다.
-USER runner
-
-# Container Apps extension을 고정 버전으로 설치하고 기본 명령 로딩까지 build 시점에 검증합니다.
-RUN az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
+# Container Apps extension을 공유 경로에 고정 버전으로 설치하고 build 시점에 명령 로딩까지 검증합니다.
+RUN mkdir -p "$AZURE_EXTENSION_DIR" \
+    && az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null
 WORKDIR /home/runner
+
+# container 시작 시 root wrapper가 secret을 보호하고 runner workflow만 non-root로 위임합니다.
+USER root
 
 # container 시작 시 entrypoint가 일회성 runner 등록을 마친 후 workflow 수신을 시작합니다.
 ENTRYPOINT ["/home/runner/entrypoint.sh"]
@@ -178,7 +205,9 @@ set -Eeuo pipefail
 
 # GitHub API를 호출하기 전에 필수 입력을 검사하여 누락된 secret이나 repository URL로 요청하지 않게 합니다.
 required_variables=(
-  GITHUB_PAT
+  GITHUB_APP_ID
+  GITHUB_APP_INSTALLATION_ID
+  GITHUB_APP_PRIVATE_KEY
   GH_URL
 )
 
@@ -188,6 +217,11 @@ for variable_name in "${required_variables[@]}"; do
     exit 64
   fi
 done
+
+github_app_id="$GITHUB_APP_ID"
+github_app_installation_id="$GITHUB_APP_INSTALLATION_ID"
+github_app_private_key="$GITHUB_APP_PRIVATE_KEY"
+unset GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID GITHUB_APP_PRIVATE_KEY
 
 # 허용된 GitHub repository URL 형식만 받아 owner와 repository 이름을 안전하게 추출합니다.
 if [[ "$GH_URL" =~ ^https://github\.com/([^/?#]+)/([^/?#]+)$ ]]; then
@@ -202,22 +236,54 @@ REGISTRATION_TOKEN_API_URL="https://api.github.com/repos/$github_owner/$github_r
 RUNNER_LABELS="${RUNNER_LABELS:-aca-runner}"
 RUNNER_NAME_PREFIX="${RUNNER_NAME_PREFIX:-aca-runner}"
 RUNNER_NAME="${RUNNER_NAME_PREFIX}-$(hostname)-${RANDOM}"
-REMOVAL_TOKEN_API_URL="${REGISTRATION_TOKEN_API_URL%/registration-token}/remove-token"
 CLEANED_UP=0
-
-# PAT는 단기 registration/removal token을 준비하는 동안에만 wrapper 내부에 유지합니다.
-github_pat="$GITHUB_PAT"
-unset GITHUB_PAT
 runner_pid=""
-removal_token=""
 
-# PAT를 GitHub API에 전달해 일회성 runner 등록 또는 제거에 사용할 단기 token을 발급받습니다.
-github_api_token() {
+base64url_encode() {
+  openssl base64 -A | tr '+/' '-_' | tr -d '='
+}
+
+create_app_jwt() {
+  local now_epoch
+  local issued_at
+  local expires_at
+  local header_json
+  local payload_json
+  local header_segment
+  local payload_segment
+  local signing_input
+  local signature_segment
+
+  now_epoch="$(date +%s)"
+  issued_at="$((now_epoch - 60))"
+  expires_at="$((now_epoch + 540))"
+  header_json='{"alg":"RS256","typ":"JWT"}'
+  printf -v payload_json \
+    '{"iat":%s,"exp":%s,"iss":%s}' \
+    "$issued_at" "$expires_at" "$github_app_id"
+
+  header_segment="$(printf '%s' "$header_json" | base64url_encode)"
+  payload_segment="$(printf '%s' "$payload_json" | base64url_encode)"
+  signing_input="${header_segment}.${payload_segment}"
+  signature_segment="$(
+    printf '%s' "$signing_input" \
+      | openssl dgst -binary -sha256 \
+        -sign <(printf '%s\n' "$github_app_private_key") \
+      | base64url_encode
+  )"
+
+  printf '%s.%s\n' "$signing_input" "$signature_segment"
+}
+
+github_api_post_token() {
   local url="$1"
+  local bearer_token="$2"
   local response
   local authorization_header
+  local token
+
   printf -v authorization_header '%s: %s %s' \
-    'Authorization' 'Bearer' "$github_pat"
+    'Authorization' 'Bearer' "$bearer_token"
   response="$(
     curl --fail --silent --show-error --request POST \
       --connect-timeout 10 \
@@ -227,59 +293,108 @@ github_api_token() {
       --header 'X-GitHub-Api-Version: 2026-03-10' \
       "$url"
   )" || return $?
-  jq --exit-status --raw-output \
-    '.token | select(type == "string" and length > 0)' <<<"$response"
+
+  if ! token="$(
+    jq --exit-status --raw-output \
+      '.token | select(type == "string" and length > 0)' <<<"$response"
+  )"; then
+    printf 'ERROR: GitHub token response did not include a non-empty token\n' >&2
+    return 1
+  fi
+
+  printf '%s\n' "$token"
 }
 
-# container 종료 시 미리 발급한 removal token으로 ephemeral runner 등록 정보를 정리합니다.
-cleanup() {
+create_installation_token() {
+  local app_jwt
+  app_jwt="$(create_app_jwt)"
+  github_api_post_token \
+    "https://api.github.com/app/installations/$github_app_installation_id/access_tokens" \
+    "$app_jwt"
+}
+
+create_runner_token() {
+  local action="$1"
+  local installation_token="$2"
+  github_api_post_token \
+    "${REGISTRATION_TOKEN_API_URL%/registration-token}/${action}-token" \
+    "$installation_token"
+}
+
+run_as_runner() {
+  runuser --preserve-environment -u runner -- "$@"
+}
+
+# container 종료 시 fresh installation/removal token으로 ephemeral runner 등록 정보를 정리합니다.
+cleanup_runner() {
+  local prior_status=$?
   local cleanup_status=0
+  local installation_token=""
+  local removal_token=""
 
   if [[ "$CLEANED_UP" == "1" ]]; then
-    return 0
+    return "$prior_status"
   fi
   CLEANED_UP=1
 
   if [[ ! -f .runner ]]; then
-    return 0
+    return "$prior_status"
   fi
 
   set +e
-  ./config.sh remove --token "$removal_token"
+  installation_token="$(create_installation_token)"
   cleanup_status=$?
+  if [[ "$cleanup_status" == "0" ]]; then
+    removal_token="$(create_runner_token remove "$installation_token")"
+    cleanup_status=$?
+  fi
+  if [[ "$cleanup_status" == "0" ]]; then
+    (run_as_runner ./config.sh remove --token "$removal_token")
+    cleanup_status=$?
+  fi
   set -e
 
   if [[ "$cleanup_status" != "0" ]]; then
     printf 'ERROR: Runner cleanup failed with status %s\n' "$cleanup_status" >&2
   fi
-  return 0
+
+  if [[ "$prior_status" != "0" ]]; then
+    return "$prior_status"
+  fi
+  return "$cleanup_status"
 }
 
 # 종료 signal을 runner process에 전달하고 Container Apps에 원래 종료 상태를 보존합니다.
 forward_signal() {
   local signal_name="$1"
   local exit_status="$2"
+  local child_pids=""
+
   if [[ -n "$runner_pid" ]]; then
-    kill -s "$signal_name" "$runner_pid" 2>/dev/null || true
+    child_pids="$(ps -o pid= --ppid "$runner_pid" | tr -d ' ' || true)"
+    if [[ -n "$child_pids" ]]; then
+      for child_pid in $child_pids; do
+        kill -s "$signal_name" "$child_pid" 2>/dev/null || true
+      done
+    else
+      kill -s "$signal_name" "$runner_pid" 2>/dev/null || true
+    fi
     wait "$runner_pid" 2>/dev/null || true
     runner_pid=""
   fi
   exit "$exit_status"
 }
 
-trap cleanup EXIT
+trap cleanup_runner EXIT
 trap 'forward_signal INT 130' INT
 trap 'forward_signal TERM 143' TERM
 
-# 기본 label을 제외하고 custom label만 가진 고유 이름의 일회성 runner를 등록합니다.
-printf 'Requesting registration token\n'
-registration_token="$(github_api_token "$REGISTRATION_TOKEN_API_URL")"
-printf 'Requesting removal token\n'
-removal_token="$(github_api_token "$REMOVAL_TOKEN_API_URL")"
-unset github_pat
-unset -f github_api_token
+# GitHub App JWT -> installation token -> registration token 순서로 일회성 runner를 등록합니다.
+registration_installation_token="$(create_installation_token)"
+registration_token="$(create_runner_token registration "$registration_installation_token")"
+unset registration_installation_token
 
-./config.sh \
+(run_as_runner ./config.sh \
   --url "$GH_URL" \
   --token "$registration_token" \
   --name "$RUNNER_NAME" \
@@ -287,14 +402,14 @@ unset -f github_api_token
   --no-default-labels \
   --unattended \
   --ephemeral \
-  --disableupdate
+  --disableupdate)
 
 unset registration_token
 printf 'Runner configured: %s\n' "$RUNNER_NAME"
 
-# workflow job 하나를 실행한 뒤 runner 종료 상태를 Container Apps Job 결과로 반환합니다.
+# workflow job 하나를 runner 사용자로 실행한 뒤 종료 상태를 Container Apps Job 결과로 반환합니다.
 set +e
-./run.sh &
+(run_as_runner ./run.sh) &
 runner_pid=$!
 wait "$runner_pid"
 runner_status=$?
@@ -307,10 +422,17 @@ exit "$runner_status"
 
 </details>
 
-entrypoint는 workflow runner를 시작하기 전에 PAT를 registration token과
-removal token으로 교환한 뒤 PAT와 API helper를 즉시 제거합니다. workflow
-프로세스에는 PAT나 두 token을 환경 변수로 전달하지 않으며, cleanup에는
-미리 발급한 단기 removal token만 사용합니다.
+entrypoint는 root wrapper로 GitHub App private key를 보호하면서 App JWT →
+installation token → registration token 순서로 runner를 등록하고, 실제
+workflow 실행은 `runuser`로 `runner` 사용자에게만 위임합니다. `run.sh`가
+끝난 뒤에는 fresh installation/removal credential을 다시 발급받아 cleanup을
+수행하므로, workflow 프로세스에는 App secret·JWT·runner token이 전달되지
+않습니다.
+
+이 흐름 때문에 runtime dependency에 `openssl`과 `runuser`(`util-linux`)가
+필수이며, trusted workflow만 이 이미지를 사용해야 합니다. root wrapper는
+credential 수명주기와 cleanup만 담당하고, workflow command 자체는 root
+권한을 얻지 못합니다.
 
 ⚠️ **주의**
 

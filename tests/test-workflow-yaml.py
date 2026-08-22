@@ -86,6 +86,10 @@ def main() -> None:
     if "az login --identity" not in signin_script:
         fail("sign-in step must use managed identity login")
 
+    validate_script = get_step(steps, "Validate runner inputs").get("run")
+    if not isinstance(validate_script, str):
+        fail("validation step must contain a run script")
+
     dns_script = get_step(steps, "Verify Blob DNS resolves to the private endpoint subnet").get("run")
     if not isinstance(dns_script, str):
         fail("DNS step must contain a run script")
@@ -175,6 +179,12 @@ printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111
         )
 
         base_env = os.environ.copy()
+        for variable_name in (
+            "GITHUB_APP_ID",
+            "GITHUB_APP_INSTALLATION_ID",
+            "GITHUB_APP_PRIVATE_KEY",
+        ):
+            base_env.pop(variable_name, None)
         base_env.update(
             {
                 "PATH": f"{bin_dir}:{base_env['PATH']}",
@@ -193,6 +203,29 @@ printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111
                 "MOCK_SHA256SUM_VALUE": "1111111111111111111111111111111111111111111111111111111111111111",
             }
         )
+
+        validation_success = run_script(validate_script, env=base_env, cwd=SCRATCH)
+        if validation_success.returncode != 0:
+            fail(
+                "validation step must succeed when Azure inputs are present and App variables are absent\n"
+                f"stdout: {validation_success.stdout}\nstderr: {validation_success.stderr}"
+            )
+
+        leaked_env = base_env | {"GITHUB_APP_PRIVATE_KEY": "leaked"}
+        validation_failure = run_script(validate_script, env=leaked_env, cwd=SCRATCH)
+        if validation_failure.returncode == 0:
+            fail("validation step must fail when a GitHub App bootstrap variable leaks into the workflow")
+        combined_validation_output = validation_failure.stdout + validation_failure.stderr
+        expected_validation_error = (
+            "ERROR: GitHub App bootstrap variable reached the workflow environment: "
+            "GITHUB_APP_PRIVATE_KEY\n"
+        )
+        if combined_validation_output != expected_validation_error:
+            fail(
+                "validation step must emit the exact leaked-variable error\n"
+                f"expected: {expected_validation_error!r}\n"
+                f"actual: {combined_validation_output!r}"
+            )
 
         dns_cases = {
             "private": ("10.20.1.4", 0),

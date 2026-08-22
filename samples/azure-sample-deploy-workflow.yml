@@ -15,6 +15,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          for variable_name in \
+            GITHUB_APP_ID \
+            GITHUB_APP_INSTALLATION_ID \
+            GITHUB_APP_PRIVATE_KEY; do
+            if [[ -n "${!variable_name:-}" ]]; then
+              printf 'ERROR: GitHub App bootstrap variable reached the workflow environment: %s\n' \
+                "$variable_name" >&2
+              exit 1
+            fi
+          done
+
           for variable in \
             AZURE_CLIENT_ID \
             AZURE_SUBSCRIPTION_ID \

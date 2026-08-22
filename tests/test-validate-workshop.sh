@@ -11,6 +11,9 @@ fail() {
 
 [[ -f "$VALIDATOR" ]] || fail "integrated validator is missing"
 
+grep -F 'GITHUB_PAT' "$VALIDATOR" >/dev/null ||
+  fail 'integrated validator must reject GITHUB_PAT operational guidance in core workshop paths'
+
 output="$(bash "$VALIDATOR" 2>&1)" || fail "integrated validator failed:\n$output"
 last_line="$(printf '%s\n' "$output" | tail -n 1)"
 [[ "$last_line" == 'PASS: complete workshop validation' ]] ||

@@ -55,7 +55,7 @@ done
 
 for text in \
   '`github-actions-runner` container를 사용하는 ACA Event Job을 만든다.' \
-  'GitHub repository와 Fine-grained PAT를 KEDA `github-runner` scaler에 연결한다.'; do
+  'GitHub repository, GitHub App 식별자, Key Vault secret reference를 KEDA `github-runner` scaler와 runner env에 연결한다.'; do
   assert_contains "$JOB_OBJECTIVES" "$text" 'missing module 04 objective marker'
 done
 
@@ -80,7 +80,8 @@ done
 
 for obsolete in \
   '저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 Azure 변수들을 복구한다.' \
-  '세션이 재시작되었더라도 GitHub owner/repo/Fine-grained PAT를 안전하게 다시 입력한다.'; do
+  '세션이 재시작되었더라도 GitHub owner/repo/Fine-grained PAT를 안전하게 다시 입력한다.' \
+  'GitHub repository와 Fine-grained PAT를 KEDA `github-runner` scaler에 연결한다.'; do
   if grep -F -- "$obsolete" <<<"$JOB_OBJECTIVES" >/dev/null; then
     fail "module 04 objective section still contains obsolete wording: $obsolete"
   fi
@@ -97,5 +98,28 @@ for obsolete in \
 done
 
 assert_contains "$IMAGE_TEXT" '`bash tests/test-artifacts.sh`는 `PASS: workflow artifacts contract`를 출력합니다.' 'missing module 03 expected output'
+
+for text in \
+  'KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"' \
+  'applicationID=$GITHUB_APP_ID' \
+  'installationID=$GITHUB_APP_INSTALLATION_ID' \
+  'appKey=github-app-private-key' \
+  'github-app-private-key=keyvaultref:$KEY_VAULT_SECRET_URI,identityref:$UAMI_RID' \
+  'GITHUB_APP_ID=$GITHUB_APP_ID' \
+  'GITHUB_APP_INSTALLATION_ID=$GITHUB_APP_INSTALLATION_ID' \
+  'GITHUB_APP_PRIVATE_KEY=secretref:github-app-private-key' \
+  'triggerParameter: appKey' \
+  'secretRef: github-app-private-key'; do
+  assert_contains "$JOB_TEXT" "$text" 'module 04 GitHub App contract missing'
+done
+
+for obsolete in \
+  'personalAccessToken' \
+  'personal-access-token' \
+  'GITHUB_PAT'; do
+  if grep -F -- "$obsolete" "$JOB_DOC" >/dev/null; then
+    fail "module 04 still contains obsolete PAT contract: $obsolete"
+  fi
+done
 
 printf 'PASS: build and deploy docs\n'

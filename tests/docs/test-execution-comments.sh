@@ -53,8 +53,8 @@ for doc in docs:
                 "execution Bash block must start with a Korean purpose comment"
             )
 
-if block_count != 36:
-    failures.append(f"expected 36 execution Bash blocks, found {block_count}")
+if block_count != 40:
+    failures.append(f"expected 40 execution Bash blocks, found {block_count}")
 
 if failures:
     print("\n".join(f"FAIL: {failure}" for failure in failures), file=sys.stderr)

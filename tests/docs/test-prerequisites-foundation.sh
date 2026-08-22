@@ -33,6 +33,21 @@ ALL_TEXT="$PREREQ_TEXT
 $FOUNDATION_TEXT"
 
 for text in \
+  'Microsoft.KeyVault' \
+  'Organization owner' \
+  'GitHub Apps' \
+  'aca-runner-lab' \
+  'Only select repositories' \
+  'Metadata' \
+  'Read-only' \
+  'Actions' \
+  'Administration' \
+  'Read and write' \
+  'GITHUB_APP_ID' \
+  'GITHUB_APP_INSTALLATION_ID' \
+  '/settings/installations/' \
+  'Install is prohibited' \
+  '로컬 Azure CLI' \
   'Microsoft.Storage' \
   'PE_SUBNET="snet-private-endpoints"' \
   'PE_SUBNET_ID=$(az network vnet subnet show' \
@@ -62,9 +77,38 @@ for text in \
   'az network private-endpoint dns-zone-group create' \
   'networkInterfaces[0].id' \
   'Storage Blob Data Contributor' \
-  '--scope "$STORAGE_ID"'; do
+  '--scope "$STORAGE_ID"' \
+  'KEY_VAULT="kvacarunner$SUFFIX"' \
+  'KEY_VAULT_PE="pe-kv-$SUFFIX"' \
+  'KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"' \
+  'KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"' \
+  'GITHUB_APP_KEY_SECRET="github-app-private-key"' \
+  'az keyvault create' \
+  '--enable-rbac-authorization true' \
+  '--retention-days 7' \
+  '--enable-purge-protection false' \
+  '--default-action Deny' \
+  'Key Vault Secrets Officer' \
+  'az keyvault secret set' \
+  '--file "$GITHUB_APP_PRIVATE_KEY_FILE"' \
+  '--group-id vault' \
+  'privatelink.vaultcore.azure.net' \
+  'az keyvault update' \
+  '--public-network-access Disabled' \
+  'Key Vault Secrets User' \
+  '--scope "$KEY_VAULT_ID"'; do
   assert_contains "$ALL_TEXT" "$text" 'missing foundation marker'
 done
+
+assert_contains \
+  "$PREREQ_TEXT" \
+  '조직이 소유한 `aca-runner-lab` private repository와 해당 조직이 소유한 GitHub App' \
+  'module 01 must require organization-owned repository and app'
+
+assert_contains \
+  "$PREREQ_TEXT" \
+  'private key PEM 파일은 로컬 워크스테이션에만 보관하고 Cloud Shell에 업로드하거나 Git에 commit하지 않습니다.' \
+  'module 01 must forbid PEM upload or commit'
 
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \
@@ -73,8 +117,24 @@ assert_contains_multiline \
 
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \
-  $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --all \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
-  'module 02 must verify only ACR_ID and STORAGE_ID scopes'
+  $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --all \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\' || scope==\'$KEY_VAULT_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
+  'module 02 must verify ACR_ID, STORAGE_ID, and KEY_VAULT_ID scopes'
+
+assert_contains_multiline \
+  "$FOUNDATION_TEXT" \
+  $'az network private-dns record-set a show \\\n  --resource-group "$RG" \\\n  --zone-name "$KEY_VAULT_DNS_ZONE" \\\n  --name "$KEY_VAULT" \\\n  --query "aRecords[].ipv4Address" \\\n  --output tsv' \
+  'module 02 must validate the Key Vault private DNS A record before PEM deletion'
+
+for forbidden in \
+  '--value "$GITHUB_APP_PRIVATE_KEY"'; do
+  if grep -F -- "$forbidden" "$FOUNDATION" >/dev/null; then
+    fail "PEM value must not appear in module 02: $forbidden"
+  fi
+done
+
+last_public_network_access="$(grep -oE -- '--public-network-access (Enabled|Disabled)' "$FOUNDATION" | tail -n1 || true)"
+[[ "$last_public_network_access" == '--public-network-access Disabled' ]] || \
+  fail "final --public-network-access occurrence must be Disabled"
 
 assert_contains \
   "$FOUNDATION_TEXT" \
@@ -97,6 +157,10 @@ if grep -F '이전 버전의 워크숍에서 만든 기본 네트워크 또는 i
 fi
 
 for obsolete in \
+  'Fine-grained personal access token' \
+  'GITHUB_PAT' \
+  'Personal access tokens' \
+  '01-github-fine-grained-pat-settings.png' \
   '--internal-only ''true' \
   'az storage account network-rule add' \
   'ENV_DEFAULT_''DOMAIN' \
