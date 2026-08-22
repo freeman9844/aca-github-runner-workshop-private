@@ -20,26 +20,21 @@
 
 👁️ **설명**
 
-같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼다면 Module 01에서 저장한 `SUFFIX`를 그대로 사용하고, Module 02에서 이름 충돌 복구로 변경한 실제 ACR 또는 Storage 이름이 있으면 해당 값을 복원합니다. 원래 subscription ID도 다시 입력해 Blob 검증에 필요한 Azure 식별자를 복구합니다. 여기서 다루는 값은 식별자이며 secret이 아닙니다. 실제 Azure 인증은 이후 GitHub Actions runner 안에서 managed identity로만 수행합니다.
+같은 Cloud Shell 세션을 계속 사용 중이라면 이 절은 건너뛰어도 됩니다. 세션이 끊겼다면 Module 01에서 저장한 `SUFFIX`를 그대로 사용하고, Module 02에서 이름 충돌 복구로 변경한 실제 Storage 이름이 있으면 해당 값을 복원합니다. 원래 subscription ID도 다시 입력해 Blob 검증에 필요한 Azure 식별자를 복구합니다. 여기서 다루는 값은 식별자이며 secret이 아닙니다. 실제 Azure 인증은 이후 GitHub Actions runner 안에서 managed identity로만 수행합니다.
 
 🟢 **실행**
 
 ```bash
-# 저장한 suffix, 실제 ACR 이름, 원래 workshop subscription ID를 다시 입력합니다.
+# 저장한 suffix와 원래 workshop subscription ID를 다시 입력합니다.
 read -rp "Saved SUFFIX: " SUFFIX
-read -rp "Saved ACR name: " ACR
 read -rp "Saved subscription ID: " SUBSCRIPTION_ID
 
 # suffix 기반 이름과 VNet 제한 Blob foundation 값을 다시 구성합니다.
-LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
-ENV="env-acarunner-$SUFFIX"
 VNET="vnet-acarunner-$SUFFIX"
 INFRA_SUBNET="snet-aca-infra"
 STORAGE="stacarunner$SUFFIX"
 STORAGE_CONTAINER="runner-artifacts"
-KEY_VAULT="kvacarunner$SUFFIX"
-GITHUB_APP_KEY_SECRET="github-app-private-key"
 UAMI="id-acarunner-$SUFFIX"
 
 # Module 02에서 Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
@@ -48,13 +43,6 @@ if [[ -n "$SAVED_STORAGE" ]]; then
   STORAGE="$SAVED_STORAGE"
 fi
 unset SAVED_STORAGE
-
-# Module 01에서 Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
-read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
-if [[ -n "$SAVED_KEY_VAULT" ]]; then
-  KEY_VAULT="$SAVED_KEY_VAULT"
-fi
-unset SAVED_KEY_VAULT
 
 # Azure CLI context를 원래 workshop subscription으로 되돌린 뒤 식별자를 조회합니다.
 az account set --subscription "$SUBSCRIPTION_ID"
@@ -79,16 +67,11 @@ SUBNET_ID=$(az network vnet subnet show \
   --name "$INFRA_SUBNET" \
   --query id \
   --output tsv)
-KEY_VAULT_ID=$(az keyvault show \
-  --resource-group "$RG" \
-  --name "$KEY_VAULT" \
-  --query id \
-  --output tsv)
-KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
-export SUFFIX LOC RG ENV VNET INFRA_SUBNET STORAGE STORAGE_CONTAINER KEY_VAULT GITHUB_APP_KEY_SECRET ACR UAMI SUBSCRIPTION_ID STORAGE_ID UAMI_PID UAMI_CLIENT_ID SUBNET_ID KEY_VAULT_ID KEY_VAULT_SECRET_URI
-printf 'RG=%s\nENV=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID=%s\nSUBNET_ID=%s\nKEY_VAULT=%s\n' \
-  "$RG" "$ENV" "$STORAGE" "$STORAGE_CONTAINER" "$UAMI" "$UAMI_CLIENT_ID" "$SUBNET_ID" "$KEY_VAULT"
+export SUFFIX SUBSCRIPTION_ID RG VNET INFRA_SUBNET STORAGE STORAGE_CONTAINER UAMI
+export STORAGE_ID UAMI_PID UAMI_CLIENT_ID SUBNET_ID
+printf 'RG=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID=%s\nSUBNET_ID=%s\n' \
+  "$RG" "$STORAGE" "$STORAGE_CONTAINER" "$UAMI" "$UAMI_CLIENT_ID" "$SUBNET_ID"
 ```
 
 📋 **예상 출력**
@@ -205,174 +188,6 @@ sed -n '1,220p' samples/azure-sample-deploy-workflow.yml
 `Validate runner inputs` step은 Azure 변수 확인보다 먼저 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`가 workflow environment로 전달되지 않았는지 검사합니다. 하나라도 보이면 `ERROR: GitHub App bootstrap variable reached the workflow environment:` prefix와 함께 즉시 실패해야 합니다.
 
 GitHub Actions의 job-level `env`에서는 `${{ runner.temp }}`를 사용할 수 없으므로 Azure CLI 설정 경로는 `Sign in to Azure with managed identity` step 안에서 `RUNNER_TEMP` shell 변수로 구성합니다. 이 값을 `$GITHUB_ENV`에 기록해 뒤의 Blob step도 같은 managed identity login 상태를 사용합니다.
-
-<details>
-<summary>aca-runner-vnet-blob.yml 전체 내용 보기</summary>
-
-```yaml
-# GitHub Actions 화면에 표시할 workflow 이름입니다.
-name: ACA Runner VNet-Restricted Blob Deploy
-
-# 수동 실행으로 VNet 제한 Blob 배포 검증을 시작합니다.
-on:
-  workflow_dispatch:
-
-# repository 내용은 읽기만 허용합니다.
-permissions:
-  contents: read
-
-jobs:
-  deploy-vnet-restricted-blob:
-    # Module 04에서 등록한 ephemeral runner label을 사용합니다.
-    runs-on: [aca-runner]
-    timeout-minutes: 10
-    steps:
-      - name: Validate runner inputs
-        shell: bash
-        run: |
-          # 필수 값 누락과 예상하지 않은 secret 노출이 있으면 즉시 실패합니다.
-          set -euo pipefail
-          # GitHub App bootstrap 값이 workflow 환경으로 노출되지 않았는지 확인합니다.
-          for variable_name in \
-            GITHUB_APP_ID \
-            GITHUB_APP_INSTALLATION_ID \
-            GITHUB_APP_PRIVATE_KEY; do
-            if [[ -n "${!variable_name:-}" ]]; then
-              printf 'ERROR: GitHub App bootstrap variable reached the workflow environment: %s\n' \
-                "$variable_name" >&2
-              exit 1
-            fi
-          done
-
-          # ACA Event Job이 managed identity와 Blob 대상 식별자를 전달했는지 확인합니다.
-          for variable in \
-            AZURE_CLIENT_ID \
-            AZURE_SUBSCRIPTION_ID \
-            AZURE_RESOURCE_GROUP \
-            AZURE_STORAGE_ACCOUNT \
-            AZURE_STORAGE_CONTAINER; do
-            if [[ -z "${!variable:-}" ]]; then
-              printf 'ERROR: %s is required.\n' "$variable" >&2
-              exit 1
-            fi
-          done
-
-      - name: Sign in to Azure with managed identity
-        shell: bash
-        run: |
-          # Azure CLI 설정 디렉터리와 identity login이 실패하면 후속 명령을 실행하지 않습니다.
-          set -euo pipefail
-          # non-root runner가 Azure CLI 설정을 기록할 임시 경로를 shell에서 구성합니다.
-          export AZURE_CONFIG_DIR="${RUNNER_TEMP:?RUNNER_TEMP is required}/.azure"
-          # non-root runner가 Azure CLI token과 설정을 기록할 디렉터리를 만듭니다.
-          mkdir -p "$AZURE_CONFIG_DIR"
-          # 이후 step도 같은 Azure CLI login 상태를 사용하도록 환경 변수를 전달합니다.
-          printf 'AZURE_CONFIG_DIR=%s\n' "$AZURE_CONFIG_DIR" >> "$GITHUB_ENV"
-          # User-Assigned Managed Identity로 Azure에 로그인합니다.
-          az login --identity \
-            --client-id "$AZURE_CLIENT_ID" \
-            --allow-no-subscriptions \
-            --output none
-          # Event Job이 전달한 workshop subscription을 현재 context로 선택합니다.
-          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
-          # secret 없이 managed identity로 로그인된 subscription과 principal 유형을 확인합니다.
-          az account show \
-            --query "{subscription:name,subscriptionId:id,user:user.name,type:user.type}" \
-            --output table
-
-      - name: Upload and download the VNet-restricted Blob artifact
-        shell: bash
-        run: |
-          # VNet으로 제한된 Blob에 artifact를 업로드한 뒤 다시 내려받아 검증합니다.
-          # Blob 업로드·다운로드 또는 checksum 검증이 실패하면 즉시 중단합니다.
-          set -euo pipefail
-          # runner 임시 디렉터리 아래에 원본 파일과 다운로드 파일 경로를 준비합니다.
-          ARTIFACT_ROOT="${RUNNER_TEMP:-${GITHUB_WORKSPACE:-$PWD}/.runner-temp}"
-          ARTIFACT_DIR="$ARTIFACT_ROOT/vnet-restricted-blob-deploy"
-          SOURCE_FILE="$ARTIFACT_DIR/source.txt"
-          DOWNLOADED_FILE="$ARTIFACT_DIR/downloaded.txt"
-          # 실행을 추적할 repository, commit, run 식별자를 안전한 기본값과 함께 수집합니다.
-          REPOSITORY_VALUE="${GITHUB_REPOSITORY:-unknown/repository}"
-          COMMIT_VALUE="${GITHUB_SHA:-unknown-commit}"
-          RUN_ID_VALUE="${GITHUB_RUN_ID:-0}"
-          RUN_ATTEMPT_VALUE="${GITHUB_RUN_ATTEMPT:-0}"
-          ACTOR_VALUE="${GITHUB_ACTOR:-unknown-actor}"
-          BLOB_NAME="github-actions/${RUN_ID_VALUE}-${RUN_ATTEMPT_VALUE}.txt"
-          mkdir -p "$ARTIFACT_DIR"
-
-          # 업로드할 artifact에 현재 GitHub Actions 실행 정보를 기록합니다.
-          cat > "$SOURCE_FILE" <<EOF2
-          repository=$REPOSITORY_VALUE
-          commit=$COMMIT_VALUE
-          run_id=$RUN_ID_VALUE
-          run_attempt=$RUN_ATTEMPT_VALUE
-          actor=$ACTOR_VALUE
-          EOF2
-
-          # 업로드 전 원본 파일의 SHA-256을 계산합니다.
-          SOURCE_SHA256="$(sha256sum "$SOURCE_FILE" | awk '{print $1}')"
-
-          # managed identity와 service endpoint 경로로 Blob을 업로드합니다.
-          az storage blob upload \
-            --account-name "$AZURE_STORAGE_ACCOUNT" \
-            --container-name "$AZURE_STORAGE_CONTAINER" \
-            --name "$BLOB_NAME" \
-            --file "$SOURCE_FILE" \
-            --metadata sha256="$SOURCE_SHA256" \
-            --auth-mode login \
-            --overwrite true \
-            --output none
-
-          # 같은 Blob을 다시 내려받아 실제 data-plane 읽기 권한도 확인합니다.
-          az storage blob download \
-            --account-name "$AZURE_STORAGE_ACCOUNT" \
-            --container-name "$AZURE_STORAGE_CONTAINER" \
-            --name "$BLOB_NAME" \
-            --file "$DOWNLOADED_FILE" \
-            --auth-mode login \
-            --overwrite true \
-            --output none
-
-          # 원본, 다운로드 파일, Blob metadata의 SHA-256이 모두 같은지 비교합니다.
-          DOWNLOADED_SHA256="$(sha256sum "$DOWNLOADED_FILE" | awk '{print $1}')"
-          BLOB_SHA256="$(az storage blob show \
-            --account-name "$AZURE_STORAGE_ACCOUNT" \
-            --container-name "$AZURE_STORAGE_CONTAINER" \
-            --name "$BLOB_NAME" \
-            --auth-mode login \
-            --query metadata.sha256 \
-            --output tsv)"
-          if [[ "$DOWNLOADED_SHA256" != "$SOURCE_SHA256" || "$BLOB_SHA256" != "$SOURCE_SHA256" ]]; then
-            printf 'ERROR: Downloaded Blob checksum does not match the uploaded artifact.\n' >&2
-            printf 'source=%s downloaded=%s blob=%s\n' \
-              "$SOURCE_SHA256" "$DOWNLOADED_SHA256" "$BLOB_SHA256" >&2
-            exit 1
-          fi
-
-          # 다음 step에서 같은 Blob과 checksum을 조회하도록 GitHub 환경에 전달합니다.
-          printf 'BLOB_NAME=%s\n' "$BLOB_NAME" >> "$GITHUB_ENV"
-          printf 'SOURCE_SHA256=%s\n' "$SOURCE_SHA256" >> "$GITHUB_ENV"
-          printf 'DOWNLOADED_SHA256=%s\n' "$DOWNLOADED_SHA256" >> "$GITHUB_ENV"
-          printf 'BLOB_SHA256=%s\n' "$BLOB_SHA256" >> "$GITHUB_ENV"
-
-      - name: Show VNet-restricted deployment result
-        shell: bash
-        run: |
-          # 최종 Blob 속성과 checksum을 GitHub Actions 로그에 출력합니다.
-          set -euo pipefail
-          az storage blob show \
-            --account-name "$AZURE_STORAGE_ACCOUNT" \
-            --container-name "$AZURE_STORAGE_CONTAINER" \
-            --name "$BLOB_NAME" \
-            --auth-mode login \
-            --query "{name:name,size:properties.contentLength,lastModified:properties.lastModified,sha256:metadata.sha256}" \
-            --output table
-          printf 'Blob endpoint: https://%s.blob.core.windows.net/%s/%s\n' \
-            "$AZURE_STORAGE_ACCOUNT" "$AZURE_STORAGE_CONTAINER" "$BLOB_NAME"
-          printf 'SHA-256: %s\n' "$SOURCE_SHA256"
-```
-
-</details>
 
 📋 **예상 출력**
 

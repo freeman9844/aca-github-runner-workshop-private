@@ -29,8 +29,6 @@ assert_contains() {
   fail "module 06 GitHub Actions workflow result image is not the approved screenshot"
 
 DOC_TEXT="$(<"$DOC")"
-WORKFLOW_TEXT="$(<"$WORKFLOW")"
-
 for heading in \
   '# 06. VNet 제한 Blob 배포와 결과 확인' \
   '## 1. Storage service endpoint, firewall, RBAC 확인' \
@@ -76,20 +74,45 @@ section_three_last_line="$(printf '%s\n' "$section_three" | awk 'NF { line=$0 } 
 [[ "$section_three_last_line" == '![GitHub Actions에서 VNet 제한 Blob workflow가 성공하고 Blob 결과를 출력한 화면](images/06-github-actions-workflow-result.png)' ]] ||
   fail "module 06 GitHub Actions result screenshot must be the final content in step 3"
 
-workflow_block="$(
-  awk '
-    /<summary>.*yml 전체 내용 보기<\/summary>/ { in_summary=1; next }
-    in_summary && /^```yaml$/ { in_yaml=1; next }
-    in_yaml && /^```$/ { exit }
-    in_yaml { print }
-  ' "$DOC"
-)"
-[[ -n "$workflow_block" ]] || fail "module 06 missing workflow disclosure"
-if [[ "$workflow_block" != "$WORKFLOW_TEXT" ]]; then
-  fail "module 06 workflow disclosure must byte-match samples/azure-sample-deploy-workflow.yml"
+assert_contains "$DOC_TEXT" \
+  "sed -n '1,220p' samples/azure-sample-deploy-workflow.yml" \
+  'module 06 must print the authoritative workflow sample'
+
+if grep -F -- '<summary>aca-runner-vnet-blob.yml 전체 내용 보기</summary>' "$DOC" >/dev/null; then
+  fail 'module 06 still duplicates the authoritative workflow sample'
 fi
 
-assert_contains "$DOC_TEXT" 'Module 01에서 저장한 `SUFFIX`를 그대로 사용하고, Module 02에서 이름 충돌 복구로 변경한 실제 ACR 또는 Storage 이름이 있으면 해당 값을 복원합니다.' 'module 06 must preserve Module 02 ownership of collision-recovered ACR or Storage names'
+assert_contains "$DOC_TEXT" 'Module 01에서 저장한 `SUFFIX`를 그대로 사용하고, Module 02에서 이름 충돌 복구로 변경한 실제 Storage 이름이 있으면 해당 값을 복원합니다.' 'module 06 must preserve Module 02 ownership of collision-recovered Storage names'
+
+recovery_section="$(
+  awk '
+    /^## 0\. / { in_section=1 }
+    /^## 1\. / { exit }
+    in_section { print }
+  ' "$DOC"
+)"
+for text in \
+  'read -rp "Saved SUFFIX: " SUFFIX' \
+  'read -rp "Saved subscription ID: " SUBSCRIPTION_ID' \
+  'Saved Storage account name if changed' \
+  'STORAGE_ID=$(az storage account show' \
+  'UAMI_PID=$(az identity show' \
+  'UAMI_CLIENT_ID=$(az identity show' \
+  'SUBNET_ID=$(az network vnet subnet show'; do
+  assert_contains "$recovery_section" "$text" \
+    'module 06 minimal recovery contract missing'
+done
+
+for removed_text in \
+  'Saved ACR name' \
+  'Saved Key Vault name if changed' \
+  'KEY_VAULT_ID=$(az keyvault show' \
+  'KEY_VAULT_SECRET_URI=' \
+  'ENV="env-acarunner-$SUFFIX"'; do
+  if printf '%s\n' "$recovery_section" | grep -F -- "$removed_text" >/dev/null; then
+    fail "module 06 recovery still restores unused state: $removed_text"
+  fi
+done
 
 section_one="$(
   awk '
@@ -130,13 +153,9 @@ for text in \
   'Cloud Shell은 control-plane만 확인합니다.' \
   'Cloud Shell에서 같은 Blob data-plane 명령을 실행하면 403' \
   'defaultAction=Allow' \
-  'export AZURE_CONFIG_DIR="${RUNNER_TEMP:?RUNNER_TEMP is required}/.azure"' \
-  'mkdir -p "$AZURE_CONFIG_DIR"' \
-  'printf '\''AZURE_CONFIG_DIR=%s\n'\'' "$AZURE_CONFIG_DIR" >> "$GITHUB_ENV"' \
   'job-level `env`에서는 `${{ runner.temp }}`를 사용할 수 없으므로' \
-  '# GitHub Actions 화면에 표시할 workflow 이름입니다.' \
-  '# User-Assigned Managed Identity로 Azure에 로그인합니다.' \
-  '# VNet으로 제한된 Blob에 artifact를 업로드한 뒤 다시 내려받아 검증합니다.'; do
+  '`RUNNER_TEMP` shell 변수로 구성합니다.' \
+  '이 값을 `$GITHUB_ENV`에 기록해 뒤의 Blob step도 같은 managed identity login 상태를 사용합니다.'; do
   assert_contains "$DOC_TEXT" "$text" 'module 06 missing VNet-restricted Blob marker'
 done
 
