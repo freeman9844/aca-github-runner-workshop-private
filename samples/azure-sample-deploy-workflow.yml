@@ -14,9 +14,6 @@ jobs:
     # Module 04에서 등록한 ephemeral runner label을 사용합니다.
     runs-on: [aca-runner]
     timeout-minutes: 10
-    # non-root runner가 Azure CLI 설정을 기록할 수 있는 임시 경로를 사용합니다.
-    env:
-      AZURE_CONFIG_DIR: ${{ runner.temp }}/.azure
     steps:
       - name: Validate runner inputs
         shell: bash
@@ -53,8 +50,12 @@ jobs:
         run: |
           # Azure CLI 설정 디렉터리와 identity login이 실패하면 후속 명령을 실행하지 않습니다.
           set -euo pipefail
+          # non-root runner가 Azure CLI 설정을 기록할 임시 경로를 shell에서 구성합니다.
+          export AZURE_CONFIG_DIR="${RUNNER_TEMP:?RUNNER_TEMP is required}/.azure"
           # non-root runner가 Azure CLI token과 설정을 기록할 디렉터리를 만듭니다.
           mkdir -p "$AZURE_CONFIG_DIR"
+          # 이후 step도 같은 Azure CLI login 상태를 사용하도록 환경 변수를 전달합니다.
+          printf 'AZURE_CONFIG_DIR=%s\n' "$AZURE_CONFIG_DIR" >> "$GITHUB_ENV"
           # User-Assigned Managed Identity로 Azure에 로그인합니다.
           az login --identity \
             --client-id "$AZURE_CLIENT_ID" \

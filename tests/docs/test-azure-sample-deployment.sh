@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DOC="$ROOT/docs/06-azure-sample-deployment.md"
 WORKFLOW="$ROOT/samples/azure-sample-deploy-workflow.yml"
+RUN_WORKFLOW_IMAGE="$ROOT/docs/images/06-github-actions-run-workflow.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -19,6 +20,9 @@ assert_contains() {
 
 [[ -f "$DOC" ]] || fail "module 06 missing"
 [[ -f "$WORKFLOW" ]] || fail "sample workflow missing"
+[[ -f "$RUN_WORKFLOW_IMAGE" ]] || fail "module 06 GitHub Actions Run workflow image missing"
+[[ "$(sha256sum "$RUN_WORKFLOW_IMAGE" | cut -d' ' -f1)" == "b1a2c3b8b635872ff8b4a0287e9870ed58b00e808f60b9d555b6c6d3ec26ed1b" ]] ||
+  fail "module 06 GitHub Actions Run workflow image is not the approved screenshot"
 
 DOC_TEXT="$(<"$DOC")"
 WORKFLOW_TEXT="$(<"$WORKFLOW")"
@@ -32,6 +36,22 @@ for heading in \
   '## 5. Cloud Shell과 Azure Portal에서 control-plane 확인'; do
   assert_contains "$DOC_TEXT" "$heading" 'module 06 missing heading'
 done
+
+section_three="$(
+  awk '
+    /^## 3\. / { in_section=1 }
+    /^## 4\. / { exit }
+    in_section { print }
+  ' "$DOC"
+)"
+assert_contains "$section_three" \
+  '![GitHub Actions에서 VNet 제한 Blob workflow의 Run workflow 메뉴를 연 화면](images/06-github-actions-run-workflow.png)' \
+  'module 06 step 3 GitHub Actions screenshot missing'
+run_workflow_image_line="$(printf '%s\n' "$section_three" | grep -nF 'images/06-github-actions-run-workflow.png' | head -n1 | cut -d: -f1)"
+expected_output_line="$(printf '%s\n' "$section_three" | grep -nF '📋 **예상 출력**' | head -n1 | cut -d: -f1)"
+[[ -n "$run_workflow_image_line" && -n "$expected_output_line" &&
+   "$run_workflow_image_line" -lt "$expected_output_line" ]] ||
+  fail "module 06 step 3 screenshot must appear after execution guidance and before expected output"
 
 workflow_block="$(
   awk '
@@ -87,8 +107,10 @@ for text in \
   'Cloud Shell은 control-plane만 확인합니다.' \
   'Cloud Shell에서 같은 Blob data-plane 명령을 실행하면 403' \
   'defaultAction=Allow' \
-  'AZURE_CONFIG_DIR: ${{ runner.temp }}/.azure' \
+  'export AZURE_CONFIG_DIR="${RUNNER_TEMP:?RUNNER_TEMP is required}/.azure"' \
   'mkdir -p "$AZURE_CONFIG_DIR"' \
+  'printf '\''AZURE_CONFIG_DIR=%s\n'\'' "$AZURE_CONFIG_DIR" >> "$GITHUB_ENV"' \
+  'job-level `env`에서는 `${{ runner.temp }}`를 사용할 수 없으므로' \
   '# GitHub Actions 화면에 표시할 workflow 이름입니다.' \
   '# User-Assigned Managed Identity로 Azure에 로그인합니다.' \
   '# VNet으로 제한된 Blob에 artifact를 업로드한 뒤 다시 내려받아 검증합니다.'; do

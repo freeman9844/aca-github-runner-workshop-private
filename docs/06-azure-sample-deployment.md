@@ -212,6 +212,8 @@ sed -n '1,220p' samples/azure-sample-deploy-workflow.yml
 
 `Validate runner inputs` step은 Azure 변수 확인보다 먼저 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`가 workflow environment로 전달되지 않았는지 검사합니다. 하나라도 보이면 `ERROR: GitHub App bootstrap variable reached the workflow environment:` prefix와 함께 즉시 실패해야 합니다.
 
+GitHub Actions의 job-level `env`에서는 `${{ runner.temp }}`를 사용할 수 없으므로 Azure CLI 설정 경로는 `Sign in to Azure with managed identity` step 안에서 `RUNNER_TEMP` shell 변수로 구성합니다. 이 값을 `$GITHUB_ENV`에 기록해 뒤의 Blob step도 같은 managed identity login 상태를 사용합니다.
+
 <details>
 <summary>aca-runner-vnet-blob.yml 전체 내용 보기</summary>
 
@@ -232,9 +234,6 @@ jobs:
     # Module 04에서 등록한 ephemeral runner label을 사용합니다.
     runs-on: [aca-runner]
     timeout-minutes: 10
-    # non-root runner가 Azure CLI 설정을 기록할 수 있는 임시 경로를 사용합니다.
-    env:
-      AZURE_CONFIG_DIR: ${{ runner.temp }}/.azure
     steps:
       - name: Validate runner inputs
         shell: bash
@@ -271,8 +270,12 @@ jobs:
         run: |
           # Azure CLI 설정 디렉터리와 identity login이 실패하면 후속 명령을 실행하지 않습니다.
           set -euo pipefail
+          # non-root runner가 Azure CLI 설정을 기록할 임시 경로를 shell에서 구성합니다.
+          export AZURE_CONFIG_DIR="${RUNNER_TEMP:?RUNNER_TEMP is required}/.azure"
           # non-root runner가 Azure CLI token과 설정을 기록할 디렉터리를 만듭니다.
           mkdir -p "$AZURE_CONFIG_DIR"
+          # 이후 step도 같은 Azure CLI login 상태를 사용하도록 환경 변수를 전달합니다.
+          printf 'AZURE_CONFIG_DIR=%s\n' "$AZURE_CONFIG_DIR" >> "$GITHUB_ENV"
           # User-Assigned Managed Identity로 Azure에 로그인합니다.
           az login --identity \
             --client-id "$AZURE_CLIENT_ID" \
@@ -400,6 +403,10 @@ jobs:
    - `Sign in to Azure with managed identity`
    - `Upload and download the VNet-restricted Blob artifact`
    - `Show VNet-restricted deployment result`
+
+> **참고 화면:** **Run workflow** 메뉴에서 기본 브랜치를 선택하고 실행 버튼을 누르는 위치를 보여주는 GitHub Actions 화면입니다. 화면의 기존 실행 성공·실패 표시는 이전 실행 이력이므로 이번 실행 결과와 별도로 판단합니다.
+
+![GitHub Actions에서 VNet 제한 Blob workflow의 Run workflow 메뉴를 연 화면](images/06-github-actions-run-workflow.png)
 
 📋 **예상 출력**
 
