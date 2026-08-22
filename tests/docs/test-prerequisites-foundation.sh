@@ -32,6 +32,41 @@ FOUNDATION_TEXT="$(<"$FOUNDATION")"
 ALL_TEXT="$PREREQ_TEXT
 $FOUNDATION_TEXT"
 
+architecture_section="$(
+  awk '
+    /^## 아키텍처 참고$/ { in_section=1 }
+    /^## 목표$/ { exit }
+    in_section { print }
+  ' "$FOUNDATION"
+)"
+
+for text in \
+  '```mermaid' \
+  'flowchart TB' \
+  'Resource Group' \
+  'Custom VNet' \
+  'Delegated ACA subnet' \
+  'External ACA Environment' \
+  'Non-delegated Private Endpoint subnet' \
+  'Blob Private Endpoint' \
+  'Key Vault Private Endpoint' \
+  'privatelink.blob.core.windows.net' \
+  'privatelink.vaultcore.azure.net' \
+  'Log Analytics' \
+  'Basic ACR' \
+  'User-Assigned Managed Identity' \
+  'AcrPull' \
+  'Storage Blob Data Contributor' \
+  'Key Vault Secrets User' \
+  'Module 04'; do
+  assert_contains "$architecture_section" "$text" 'module 02 architecture diagram missing marker'
+done
+
+architecture_line="$(grep -nF '## 아키텍처 참고' "$FOUNDATION" | head -n1 | cut -d: -f1)"
+goal_line="$(grep -nF '## 목표' "$FOUNDATION" | head -n1 | cut -d: -f1)"
+[[ -n "$architecture_line" && -n "$goal_line" && "$architecture_line" -lt "$goal_line" ]] ||
+  fail "module 02 architecture diagram must appear before goals"
+
 for text in \
   'Microsoft.KeyVault' \
   'Organization owner' \

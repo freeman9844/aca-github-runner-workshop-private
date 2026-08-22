@@ -2,6 +2,59 @@
 
 > Azure Cloud Shell Bash에서 리소스 그룹, Log Analytics workspace, Virtual Network, External Azure Container Apps Environment, locked-down Blob Storage, Blob Private Endpoint, Private DNS, Azure Monitor diagnostic settings, Azure Container Registry, User-Assigned Managed Identity를 만들고 least-privilege RBAC를 연결합니다.
 
+## 아키텍처 참고
+
+아래 다이어그램은 이 모듈에서 준비하는 Azure foundation과 주요 연결을
+요약합니다. ACA Event Job은 아직 만들지 않으며 Module 04에서 이 foundation에
+연결합니다.
+
+```mermaid
+flowchart TB
+  next["Module 04에서 추가<br/>ACA Event Job<br/>(Module 02에서는 미생성)"]
+
+  subgraph rg["Resource Group: rg-acarunner-{suffix}"]
+    log["Log Analytics<br/>ContainerAppConsoleLogs"]
+    acr["Basic ACR<br/>Admin disabled · ARM authentication"]
+    uami["User-Assigned Managed Identity"]
+    storage["Storage Account<br/>Standard_LRS · Shared Key disabled<br/>Public endpoint firewall: default deny"]
+    kv["Key Vault<br/>RBAC authorization<br/>Public network access: disabled"]
+
+    subgraph vnet["Custom VNet: 10.20.0.0/16"]
+      subgraph acaSubnet["Delegated ACA subnet: 10.20.0.0/27"]
+        env["External ACA Environment<br/>Microsoft.App/environments delegation"]
+      end
+
+      subgraph peSubnet["Non-delegated Private Endpoint subnet: 10.20.1.0/24"]
+        bpe["Blob Private Endpoint"]
+        kvpe["Key Vault Private Endpoint"]
+      end
+    end
+
+    bdns["Private DNS zone<br/>privatelink.blob.core.windows.net"]
+    kvdns["Private DNS zone<br/>privatelink.vaultcore.azure.net"]
+  end
+
+  env -->|"Diagnostic settings"| log
+  bpe ==>|"Private Link: blob"| storage
+  kvpe ==>|"Private Link: vault"| kv
+  bpe -->|"DNS zone group"| bdns
+  kvpe -->|"DNS zone group"| kvdns
+  bdns -->|"VNet link · private IP resolution"| vnet
+  kvdns -->|"VNet link · private IP resolution"| vnet
+  uami -->|"AcrPull"| acr
+  uami -->|"Storage Blob Data Contributor"| storage
+  uami -->|"Key Vault Secrets User"| kv
+  next -.->|"Custom VNet + UAMI + secret reference 사용"| env
+```
+
+- External ACA Environment는 custom VNet에 통합되지만 internal environment는
+  아니며, Module 04에서 추가할 ACA Event Job은 ingress를 제공하지 않습니다.
+- Blob과 Key Vault data-plane은 각각 전용 Private Endpoint와 Private DNS를
+  사용합니다. ACR image pull과 Azure control-plane 호출은 public outbound를
+  사용합니다.
+- UAMI의 세 역할은 각 대상 리소스 범위에만 부여합니다. Resource Group 전체
+  범위의 광범위한 data-plane 역할은 사용하지 않습니다.
+
 ## 목표
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
