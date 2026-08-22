@@ -1,6 +1,6 @@
 # 04. Event Job + KEDA 구성
 
-> Azure Cloud Shell Bash에서 ACR image, Fine-grained PAT, User-Assigned Managed Identity, KEDA `github-runner` scaler를 연결해 repository-scoped Azure Container Apps Event Job을 배포합니다.
+> Azure Cloud Shell Bash에서 ACR image, GitHub App 식별자, Key Vault private key secret, User-Assigned Managed Identity, KEDA `github-runner` scaler를 연결해 repository-scoped Azure Container Apps Event Job을 배포합니다.
 
 ## 목표
 
@@ -8,7 +8,7 @@
 
 - `github-actions-runner` container를 사용하는 ACA Event Job을 만든다.
 - User-Assigned Managed Identity와 Storage 입력 변수를 runner container에 전달한다.
-- GitHub repository와 Fine-grained PAT를 KEDA `github-runner` scaler에 연결한다.
+- GitHub repository, GitHub App 식별자, Key Vault secret reference를 KEDA `github-runner` scaler와 runner env에 연결한다.
 - scaler의 execution/scale/auth/metadata 값을 이해한다.
 - secret 값을 노출하지 않고 Job 설정과 초기 상태를 검증한다.
 - Cloud Shell 세션을 재연결한 경우에만 선택적 복구 절차로 Azure 변수와 GitHub 입력을 다시 구성한다.
@@ -129,29 +129,22 @@ JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 STORAGE=stacarunnera1b2c3 ACR_S
 
 👁️ **설명**
 
-Cloud Shell 세션이 재시작되면 GitHub 변수도 사라집니다. 모듈 01에서 승인받고 아직 만료되지 않은 Fine-grained PAT를 다시 읽어 와야 하며, 이 토큰은 `aca-runner-lab` private repository 하나에만 접근 권한이 있어야 합니다.
+Cloud Shell 세션이 재시작되면 GitHub owner/repository와 GitHub App 식별자도 사라집니다. 하지만 private key PEM 자체는 다시 입력하지 않습니다. 모듈 02/Task 3에서 만든 `KEY_VAULT`, `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_SECRET_URI`, `UAMI_RID`를 그대로 사용하고, 이 모듈에서는 KEDA와 runner bootstrap이 사용할 non-secret 식별자만 복원합니다.
 
 🟢 **실행**
 
 ```bash
-# KEDA가 감시할 GitHub owner와 private repository를 입력받습니다.
-read -rp "GitHub owner: " GITHUB_OWNER
+# KEDA와 runner bootstrap이 사용할 GitHub App 식별자를 복원합니다.
+read -rp "GitHub organization: " GITHUB_OWNER
 read -rp "Private repository name: " GITHUB_REPO
-
-# PAT를 화면에 다시 표시하지 않고 비어 있지 않은 값이 들어올 때까지 읽습니다.
-GITHUB_PAT=
-until [[ -n "$GITHUB_PAT" ]]; do
-  read -rsp "Fine-grained PAT: " GITHUB_PAT
-  printf '\n'
-  [[ -n "$GITHUB_PAT" ]] ||
-    printf 'ERROR: Fine-grained PAT cannot be empty. Try again.\n' >&2
-done
+read -rp "GitHub App ID: " GITHUB_APP_ID
+read -rp "GitHub App Installation ID: " GITHUB_APP_INSTALLATION_ID
 ```
 
 📋 **예상 출력**
 
-- 프롬프트는 owner, repository, Fine-grained PAT를 순서대로 요청합니다.
-- 입력하는 PAT는 모듈 01에서 검증한 approved, unexpired 토큰이어야 하며, lab repository 하나에만 접근할 수 있어야 합니다.
+- 프롬프트는 organization, repository, GitHub App ID, GitHub App Installation ID를 순서대로 요청합니다.
+- private key PEM은 다시 묻지 않습니다. scaler와 runner는 `github-app-private-key=keyvaultref:$KEY_VAULT_SECRET_URI,identityref:$UAMI_RID` reference로 같은 Key Vault secret을 사용합니다.
 
 </details>
 
@@ -203,7 +196,7 @@ Job 설정 오류를 복구할 때는 Resource Group 전체를 다시 만들지 
 
 👁️ **설명**
 
-이 워크숍은 queued workflow가 생겼을 때만 runner를 띄우는 Event Job을 사용합니다. runner container 이름은 문서, 검증, 로그 해석을 통일하기 위해 반드시 `github-actions-runner`로 고정합니다. 아래 `AZURE_*` 값은 Azure 리소스를 식별하는 환경 변수이며 credential이 아닙니다. 실제 인증은 workflow가 실행 중 managed-identity endpoint에서 short-lived Azure token을 받아 처리합니다. 이 단계의 image pull과 scaler polling은 workshop의 public outbound 경로를 그대로 사용하고, Blob artifact 경로에는 `AZURE_STORAGE_ACCOUNT=$STORAGE`, `AZURE_STORAGE_CONTAINER=$STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR=$PRIVATE_ENDPOINT_CIDR`를 전달해 Module 06 workflow 입력값을 고정합니다.
+이 워크숍은 queued workflow가 생겼을 때만 runner를 띄우는 Event Job을 사용합니다. runner container 이름은 문서, 검증, 로그 해석을 통일하기 위해 반드시 `github-actions-runner`로 고정합니다. 아래 `AZURE_*` 값은 Azure 리소스를 식별하는 환경 변수이며 credential이 아닙니다. 실제 인증은 workflow가 실행 중 managed-identity endpoint에서 short-lived Azure token을 받아 처리합니다. 이 단계의 image pull과 scaler polling은 workshop의 public outbound 경로를 그대로 사용하고, Blob artifact 경로에는 `AZURE_STORAGE_ACCOUNT=$STORAGE`, `AZURE_STORAGE_CONTAINER=$STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR=$PRIVATE_ENDPOINT_CIDR`를 전달해 Module 06 workflow 입력값을 고정합니다. GitHub queue polling과 runner registration은 PAT 대신 GitHub App ID, Installation ID, Key Vault secret reference를 공유합니다.
 
 🟢 **실행**
 
@@ -252,15 +245,19 @@ JOB_CREATE_ARGS=(
 
   # queued workflow job 1개당 execution 1개가 필요하다고 계산합니다.
   "targetWorkflowQueueLength=1"
+  "applicationID=$GITHUB_APP_ID"
+  "installationID=$GITHUB_APP_INSTALLATION_ID"
 
-  # scaler는 Job secret에 저장된 Fine-grained PAT로 GitHub queue를 조회합니다.
-  --scale-rule-auth "personalAccessToken=personal-access-token"
-  --secrets "personal-access-token=$GITHUB_PAT"
+  # scaler와 runner bootstrap은 Key Vault의 GitHub App private key secret을 함께 사용합니다.
+  --scale-rule-auth "appKey=github-app-private-key"
+  --secrets \
+  "github-app-private-key=keyvaultref:$KEY_VAULT_SECRET_URI,identityref:$UAMI_RID"
 
-  # entrypoint는 같은 secret으로 short-lived runner token을 발급한 뒤
-  # workflow process를 시작하기 전에 exported GITHUB_PAT를 제거합니다.
+  # entrypoint는 같은 private key로 GitHub App JWT와 runner registration token을 발급합니다.
   --env-vars
-  "GITHUB_PAT=secretref:personal-access-token"
+  "GITHUB_APP_ID=$GITHUB_APP_ID"
+  "GITHUB_APP_INSTALLATION_ID=$GITHUB_APP_INSTALLATION_ID"
+  "GITHUB_APP_PRIVATE_KEY=secretref:github-app-private-key"
   "AZURE_CLIENT_ID=$UAMI_CLIENT_ID"
   "AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID"
   "AZURE_RESOURCE_GROUP=$RG"
@@ -285,9 +282,9 @@ JOB_CREATE_ARGS=(
   --output none
 )
 
-# 검토한 인자 배열로 Event Job을 만들고 성공 후 PAT가 담긴 임시 shell 값을 제거합니다.
+# 검토한 인자 배열로 Event Job을 만들고 GitHub App 설정이 저장됐는지 확인합니다.
 az containerapp job create "${JOB_CREATE_ARGS[@]}"
-unset JOB_CREATE_ARGS GITHUB_PAT
+unset JOB_CREATE_ARGS
 ```
 
 📋 **예상 출력**
@@ -297,7 +294,7 @@ unset JOB_CREATE_ARGS GITHUB_PAT
 
 🟢 **실행**
 
-배포 직후 Job configuration과 초기 execution 상태를 같은 흐름에서 확인합니다. `job show`는 secret 값을 조회하지 않으므로 PAT가 다시 출력되지 않습니다.
+배포 직후 Job configuration과 초기 execution 상태를 같은 흐름에서 확인합니다. `job show`는 Key Vault에서 resolve된 secret 값을 조회하지 않으므로 PEM이 다시 출력되지 않습니다. 대신 scaler auth가 `appKey -> github-app-private-key`로 연결됐는지와 GitHub App metadata가 의도한 값인지 확인합니다.
 
 ```bash
 # 생성된 Job의 trigger, timeout, scale rule과 image가 의도한 값인지 확인합니다.
@@ -334,10 +331,12 @@ pollingInterval: 30
 replicaTimeout: 900
 rules:
 - auth:
-  - secretRef: personal-access-token
-    triggerParameter: personalAccessToken
+  - secretRef: github-app-private-key
+    triggerParameter: appKey
   metadata:
+    applicationID: '12345'
     githubApiURL: https://api.github.com
+    installationID: '67890'
     labels: aca-runner
     noDefaultLabels: 'true'
     owner: freeman9844
@@ -349,7 +348,7 @@ rules:
 triggerType: Event
 ```
 
-`image`의 ACR 이름과 `metadata.owner`, `metadata.repos`는 참가자가 만든 리소스와 GitHub 입력값에 따라 달라집니다. 나머지 값은 위 예시와 일치해야 합니다.
+`image`의 ACR 이름과 `metadata.owner`, `metadata.repos`, `metadata.applicationID`, `metadata.installationID`는 참가자가 만든 리소스와 GitHub 입력값에 따라 달라집니다. `auth.secretRef`는 `github-app-private-key`, `auth.triggerParameter`는 `appKey`여야 하며 나머지 값도 위 예시와 일치해야 합니다.
 
 `az containerapp job execution list`는 workflow를 아직 queue에 넣지 않았다면 실제 테스트처럼 아무 행도 출력되지 않을 수 있습니다. **배포 직후 active execution이 없는 것이 정상**입니다.
 
@@ -373,15 +372,16 @@ GitHub 저장소의 **Settings → Actions → Runners**를 열어봅니다. wor
 
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
-| workflow가 계속 queued이고 execution이 안 생김 | 토큰이 만료되었거나 revoked 되었거나 approval 대기 중이거나, 잘못된 selected repository 기준으로 발급됨 | 모듈 01에서 승인받은 Fine-grained PAT를 다시 확인하고, `aca-runner-lab` repository 하나만 선택된 unexpired 토큰인지 점검한 뒤 필요하면 Job을 다시 만듭니다. |
-| `job show`의 rule은 보이는데 scale이 안 됨 | scaler metadata 오타 또는 잘못된 auth 매핑 | `githubApiURL=https://api.github.com`, `owner`, `runnerScope=repo`, `repos=$GITHUB_REPO`, `labels=aca-runner`, `noDefaultLabels=true`, `targetWorkflowQueueLength=1`, `personalAccessToken`이 정확한지 `az containerapp job show ... --query "properties.configuration.eventTriggerConfig.scale.rules"`로 다시 확인합니다. |
+| workflow가 계속 queued이고 execution이 안 생김 | KEDA queue polling 단계에서 App이 해당 repository에 설치되지 않았거나 scaler metadata/auth 매핑이 틀림 | GitHub App이 선택한 `aca-runner-lab` repository에 실제로 설치되어 있는지 확인하고, `az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.configuration.eventTriggerConfig.scale.rules"`에서 `githubApiURL=https://api.github.com`, `owner`, `runnerScope=repo`, `repos=$GITHUB_REPO`, `labels=aca-runner`, `noDefaultLabels=true`, `targetWorkflowQueueLength=1`, `applicationID`, `installationID`, `appKey -> github-app-private-key`가 모두 정확한지 다시 확인합니다. |
+| GitHub API에서 403이 나오고 execution이 생기지 않음 | App 권한을 바꾼 뒤 installation approval이 아직 갱신되지 않았음 | GitHub App 설정에서 필요한 권한 변경 후 organization 또는 repository owner가 installation approval을 다시 완료했는지 확인합니다. approval 전에는 scaler가 queue를 읽지 못합니다. |
+| `job show`의 rule은 보이는데 scale이 안 됨 | 잘못된 App ID 또는 Installation ID | 모듈 01에서 확인한 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`를 다시 대조하고, App settings 화면과 `/settings/installations/` URL의 숫자가 문서 입력과 일치하는지 확인한 뒤 Job을 다시 만듭니다. |
 | execution은 생겼는데 GitHub job이 runner를 못 잡음 | workflow label과 runner label 불일치 | workflow의 `runs-on`에 `aca-runner`가 들어 있는지, Job env가 `RUNNER_LABELS=aca-runner`인지 동시에 확인합니다. |
 | workflow는 성공했지만 현재 execution이 900초 뒤 `Failed`가 됨 | 다른 Event Job이 동일한 repository와 `aca-runner` label을 감시하며 workflow Job을 먼저 가져감 | 1단계의 `az containerapp job list` query를 다시 실행합니다. 다른 Job이 보이면 해당 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 현재 Job을 다시 만듭니다. |
 | execution이 바로 실패하며 image pull 오류가 남 | UAMI의 `AcrPull` 전파 지연 또는 registry identity 설정 누락 | `az role assignment list --assignee "$UAMI_PID" --scope "$ACR_ID" --query "[].roleDefinitionName" --output tsv`로 `AcrPull`을 확인하고, Job 정의에 `--mi-user-assigned "$UAMI_RID"`와 `--registry-identity "$UAMI_RID"`가 모두 들어갔는지 다시 봅니다. |
-| execution이 곧바로 인증 오류로 끝남 | Job secret과 runner env가 오래된 토큰을 가리키거나 잘못된 토큰이 입력됨 | 모듈 01에서 확인한 PAT를 다시 로드하고 이 워크숍 Job만 삭제 후 다시 만들어 secret과 runner env를 함께 갱신합니다. |
-| GitHub API에서 403 또는 registration token 발급 실패 | 권한 부족 또는 organization approval 누락 | 토큰 권한이 `Actions: Read-only`, `Administration: Read and write`, `Metadata: Read-only`인지 확인하고, organization 승인 절차가 있다면 승인 상태도 다시 확인합니다. |
+| execution이 곧바로 인증 오류로 끝남 | runner registration 단계에서 private key PEM이 손상되었거나 disabled/deleted key를 참조함 | `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지 확인합니다. PEM을 다시 업로드했다면 이 워크숍 Job만 삭제 후 재생성해 Key Vault reference를 새 값으로 다시 resolve합니다. |
+| execution 시작 직후 Key Vault reference 오류가 남거나 secret을 읽지 못함 | UAMI의 Key Vault secret get 권한, private endpoint/DNS, 또는 Key Vault reference authorization 문제 | 모듈 02/Task 3의 Key Vault access assignment가 유지되는지 확인하고, `KEY_VAULT_SECRET_URI`가 실제 secret URI인지, ACA Environment가 `privatelink.vaultcore.azure.net`을 해석할 수 있는지, `identityref:$UAMI_RID`가 현재 Job identity와 일치하는지 다시 점검합니다. |
+| execution은 생기지만 registration token 발급 또는 runner 등록에서 401/404가 남 | GitHub App queue polling은 성공했지만 runner bootstrap이 repository registration 단계에서 실패함 | `az containerapp job execution list --name "$JOB" --resource-group "$RG" --output table`로 execution 생성 여부를 먼저 확인해 KEDA polling 성공 여부를 분리하고, 그 뒤 execution log에서 runner registration API 오류를 확인합니다. 이 경우 `GH_URL`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY` env 연결을 다시 검토합니다. |
 | `unrecognized arguments` 또는 help와 문서가 다름 | Cloud Shell의 containerapp extension 버전이 워크숍 기준과 다름 | 모듈 01의 `az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors`를 다시 실행하고 `az version`으로 버전을 확인한 뒤 명령을 재시도합니다. |
-| 방금 토큰을 rotation했는데도 실패가 계속됨 | ACA secret과 runner env가 이전 토큰을 계속 사용 중 | 새 PAT를 다시 로드한 뒤 Job 하나만 삭제 후 이 모듈을 다시 실행해 ACA secret과 두 consumer를 모두 새 토큰으로 맞춥니다. 리소스 그룹 전체를 다시 만들 필요는 없습니다. |
 | 사용자 지정 NSG/UDR/Firewall 적용 후 execution이 생성되지 않거나 image pull/log 조회가 동시에 실패함 | GitHub API, ACR, Azure identity, ARM, Azure Monitor로 가는 public outbound가 차단됨 | 워크숍 기본값은 outbound를 열어 둔 External ACA Environment입니다. 조직 정책으로 NSG, UDR, Azure Firewall, forced tunneling, ACR Private Endpoint를 추가했다면 GitHub API, ACR, Azure identity, ARM, Azure Monitor 대상이 허용되는지 먼저 검증하고 다시 시도합니다. |
 
 ---
