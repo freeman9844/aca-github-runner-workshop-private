@@ -338,8 +338,8 @@ fi
 ```
 
 - timestamp, 임시 script UUID, PID와 repository 작업 경로는 실행마다 달라집니다.
-- `--tail 100` 구간에 따라 `Requesting registration token`, `Runner configured`,
-  `Runner process exited`가 보이지 않을 수 있습니다. lifecycle marker는 7단계의
+- `--tail 100` 구간에 따라 `Runner configured`, `Runner process exited`가
+  보이지 않을 수 있습니다. lifecycle marker는 7단계의
   Log Analytics 조회로 다시 확인합니다.
 
 ## 7. Log Analytics에서 resource-specific `ContainerAppConsoleLogs`를 KQL로 확인
@@ -516,7 +516,7 @@ queued workflow가 생겼는데 runner가 뜨지 않으면 `applicationID`, `ins
 
 ### Runner registration failure memo
 
-KEDA auth와 Key Vault resolution이 맞는데도 runner가 등록되지 않으면 registration token 단계로 좁혀 봅니다. 이 경우 `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지, execution log에서 `Requesting registration token` 다음에 `Runner configured`가 나오는지 확인합니다.
+KEDA auth와 Key Vault resolution이 맞는데도 runner가 등록되지 않으면 registration token 단계로 좁혀 봅니다. 이 경우 `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지 확인하고, execution log에 GitHub API 오류가 나온 뒤 `Runner configured`가 누락되었는지 확인합니다.
 
 👁️ **설명**
 
@@ -569,7 +569,7 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 | ACA 쪽 execution은 끝났는데 과거 replica 로그가 안 보이거나 일부만 남음 | 로그 보존/수집 지연 또는 조회 대상을 잘못 잡음 | `EXECUTION=$(...)`로 최신 execution 이름을 다시 구한 뒤 `ContainerAppConsoleLogs | where ContainerGroupName startswith '$EXECUTION'` KQL로 조회 범위를 좁힙니다. |
 | GitHub API 또는 scaler 동작이 401/403을 반환함 | JWT clock skew, installation token 실패, 또는 App permission/approval 누락 | `401`이면 private key로 만든 JWT의 시스템 시간이 맞는지 먼저 확인하고, `403`이면 App 권한 변경 후 installation approval이 갱신됐는지 확인합니다. 둘 다 `applicationID`, `installationID`, `GitHub App installation`, `appKey`를 다시 점검해야 합니다. |
 | KEDA scaler가 queue를 감시하지 못함 | ACA secret 또는 auth mapping 이름이 맞지 않음 | ACA secret `github-app-private-key`와 scale-rule auth `appKey` 매핑이 그대로 유지됐는지 `az containerapp job show ... --query "properties.configuration.eventTriggerConfig.scale.rules"`로 다시 확인합니다. |
-| runner registration이 실패함 | private key가 손상되었거나 disabled/deleted key를 참조하거나 registration token 발급이 실패함 | `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지 확인하고, execution log에서 `Requesting registration token`과 `Runner configured` 중 어디까지 도달했는지 확인합니다. |
+| runner registration이 실패함 | private key가 손상되었거나 disabled/deleted key를 참조하거나 registration token 발급이 실패함 | `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지 확인하고, execution log의 GitHub API 오류와 `Runner configured` 출력 여부를 함께 확인합니다. |
 | secret rotation 뒤에도 이전 인증처럼 동작함 | 교체 후 기존 Job 정의가 그대로 남아 있거나 옛 Key Vault secretRef를 계속 참조함 | 새 `github-app-private-key` secret으로 바꾼 뒤 이 워크숍 Job만 다시 생성해 `appKey`가 새 Key Vault secret을 resolve하도록 합니다. |
 | workflow가 오래 걸리다가 timeout으로 실패함 | execution 기동 지연, GitHub queue 적체, 또는 외부 서비스 일시 지연 | GitHub Actions와 ACA execution 시작 시간을 함께 비교합니다. 필요하면 잠시 후 같은 workflow를 다시 실행해 재현성을 확인합니다. |
 | **Settings → Actions → Runners**에 stale offline runner가 남아 보임 | GitHub UI의 기록 반영 지연 또는 cleanup metadata 잔존 | 몇 분 후 새로고침해 사라지는지 확인하고, 계속 남으면 최신 execution 로그에서 `Runner process exited`가 있었는지 먼저 검토합니다. persistent online runner가 남는 경우만 문제로 취급합니다. |

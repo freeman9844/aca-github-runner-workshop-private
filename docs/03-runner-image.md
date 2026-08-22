@@ -134,11 +134,13 @@ workflow 경계, GitHub App JWT → installation token → runner token 교환,
 FROM ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
 
 ARG AZURE_CLI_VERSION=2.89.1-1~noble
+ENV AZURE_EXTENSION_DIR=/opt/azure/cliextensions
 
 USER root
 
 # GitHub API 호출·JSON 처리와 Azure 배포에 필요한 도구 및 고정 버전 Azure CLI를 설치합니다.
-RUN apt-get update \
+RUN printf 'APT::Sandbox::User "root";\n' >/etc/apt/apt.conf.d/99rootless-build \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
@@ -168,18 +170,17 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends azure-cli="$AZURE_CLI_VERSION" \
     && gpasswd --delete runner sudo \
     && gpasswd --delete runner docker \
+    && gpasswd --delete runner users \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99rootless-build
 
 # workflow가 등록·정리 로직을 바꾸지 못하도록 entrypoint를 root 소유의 읽기·실행 전용 파일로 배치합니다.
 COPY --chown=root:root entrypoint.sh /home/runner/entrypoint.sh
 RUN chmod 0555 /home/runner/entrypoint.sh
 
-# sudo와 docker 그룹 권한을 제거한 non-root runner 사용자로 이후 명령과 workflow를 실행합니다.
-USER runner
-
-# Container Apps extension을 고정 버전으로 설치하고 기본 명령 로딩까지 build 시점에 검증합니다.
-RUN az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
+# Container Apps extension을 공유 경로에 고정 버전으로 설치하고 build 시점에 명령 로딩까지 검증합니다.
+RUN mkdir -p "$AZURE_EXTENSION_DIR" \
+    && az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null
 WORKDIR /home/runner
@@ -321,7 +322,7 @@ create_runner_token() {
 }
 
 run_as_runner() {
-  exec runuser --preserve-environment -u runner -- "$@"
+  runuser --preserve-environment -u runner -- "$@"
 }
 
 # container 종료 시 fresh installation/removal token으로 ephemeral runner 등록 정보를 정리합니다.
@@ -367,9 +368,17 @@ cleanup_runner() {
 forward_signal() {
   local signal_name="$1"
   local exit_status="$2"
+  local child_pids=""
 
   if [[ -n "$runner_pid" ]]; then
-    kill -s "$signal_name" "$runner_pid" 2>/dev/null || true
+    child_pids="$(ps -o pid= --ppid "$runner_pid" | tr -d ' ' || true)"
+    if [[ -n "$child_pids" ]]; then
+      for child_pid in $child_pids; do
+        kill -s "$signal_name" "$child_pid" 2>/dev/null || true
+      done
+    else
+      kill -s "$signal_name" "$runner_pid" 2>/dev/null || true
+    fi
     wait "$runner_pid" 2>/dev/null || true
     runner_pid=""
   fi

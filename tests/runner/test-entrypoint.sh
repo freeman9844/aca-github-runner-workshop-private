@@ -222,7 +222,22 @@ elif [[ "${1:-}" == "./config.sh" && "${2:-}" == "remove" ]]; then
   printf 'remove user=%s\n' "$user" >>"$MOCK_CALLS/events.log"
 fi
 
-exec "$@"
+forward_to_child() {
+  local signal_name="$1"
+  local forwarded_status=0
+  kill -s "$signal_name" "$child_pid" 2>/dev/null || true
+  wait "$child_pid" || forwarded_status=$?
+  exit "$forwarded_status"
+}
+
+child_status=0
+"$@" &
+child_pid=$!
+trap 'forward_to_child TERM' TERM
+trap 'forward_to_child INT' INT
+wait "$child_pid" || child_status=$?
+trap - TERM INT
+exit "$child_status"
 EOF2
 
   cat >"$FIXTURE/runner/config.sh" <<'EOF2'
@@ -243,6 +258,7 @@ env | sort >"$MOCK_CALLS/run-env.log"
 printf 'run\n' >>"$MOCK_CALLS/run.log"
 if [[ "${MOCK_RUN_WAIT:-0}" == "1" ]]; then
   trap 'printf "terminated\n" >"$MOCK_CALLS/run-terminated.log"; exit 143' TERM
+  printf '%s\n' "$$" >"$MOCK_CALLS/run-pid"
   touch "$MOCK_CALLS/run-started"
   while :; do
     sleep 1
@@ -485,6 +501,10 @@ status=$?
 set -e
 [[ "$status" == "143" ]] || fail "TERM exit status was not preserved"
 [[ -f "$MOCK_CALLS/run-terminated.log" ]] || fail "TERM was not forwarded to the runner process"
+run_pid="$(<"$MOCK_CALLS/run-pid")"
+if kill -0 "$run_pid" 2>/dev/null; then
+  fail "runner process remained alive after TERM"
+fi
 [[ "$(grep -c '^curl endpoint=installation-token' "$MOCK_CALLS/events.log")" == "2" ]] ||
   fail "cleanup ran more than once after TERM"
 [[ "$(grep -c '^remove user=runner' "$MOCK_CALLS/events.log")" == "1" ]] ||

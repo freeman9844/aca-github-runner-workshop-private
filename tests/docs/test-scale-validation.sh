@@ -72,6 +72,12 @@ for text in \
 done
 
 assert_contains "$DOC_TEXT" '### Key Vault resolution failure memo' 'module 05 key vault resolution memo missing'
+assert_contains "$DOC_TEXT" '`Runner configured`' 'module 05 configured lifecycle marker missing'
+assert_contains "$DOC_TEXT" '`Runner process exited`' 'module 05 exit lifecycle marker missing'
+
+if grep -F -- 'Requesting registration token' "$DOC" >/dev/null; then
+  fail "module 05 references a lifecycle marker that entrypoint does not emit"
+fi
 
 for obsolete in \
   'Fine-grained PAT' \
