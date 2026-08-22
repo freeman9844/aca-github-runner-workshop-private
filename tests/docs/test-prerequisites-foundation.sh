@@ -8,6 +8,8 @@ ORG_REPO_IMAGE="$ROOT/docs/images/01-github-organization-private-repository.png"
 APP_SETTINGS_IMAGE="$ROOT/docs/images/01-github-app-settings-example.png"
 APP_INSTALL_TARGET_IMAGE="$ROOT/docs/images/01-github-app-install-target.png"
 APP_SELECT_REPOSITORY_IMAGE="$ROOT/docs/images/01-github-app-select-repository.png"
+KEY_VAULT_SECRETS_IMAGE="$ROOT/docs/images/01-key-vault-secrets-list.png"
+KEY_VAULT_CREATE_SECRET_IMAGE="$ROOT/docs/images/01-key-vault-create-secret.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -34,6 +36,8 @@ assert_contains_multiline() {
 [[ -f "$APP_SETTINGS_IMAGE" ]] || fail "module 01 GitHub App settings example image missing"
 [[ -f "$APP_INSTALL_TARGET_IMAGE" ]] || fail "module 01 GitHub App install target image missing"
 [[ -f "$APP_SELECT_REPOSITORY_IMAGE" ]] || fail "module 01 GitHub App repository selection image missing"
+[[ -f "$KEY_VAULT_SECRETS_IMAGE" ]] || fail "module 01 Key Vault secrets list image missing"
+[[ -f "$KEY_VAULT_CREATE_SECRET_IMAGE" ]] || fail "module 01 Key Vault create secret image missing"
 
 PREREQ_TEXT="$(<"$PREREQ")"
 FOUNDATION_TEXT="$(<"$FOUNDATION")"
@@ -270,7 +274,9 @@ for text in \
   '`-----BEGIN RSA PRIVATE KEY-----`' \
   '`-----END RSA PRIVATE KEY-----`' \
   '**Create**' \
-  'Secret Identifier'; do
+  'Secret Identifier' \
+  '![Azure Portal Key Vault의 Secrets 메뉴와 Generate/Import 예시](images/01-key-vault-secrets-list.png)' \
+  '![Azure Portal에서 github-app-private-key secret을 만드는 입력 예시](images/01-key-vault-create-secret.png)'; do
   assert_contains "$step_seven_portal" "$text" \
     'module 01 step 7-L Azure Portal secret guidance missing'
 done
@@ -330,8 +336,10 @@ for text in \
   '"https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID"' \
   'select(.app_id == $app_id)' \
   'PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인' \
+  'for required_variable in SUBSCRIPTION_ID KEY_VAULT GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID' \
+  'ERROR: required variable is not set:' \
   '# 인증에 필요한 로컬 명령이 모두 설치되어 있는지 먼저 확인합니다.' \
-  '# Key Vault와 GitHub App 설치를 식별할 값을 로컬 터미널에서 입력합니다.' \
+  '# 7-C에서 전달한 Azure와 GitHub 식별자가 현재 로컬 shell에 있는지 확인합니다.' \
   '# App ID와 Installation ID가 GitHub에서 사용하는 양의 정수 형식인지 검사합니다.' \
   '# 임시 private key 파일을 만들고 함수 종료 시 secret과 JWT를 항상 정리합니다.' \
   '# Key Vault secret을 보호된 임시 파일로 내려받아 JWT 서명에 사용합니다.' \
@@ -342,6 +350,19 @@ for text in \
   '# 검증 함수를 실행하고 완료 후 현재 shell에서 함수 정의를 제거합니다.'; do
   assert_contains "$step_eight_section" "$text" \
     'module 01 step 8 stored-secret authentication missing'
+done
+assert_contains \
+  "$step_seven_cloud_shell" \
+  'export SUBSCRIPTION_ID=' \
+  'module 01 step 7-C must print the local step 8 export command'
+for forbidden in \
+  'read -rp "Azure subscription ID:' \
+  'read -rp "Key Vault name:' \
+  'read -rp "GitHub App ID:' \
+  'read -rp "GitHub App Installation ID:'; do
+  if [[ "$step_eight_section" == *"$forbidden"* ]]; then
+    fail "module 01 step 8 must reuse existing variables instead of prompting: $forbidden"
+  fi
 done
 for text in \
   'GitHub App private key를 Azure Portal에서 Key Vault secret으로 저장한다.' \

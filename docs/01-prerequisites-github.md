@@ -401,6 +401,9 @@ printf '다음 값을 저장하세요: SUFFIX=%s RG=%s KEY_VAULT=%s\n' \
   "$SUFFIX" "$RG" "$KEY_VAULT"
 printf 'KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=%s\n' \
   "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID"
+printf '로컬 8단계에서 다음 명령을 먼저 실행하세요:\n'
+printf "export SUBSCRIPTION_ID='%s' KEY_VAULT='%s' GITHUB_APP_ID='%s' GITHUB_APP_INSTALLATION_ID='%s'\n" \
+  "$SUBSCRIPTION_ID" "$KEY_VAULT" "$GITHUB_APP_ID" "$GITHUB_APP_INSTALLATION_ID"
 ```
 
 📋 **예상 출력**
@@ -408,10 +411,14 @@ printf 'KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=%s\n' \
 ```text
 다음 값을 저장하세요: SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 KEY_VAULT=kvacarunnera1b2c3
 KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=11111111-2222-3333-4444-555555555555
+로컬 8단계에서 다음 명령을 먼저 실행하세요:
+export SUBSCRIPTION_ID='00000000-1111-2222-3333-444444444444' KEY_VAULT='kvacarunnera1b2c3' GITHUB_APP_ID='1234567' GITHUB_APP_INSTALLATION_ID='155640565'
 ```
 
 출력된 값은 모두 참가자 메모에 저장하세요. 같은 Cloud Shell 세션에는 `LOC`,
 `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_ID`도 남아 있으므로 Module 02에서 그대로 재사용할 수 있습니다.
+마지막 `export` 한 줄은 8단계를 실행할 로컬 워크스테이션 Bash에 붙여 넣으세요.
+네 값은 비밀이 아닌 식별자이며, 8단계에서는 다시 입력하지 않고 그대로 사용합니다.
 `Key Vault Secrets Officer` RBAC 전파에는 최대 2분이 걸릴 수 있습니다.
 
 ### 7-L. Azure Portal: GitHub App PEM secret 만들기
@@ -457,6 +464,14 @@ Azure Portal의 Key Vault secret 화면은 PEM 파일 자체를 직접 업로드
 - Module 02에서 private-access 검증이 끝날 때까지 source PEM 파일은 로컬 워크스테이션에
   그대로 보관하세요.
 
+> **참고 화면:** 첫 번째 이미지는 Key Vault의 **Objects → Secrets**에서
+> **Generate/Import**를 선택하는 화면이며, 두 번째 이미지는
+> `github-app-private-key`, PEM secret value, `text/plain`, **Enabled: Yes**를 입력한 예시입니다.
+
+![Azure Portal Key Vault의 Secrets 메뉴와 Generate/Import 예시](images/01-key-vault-secrets-list.png)
+
+![Azure Portal에서 github-app-private-key secret을 만드는 입력 예시](images/01-key-vault-create-secret.png)
+
 ## 8. Key Vault secret으로 GitHub App 설치 연결 검증
 
 👁️ **설명**
@@ -464,7 +479,8 @@ Azure Portal의 Key Vault secret 화면은 PEM 파일 자체를 직접 업로드
 이 단계는 Key Vault에 저장한 secret, App ID, Installation ID가 하나의 실제
 GitHub App 설치를 가리키는지 확인합니다. 인증에는 **로컬 워크스테이션 Bash**에서
 Key Vault로부터 임시 파일로 내려받은 private key만 사용하며 source PEM 파일은 여기서
-삭제하지 않습니다.
+삭제하지 않습니다. 먼저 7-C가 출력한 `export SUBSCRIPTION_ID=...` 한 줄을 같은 로컬
+Bash에 붙여 넣은 뒤 아래 검증 명령을 실행합니다.
 
 🟢 **실행**
 
@@ -473,10 +489,9 @@ Key Vault로부터 임시 파일로 내려받은 private key만 사용하며 sou
 verify_key_vault_app_installation() (
   set -euo pipefail
 
-  local SUBSCRIPTION_ID KEY_VAULT GITHUB_APP_KEY_SECRET
-  local GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID
+  local GITHUB_APP_KEY_SECRET
   local TEMP_PRIVATE_KEY_FILE now_epoch payload_json signing_input
-  local app_jwt installation_owner required_command
+  local app_jwt installation_owner required_command required_variable
 
   # 인증에 필요한 로컬 명령이 모두 설치되어 있는지 먼저 확인합니다.
   for required_command in az openssl curl jq; do
@@ -486,11 +501,13 @@ verify_key_vault_app_installation() (
     fi
   done
 
-  # Key Vault와 GitHub App 설치를 식별할 값을 로컬 터미널에서 입력합니다.
-  read -rp "Azure subscription ID: " SUBSCRIPTION_ID
-  read -rp "Key Vault name: " KEY_VAULT
-  read -rp "GitHub App ID: " GITHUB_APP_ID
-  read -rp "GitHub App Installation ID: " GITHUB_APP_INSTALLATION_ID
+  # 7-C에서 전달한 Azure와 GitHub 식별자가 현재 로컬 shell에 있는지 확인합니다.
+  for required_variable in SUBSCRIPTION_ID KEY_VAULT GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID; do
+    if [[ ! -v "$required_variable" ]] || [[ -z "${!required_variable}" ]]; then
+      printf 'ERROR: required variable is not set: %s\n' "$required_variable" >&2
+      return 1
+    fi
+  done
   GITHUB_APP_KEY_SECRET="github-app-private-key"
 
   # App ID와 Installation ID가 GitHub에서 사용하는 양의 정수 형식인지 검사합니다.
@@ -565,10 +582,6 @@ verify_key_vault_app_installation &&
 📋 **예상 출력**
 
 ```text
-Azure subscription ID: 00000000-1111-2222-3333-444444444444
-Key Vault name: kvacarunnera1b2c3
-GitHub App ID: 1234567
-GitHub App Installation ID: 155640565
 PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인: App 1234567, Installation 155640565, Owner freejava98
 ```
 
