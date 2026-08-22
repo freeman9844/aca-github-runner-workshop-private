@@ -77,3 +77,67 @@ Planned commit message:
 ```text
 docs: align Key Vault ownership references
 ```
+
+## Round 1 Review Fix: strengthen ownership-contract assertions
+
+### Fix details
+
+- Tightened `tests/docs/test-build-deploy.sh` to require Module 03's full recovery ownership split (`Module 01` for actual `KEY_VAULT`, `Module 02` for actual `ACR`) and Module 04's full split-Key-Vault sentence plus the troubleshooting order sentence.
+- Tightened `tests/docs/test-scale-validation.sh` and `tests/docs/test-azure-sample-deployment.sh` to require the full recovery sentence that preserves Module 02 ownership of collision-recovered actual ACR/Storage names.
+- No documentation changes were needed because the existing docs already satisfied the strengthened contracts.
+
+### TDD evidence
+
+#### RED (temporary ownership-phrase removal)
+
+Temporarily removed `Module 02에서 저장한` from the Module 03 recovery sentence, then ran all three focused tests:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+p = Path('/home/jungwoonlee/git/aca-github-runner-workshop-private/.worktrees/key-vault-module-restructure/docs/03-runner-image.md')
+old = 'Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 이때 Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, Module 02에서 저장한 실제 `ACR` 이름을 사용해 같은 리소스를 복구합니다.'
+new = 'Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 이때 Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, 실제 `ACR` 이름을 사용해 같은 리소스를 복구합니다.'
+text = p.read_text()
+p.write_text(text.replace(old, new, 1))
+PY
+cd /home/jungwoonlee/git/aca-github-runner-workshop-private/.worktrees/key-vault-module-restructure && \
+  bash tests/docs/test-build-deploy.sh; \
+  bash tests/docs/test-scale-validation.sh; \
+  bash tests/docs/test-azure-sample-deployment.sh
+```
+
+Observed output:
+
+```text
+FAIL: module 03 must preserve Module 01 Key Vault ownership and Module 02 ACR ownership: Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, Module 02에서 저장한 실제 `ACR` 이름을 사용해 같은 리소스를 복구합니다.
+PASS: scale validation doc
+PASS: Private Blob 배포와 결과 확인 doc and workflow disclosure
+```
+
+#### GREEN
+
+Restored the doc, then re-ran all three focused tests and `git diff --check`:
+
+```bash
+git -C /home/jungwoonlee/git/aca-github-runner-workshop-private/.worktrees/key-vault-module-restructure checkout -- docs/03-runner-image.md && \
+cd /home/jungwoonlee/git/aca-github-runner-workshop-private/.worktrees/key-vault-module-restructure && \
+  bash tests/docs/test-build-deploy.sh && \
+  bash tests/docs/test-scale-validation.sh && \
+  bash tests/docs/test-azure-sample-deployment.sh && \
+  git diff --check
+```
+
+Observed output:
+
+```text
+PASS: build and deploy docs
+PASS: scale validation doc
+PASS: Private Blob 배포와 결과 확인 doc and workflow disclosure
+```
+
+### Self-review
+
+- Confirmed the strengthened assertions fail when the required Module 02 ACR ownership phrase is removed from Module 03.
+- Confirmed the final diff only changes the three focused tests plus this report; docs remain unchanged.
+- Confirmed `git diff --check` is clean after the final test run.

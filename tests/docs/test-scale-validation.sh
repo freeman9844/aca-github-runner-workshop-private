@@ -33,7 +33,7 @@ assert_contains "$recovery_section" 'read -rp "Saved GITHUB_APP_ID:' 'module 05 
 assert_contains "$recovery_section" 'read -rp "Saved GITHUB_APP_INSTALLATION_ID:' 'module 05 GitHub App installation ID recovery prompt missing'
 assert_contains "$recovery_section" 'GITHUB_APP_ID=' 'module 05 GitHub App ID restore missing'
 assert_contains "$recovery_section" 'GITHUB_APP_INSTALLATION_ID=' 'module 05 GitHub App installation ID restore missing'
-assert_contains "$recovery_section" 'Module 01에서 저장한 `SUFFIX`' 'module 05 must identify Module 01 as the suffix source'
+assert_contains "$recovery_section" 'Module 01에서 저장한 `SUFFIX`를 그대로 사용하고, Module 02에서 이름 충돌 복구로 변경한 실제 ACR 또는 Storage 이름이 있으면 해당 값을 복원합니다.' 'module 05 must preserve Module 02 ownership of collision-recovered ACR or Storage names'
 
 for text in \
   '## 0. 세션 재연결 시 변수 복구 (선택)' \

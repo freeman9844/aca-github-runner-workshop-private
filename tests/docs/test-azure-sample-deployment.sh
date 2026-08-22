@@ -48,7 +48,7 @@ if [[ "$workflow_block" != "$WORKFLOW_TEXT" ]]; then
   fail "module 06 workflow disclosure must byte-match samples/azure-sample-deploy-workflow.yml"
 fi
 
-assert_contains "$DOC_TEXT" 'Module 01에서 저장한 `SUFFIX`' 'module 06 must identify Module 01 as the suffix source'
+assert_contains "$DOC_TEXT" 'Module 01에서 저장한 `SUFFIX`를 그대로 사용하고, Module 02에서 이름 충돌 복구로 변경한 실제 ACR 또는 Storage 이름이 있으면 해당 값을 복원합니다.' 'module 06 must preserve Module 02 ownership of collision-recovered ACR or Storage names'
 
 for text in \
   'Storage Blob Data Contributor' \
