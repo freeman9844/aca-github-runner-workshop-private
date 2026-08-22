@@ -198,6 +198,8 @@ for text in \
   '**Only select repositories**' \
   '`aca-runner-lab` 하나를 선택' \
   '/settings/installations/<installation-id>' \
+  'https://github.com/organizations/freejava98/settings/installations/155640565' \
+  '`155640565`가 Installation ID입니다.' \
   '![freejava98 organization에 GitHub App을 설치할 대상 선택 예시](images/01-github-app-install-target.png)' \
   '![Only select repositories에서 aca-runner-lab을 선택한 GitHub App 설치 예시](images/01-github-app-select-repository.png)'; do
   assert_contains "$step_five_section" "$text" 'module 01 step 5 App installation guidance missing'

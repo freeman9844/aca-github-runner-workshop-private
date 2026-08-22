@@ -291,6 +291,8 @@ Installation ID는 App을 생성한 시점에는 확인할 수 없으며, 만들
 
 설치가 완료되면 브라우저 주소가 `/settings/installations/<installation-id>` 형식으로 표시됩니다. 마지막 숫자가 **Installation ID**이므로 이후 단계에서 사용할 수 있도록 기록합니다.
 
+예를 들어 URL이 `https://github.com/organizations/freejava98/settings/installations/155640565`라면 마지막 숫자인 `155640565`가 Installation ID입니다.
+
 ## 6. Cloud Shell 변수로 GitHub App 식별자만 로드
 
 👁️ **설명**
