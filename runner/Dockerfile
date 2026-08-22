@@ -47,6 +47,7 @@ RUN chmod 0555 /home/runner/entrypoint.sh
 
 # Container Apps extension을 공유 경로에 고정 버전으로 설치하고 build 시점에 명령 로딩까지 검증합니다.
 RUN mkdir -p "$AZURE_EXTENSION_DIR" \
+    && install -d -o runner -g runner -m 0700 /home/runner/.azure \
     && az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null

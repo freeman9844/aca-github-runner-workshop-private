@@ -355,18 +355,6 @@ triggerType: Event
 
 ![Azure Portal에서 생성된 Container Apps Job 확인](images/04-azure-portal-container-app-job.png)
 
-## 3. GitHub 쪽에서 미리 확인할 것
-
-👁️ **설명**
-
-GitHub 저장소의 **Settings → Actions → Runners**를 열어봅니다. workflow가 queue되기 전에는 self-hosted runner가 0개인 화면이 정상입니다. 이 워크숍의 runner는 Event Job이 queued workflow를 감지했을 때만 잠깐 생성되고, job이 끝나면 ephemeral runner도 사라집니다.
-
-![Workflow 실행 전 GitHub Self-hosted runners 화면](images/04-github-self-hosted-runners-empty.png)
-
-⚠️ **주의**
-
-워크숍 시작 전에 runner를 수동으로 미리 등록해 둘 필요가 없습니다. 항상 queue를 트리거로 생성되는지 확인해야 `0 → N → 0` 검증이 가능합니다.
-
 ## 트러블슈팅
 
 | 증상 | 주요 원인 | 해결 방법 |

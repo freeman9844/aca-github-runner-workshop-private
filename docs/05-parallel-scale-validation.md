@@ -229,6 +229,10 @@ az containerapp job execution list \
 
 GitHub repository에서 **Actions → ACA Runner Scale Test → Run workflow**를 선택하고 기본 브랜치에서 실행합니다.
 
+> **참고 화면:** **Run workflow** 메뉴에서 기본 브랜치를 선택하고 실행 버튼을 누르기 직전의 GitHub Actions 화면입니다.
+
+![GitHub Actions에서 Run workflow 메뉴를 연 화면](images/05-github-actions-run-workflow.png)
+
 📋 **예상 출력**
 
 - GitHub Actions 실행 목록에 `ACA Runner Scale Test`가 새로 생성됩니다.
@@ -264,10 +268,10 @@ az containerapp job execution list \
 ```text
 Name                       Status    Start
 -------------------------  --------  -------------------------
-job-ghrunner-145945-4vql7  Running   2026-08-19T05:10:51+00:00
-job-ghrunner-145945-bbqc9  Running   2026-08-19T05:10:51+00:00
-job-ghrunner-145945-tvdcr  Running   2026-08-19T05:10:51+00:00
-job-ghrunner-145945-xh6w5  Running   2026-08-19T05:10:51+00:00
+job-ghrunner-717094-c5jhk  Running   2026-08-22T14:40:22+00:00
+job-ghrunner-717094-db6km  Running   2026-08-22T14:40:22+00:00
+job-ghrunner-717094-jkjx4  Running   2026-08-22T14:40:22+00:00
+job-ghrunner-717094-v2rz4  Running   2026-08-22T14:40:22+00:00
 ```
 
 - execution 이름의 suffix와 시작 시각은 실행할 때마다 달라집니다.
@@ -347,61 +351,120 @@ Log Analytics ingestion은 즉시 완료되지 않을 수 있습니다. executio
 확인합니다. 실제 테스트에서도 마지막 로그가 Log Analytics에 나타나기까지
 약 6분이 걸릴 수 있었습니다.
 
+resource-specific `ContainerAppConsoleLogs`의 `JobName` 열로 현재 ACA Job 로그만 조회합니다. workspace 전체 로그를 세거나 오래된 `$EXECUTION` prefix에 의존하면 다른 Container Apps 로그를 현재 실행 로그로 잘못 판단할 수 있습니다.
+
+대기 중 `Ctrl+C`를 눌러도 Cloud Shell 전체가 종료되지 않도록 polling을 함수로
+격리하고 조건문 안에서 호출합니다. 이전 모듈에서 `set -e`가 활성화된 세션도
+중단 상태를 함수의 반환값으로만 처리합니다.
+
 🟢 **실행**
 
 ```bash
-# 고정 sleep 대신 실제 로그가 들어왔는지 30초마다 확인하며 최대 10분까지 기다립니다.
-LOG_WAIT_TIMEOUT_SECONDS=600
-LOG_WAIT_INTERVAL_SECONDS=30
-LOG_WAIT_DEADLINE=$((SECONDS + LOG_WAIT_TIMEOUT_SECONDS))
-LOG_COUNT=0
+# Ctrl+C나 timeout이 현재 Cloud Shell을 종료하지 않도록 대기와 조회를 함수로 격리합니다.
+wait_for_containerapp_console_logs() {
+  local log_wait_timeout_seconds=600
+  local log_wait_interval_seconds=30
+  local log_wait_deadline=$((SECONDS + log_wait_timeout_seconds))
+  local log_count=0
+  local log_wait_interrupted=0
 
-while (( SECONDS <= LOG_WAIT_DEADLINE )); do
-  LOG_COUNT=$(az monitor log-analytics query \
+  trap 'log_wait_interrupted=1' INT
+
+  while (( SECONDS <= log_wait_deadline )); do
+    if ! log_count=$(az monitor log-analytics query \
+      --workspace "$LOG_ID" \
+      --analytics-query "
+        ContainerAppConsoleLogs
+        | where TimeGenerated > ago(2h)
+        | where JobName == '$JOB'
+        | summarize Count=count()
+      " \
+      --query "[0].Count" \
+      --output tsv); then
+      if (( log_wait_interrupted )); then
+        trap - INT
+        return 130
+      fi
+      printf 'ERROR: Log Analytics ingestion 확인 query가 실패했습니다.\n' >&2
+      trap - INT
+      return 1
+    fi
+
+    if (( log_wait_interrupted )); then
+      trap - INT
+      return 130
+    fi
+
+    if [[ "$log_count" =~ ^[0-9]+$ ]] && (( log_count > 0 )); then
+      printf 'Log Analytics ingestion ready: %s rows\n' "$log_count"
+      break
+    fi
+
+    if (( SECONDS >= log_wait_deadline )); then
+      break
+    fi
+
+    printf 'Log Analytics ingestion pending; %s초 후 다시 확인합니다.\n' \
+      "$log_wait_interval_seconds"
+    if ! sleep "$log_wait_interval_seconds"; then
+      if (( log_wait_interrupted )); then
+        trap - INT
+        return 130
+      fi
+      printf 'ERROR: Log Analytics ingestion 대기 중 sleep이 실패했습니다.\n' >&2
+      trap - INT
+      return 1
+    fi
+  done
+
+  if [[ ! "$log_count" =~ ^[0-9]+$ ]] || (( log_count == 0 )); then
+    printf '%s\n' \
+      'ERROR: ContainerAppConsoleLogs가 10분 안에 수집되지 않았습니다.' \
+      'LOG_ID와 Module 02의 aca-runner-logs diagnostic setting을 확인하세요.' >&2
+    trap - INT
+    return 1
+  fi
+
+  # 로그 유입이 확인되면 replica별 건수와 마지막 수집 시각을 출력합니다.
+  if ! az monitor log-analytics query \
     --workspace "$LOG_ID" \
     --analytics-query "
       ContainerAppConsoleLogs
       | where TimeGenerated > ago(2h)
-      | summarize Count=count()
+      | where JobName == '$JOB'
+      | summarize Count=count(), LastSeen=max(TimeGenerated)
+          by ContainerGroupName
+      | order by LastSeen desc
     " \
-    --query "[0].Count" \
-    --output tsv)
-
-  if [[ "$LOG_COUNT" =~ ^[0-9]+$ ]] && (( LOG_COUNT > 0 )); then
-    printf 'Log Analytics ingestion ready: %s rows\n' "$LOG_COUNT"
-    break
+    --output table; then
+    printf 'ERROR: replica별 Log Analytics 집계 query가 실패했습니다.\n' >&2
+    trap - INT
+    return 1
   fi
 
-  if (( SECONDS >= LOG_WAIT_DEADLINE )); then
-    break
+  trap - INT
+  return 0
+}
+
+if wait_for_containerapp_console_logs; then
+  true
+else
+  LOG_WAIT_STATUS=$?
+  if (( LOG_WAIT_STATUS == 130 )); then
+    printf 'INFO: Log Analytics 대기를 중단했습니다. Cloud Shell 세션은 유지됩니다.\n'
+  else
+    printf 'ERROR: 문제를 해결한 뒤 7단계의 첫 번째 실행 블록만 다시 실행하세요.\n' >&2
   fi
-
-  printf 'Log Analytics ingestion pending; %s초 후 다시 확인합니다.\n' \
-    "$LOG_WAIT_INTERVAL_SECONDS"
-  sleep "$LOG_WAIT_INTERVAL_SECONDS"
-done
-
-if [[ ! "$LOG_COUNT" =~ ^[0-9]+$ ]] || (( LOG_COUNT == 0 )); then
-  printf '%s\n' \
-    'ERROR: ContainerAppConsoleLogs가 10분 안에 수집되지 않았습니다.' \
-    'LOG_ID와 Module 02의 aca-runner-logs diagnostic setting을 확인하세요.' >&2
-  exit 1
+  unset LOG_WAIT_STATUS
 fi
 
-# 로그 유입이 확인되면 replica별 건수와 마지막 수집 시각을 출력합니다.
-az monitor log-analytics query \
-  --workspace "$LOG_ID" \
-  --analytics-query "
-    ContainerAppConsoleLogs
-    | where TimeGenerated > ago(2h)
-    | summarize Count=count(), LastSeen=max(TimeGenerated)
-        by ContainerGroupName
-    | order by LastSeen desc
-  " \
-  --output table
-
-unset LOG_WAIT_TIMEOUT_SECONDS LOG_WAIT_INTERVAL_SECONDS LOG_WAIT_DEADLINE LOG_COUNT
+unset -f wait_for_containerapp_console_logs
 ```
+
+⚠️ **주의**
+
+- 대기 중 중단하려면 `Ctrl+C`를 한 번 누르세요. 함수만 종료되고 Cloud Shell prompt로 돌아옵니다.
+- Cloud Shell에 직접 붙여 넣는 실행 블록에서는 `exit`를 사용하면 현재 셸 세션까지 종료되므로 `return`으로 함수만 끝냅니다.
 
 📋 **예상 출력**
 
@@ -417,19 +480,19 @@ job-ghrunner-145945-bbqc9-m97mq  1867     2026-08-19T05:12:17.8271544Z  PrimaryR
 
 - replica suffix, `Count`, `LastSeen`은 실행과 수집 시점마다 달라집니다.
 - 로그가 이미 수집되었다면 `pending` 줄 없이 바로 `ready`와 집계 표가 출력됩니다.
-- `$EXECUTION` 뒤에 replica suffix가 추가된 실제 `ContainerGroupName`을 확인한
+- 현재 `$JOB`에서 생성된 replica별 `ContainerGroupName`과 수집 시각을 확인한
   다음 상세 로그를 조회합니다.
 
 🟢 **실행**
 
 ```bash
-# 최신 execution prefix로 같은 replica들의 상세 console log를 시간순으로 조회합니다.
+# 현재 ACA Job의 최근 2시간 상세 console log를 시간순으로 조회합니다.
 az monitor log-analytics query \
   --workspace "$LOG_ID" \
   --analytics-query "
     ContainerAppConsoleLogs
-    | where TimeGenerated > ago(30m)
-    | where ContainerGroupName startswith '$EXECUTION'
+    | where TimeGenerated > ago(2h)
+    | where JobName == '$JOB'
     | project TimeGenerated, ContainerGroupName, Log
     | order by TimeGenerated asc
   " \
@@ -438,10 +501,9 @@ az monitor log-analytics query \
 
 📋 **예상 출력**
 
-- `ContainerAppConsoleLogs` 표에서 `ContainerGroupName`이 `$EXECUTION`으로 시작하는 행들이 시간순으로 출력됩니다.
-- CLI 로그와 같은 execution의 메시지를 Azure Monitor 쪽에서도 재확인할 수 있습니다.
-- 집계 query에는 결과가 있지만 상세 query가 비어 있으면 `$EXECUTION`이 가장
-  최근 execution인지 다시 확인합니다.
+- `ContainerAppConsoleLogs` 표에서 현재 `$JOB`에 속한 최근 2시간의 replica 로그가 시간순으로 출력됩니다.
+- CLI에서 확인한 execution을 포함해 같은 ACA Job에서 생성된 메시지를 Azure Monitor 쪽에서도 재확인할 수 있습니다.
+- GitHub Actions는 성공했지만 결과가 비어 있으면 `LOG_ID`, diagnostic setting, `JobName` 값을 다시 확인하고 몇 분 뒤 같은 query를 재실행합니다.
 
 ## 8. GitHub에서 네 개 Job 성공과 runner hostname 차이 확인
 

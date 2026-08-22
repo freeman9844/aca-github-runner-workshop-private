@@ -130,6 +130,20 @@ External ACA Job은 ingress를 지원하지 않으며, 이 workflow는 inbound r
 🟢 **실행**
 
 ```bash
+# Cloud Shell 재시작 여부와 관계없이 Storage ID와 runner UAMI principal ID를 다시 조회합니다.
+UAMI="${UAMI:-id-acarunner-$SUFFIX}"
+STORAGE_ID=$(az storage account show \
+  --resource-group "$RG" \
+  --name "$STORAGE" \
+  --query id \
+  --output tsv)
+# runner UAMI principal ID를 현재 Azure identity에서 다시 조회합니다.
+UAMI_PID=$(az identity show \
+  --resource-group "$RG" \
+  --name "$UAMI" \
+  --query principalId \
+  --output tsv)
+
 # subnet의 Microsoft.Storage service endpoint를 확인합니다.
 az network vnet subnet show \
   --resource-group "$RG" \
@@ -146,11 +160,15 @@ az storage account show \
   --output json
 
 # runner UAMI가 Storage Blob Data Contributor를 정확히 Storage account scope에서 갖는지 확인합니다.
-az role assignment list \
-  --assignee "$UAMI_PID" \
-  --scope "$STORAGE_ID" \
-  --query "[?roleDefinitionName=='Storage Blob Data Contributor'].{role:roleDefinitionName,scope:scope}" \
-  --output table
+if [[ -z "$UAMI_PID" ]]; then
+  printf 'ERROR: runner UAMI principal ID를 조회하지 못했습니다: %s\n' "$UAMI" >&2
+else
+  az role assignment list \
+    --assignee "$UAMI_PID" \
+    --scope "$STORAGE_ID" \
+    --query "[?roleDefinitionName=='Storage Blob Data Contributor'].{role:roleDefinitionName,scope:scope}" \
+    --output table
+fi
 ```
 
 📋 **예상 출력**
@@ -160,6 +178,7 @@ az role assignment list \
 - `defaultAction`은 `Deny`, `bypass`는 `None`이어야 합니다.
 - `virtualNetworkRules` 안의 `id`가 `SUBNET_ID`와 같고 `state`는 `Succeeded`여야 합니다.
 - `allowBlobPublicAccess`와 `allowSharedKeyAccess`는 모두 `false`여야 합니다.
+- `UAMI_PID`는 현재 `id-acarunner-<suffix>` identity의 principal ID로 다시 채워져야 합니다.
 - role assignment 표에는 `Storage Blob Data Contributor`가 정확히 `$STORAGE_ID` scope로 표시되어야 합니다.
 
 ⚠️ **주의**
@@ -197,23 +216,32 @@ sed -n '1,220p' samples/azure-sample-deploy-workflow.yml
 <summary>aca-runner-vnet-blob.yml 전체 내용 보기</summary>
 
 ```yaml
+# GitHub Actions 화면에 표시할 workflow 이름입니다.
 name: ACA Runner VNet-Restricted Blob Deploy
 
+# 수동 실행으로 VNet 제한 Blob 배포 검증을 시작합니다.
 on:
   workflow_dispatch:
 
+# repository 내용은 읽기만 허용합니다.
 permissions:
   contents: read
 
 jobs:
   deploy-vnet-restricted-blob:
+    # Module 04에서 등록한 ephemeral runner label을 사용합니다.
     runs-on: [aca-runner]
     timeout-minutes: 10
+    # non-root runner가 Azure CLI 설정을 기록할 수 있는 임시 경로를 사용합니다.
+    env:
+      AZURE_CONFIG_DIR: ${{ runner.temp }}/.azure
     steps:
       - name: Validate runner inputs
         shell: bash
         run: |
+          # 필수 값 누락과 예상하지 않은 secret 노출이 있으면 즉시 실패합니다.
           set -euo pipefail
+          # GitHub App bootstrap 값이 workflow 환경으로 노출되지 않았는지 확인합니다.
           for variable_name in \
             GITHUB_APP_ID \
             GITHUB_APP_INSTALLATION_ID \
@@ -225,6 +253,7 @@ jobs:
             fi
           done
 
+          # ACA Event Job이 managed identity와 Blob 대상 식별자를 전달했는지 확인합니다.
           for variable in \
             AZURE_CLIENT_ID \
             AZURE_SUBSCRIPTION_ID \
@@ -240,13 +269,18 @@ jobs:
       - name: Sign in to Azure with managed identity
         shell: bash
         run: |
+          # Azure CLI 설정 디렉터리와 identity login이 실패하면 후속 명령을 실행하지 않습니다.
           set -euo pipefail
-          # The runner UAMI needs Storage Blob Data Contributor on the Storage account.
+          # non-root runner가 Azure CLI token과 설정을 기록할 디렉터리를 만듭니다.
+          mkdir -p "$AZURE_CONFIG_DIR"
+          # User-Assigned Managed Identity로 Azure에 로그인합니다.
           az login --identity \
             --client-id "$AZURE_CLIENT_ID" \
             --allow-no-subscriptions \
             --output none
+          # Event Job이 전달한 workshop subscription을 현재 context로 선택합니다.
           az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          # secret 없이 managed identity로 로그인된 subscription과 principal 유형을 확인합니다.
           az account show \
             --query "{subscription:name,subscriptionId:id,user:user.name,type:user.type}" \
             --output table
@@ -254,11 +288,15 @@ jobs:
       - name: Upload and download the VNet-restricted Blob artifact
         shell: bash
         run: |
+          # VNet으로 제한된 Blob에 artifact를 업로드한 뒤 다시 내려받아 검증합니다.
+          # Blob 업로드·다운로드 또는 checksum 검증이 실패하면 즉시 중단합니다.
           set -euo pipefail
+          # runner 임시 디렉터리 아래에 원본 파일과 다운로드 파일 경로를 준비합니다.
           ARTIFACT_ROOT="${RUNNER_TEMP:-${GITHUB_WORKSPACE:-$PWD}/.runner-temp}"
           ARTIFACT_DIR="$ARTIFACT_ROOT/vnet-restricted-blob-deploy"
           SOURCE_FILE="$ARTIFACT_DIR/source.txt"
           DOWNLOADED_FILE="$ARTIFACT_DIR/downloaded.txt"
+          # 실행을 추적할 repository, commit, run 식별자를 안전한 기본값과 함께 수집합니다.
           REPOSITORY_VALUE="${GITHUB_REPOSITORY:-unknown/repository}"
           COMMIT_VALUE="${GITHUB_SHA:-unknown-commit}"
           RUN_ID_VALUE="${GITHUB_RUN_ID:-0}"
@@ -267,6 +305,7 @@ jobs:
           BLOB_NAME="github-actions/${RUN_ID_VALUE}-${RUN_ATTEMPT_VALUE}.txt"
           mkdir -p "$ARTIFACT_DIR"
 
+          # 업로드할 artifact에 현재 GitHub Actions 실행 정보를 기록합니다.
           cat > "$SOURCE_FILE" <<EOF2
           repository=$REPOSITORY_VALUE
           commit=$COMMIT_VALUE
@@ -275,8 +314,10 @@ jobs:
           actor=$ACTOR_VALUE
           EOF2
 
+          # 업로드 전 원본 파일의 SHA-256을 계산합니다.
           SOURCE_SHA256="$(sha256sum "$SOURCE_FILE" | awk '{print $1}')"
 
+          # managed identity와 service endpoint 경로로 Blob을 업로드합니다.
           az storage blob upload \
             --account-name "$AZURE_STORAGE_ACCOUNT" \
             --container-name "$AZURE_STORAGE_CONTAINER" \
@@ -287,6 +328,7 @@ jobs:
             --overwrite true \
             --output none
 
+          # 같은 Blob을 다시 내려받아 실제 data-plane 읽기 권한도 확인합니다.
           az storage blob download \
             --account-name "$AZURE_STORAGE_ACCOUNT" \
             --container-name "$AZURE_STORAGE_CONTAINER" \
@@ -296,6 +338,7 @@ jobs:
             --overwrite true \
             --output none
 
+          # 원본, 다운로드 파일, Blob metadata의 SHA-256이 모두 같은지 비교합니다.
           DOWNLOADED_SHA256="$(sha256sum "$DOWNLOADED_FILE" | awk '{print $1}')"
           BLOB_SHA256="$(az storage blob show \
             --account-name "$AZURE_STORAGE_ACCOUNT" \
@@ -311,6 +354,7 @@ jobs:
             exit 1
           fi
 
+          # 다음 step에서 같은 Blob과 checksum을 조회하도록 GitHub 환경에 전달합니다.
           printf 'BLOB_NAME=%s\n' "$BLOB_NAME" >> "$GITHUB_ENV"
           printf 'SOURCE_SHA256=%s\n' "$SOURCE_SHA256" >> "$GITHUB_ENV"
           printf 'DOWNLOADED_SHA256=%s\n' "$DOWNLOADED_SHA256" >> "$GITHUB_ENV"
@@ -319,6 +363,7 @@ jobs:
       - name: Show VNet-restricted deployment result
         shell: bash
         run: |
+          # 최종 Blob 속성과 checksum을 GitHub Actions 로그에 출력합니다.
           set -euo pipefail
           az storage blob show \
             --account-name "$AZURE_STORAGE_ACCOUNT" \

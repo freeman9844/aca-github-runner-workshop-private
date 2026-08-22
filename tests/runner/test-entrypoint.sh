@@ -216,6 +216,13 @@ done
 }
 
 printf '%s\n' "$user" >>"$MOCK_CALLS/runuser-users.log"
+exec_args=("$@")
+if [[ "${1:-}" == "env" ]]; then
+  shift
+  while [[ "${1:-}" == *=* ]]; do
+    shift
+  done
+fi
 if [[ "${1:-}" == "./run.sh" ]]; then
   printf 'run user=%s\n' "$user" >>"$MOCK_CALLS/events.log"
 elif [[ "${1:-}" == "./config.sh" && "${2:-}" == "remove" ]]; then
@@ -231,7 +238,7 @@ forward_to_child() {
 }
 
 child_status=0
-"$@" &
+"${exec_args[@]}" &
 child_pid=$!
 trap 'forward_to_child TERM' TERM
 trap 'forward_to_child INT' INT
@@ -370,6 +377,10 @@ openssl dgst -sha256 \
   >/dev/null 2>&1 || fail "app JWT signature did not verify"
 
 assert_all_lines_equal "$MOCK_CALLS/runuser-users.log" "runner"
+grep -Fx 'HOME=/home/runner' "$MOCK_CALLS/run-env.log" >/dev/null ||
+  fail "runner process must receive HOME=/home/runner"
+grep -Fx 'AZURE_CONFIG_DIR=/home/runner/.azure' "$MOCK_CALLS/run-env.log" >/dev/null ||
+  fail "runner process must receive a writable Azure CLI config directory"
 
 mapfile -t events <"$MOCK_CALLS/events.log"
 [[ "${events[0]}" == "curl endpoint=installation-token auth_type=app jwt=<redacted>" ]] ||

@@ -73,6 +73,11 @@ def main() -> None:
         fail("deploy-vnet-restricted-blob job must be a mapping")
     if not isinstance(steps, list):
         fail("deploy-vnet-restricted-blob job must define steps")
+    job_env = deploy_job.get("env")
+    if not isinstance(job_env, dict):
+        fail("deploy-vnet-restricted-blob job must define env")
+    if job_env.get("AZURE_CONFIG_DIR") != "${{ runner.temp }}/.azure":
+        fail("workflow must place Azure CLI config under runner.temp")
 
     required_step_names = {
         "Validate runner inputs",
@@ -93,6 +98,21 @@ def main() -> None:
         fail("sign-in step must contain a run script")
     if "az login --identity" not in signin_script:
         fail("sign-in step must use managed identity login")
+    if 'mkdir -p "$AZURE_CONFIG_DIR"' not in signin_script:
+        fail("sign-in step must create the writable Azure CLI config directory")
+
+    for korean_comment in (
+        "# GitHub Actions 화면에 표시할 workflow 이름입니다.",
+        "# 수동 실행으로 VNet 제한 Blob 배포 검증을 시작합니다.",
+        "# repository 내용은 읽기만 허용합니다.",
+        "# non-root runner가 Azure CLI 설정을 기록할 수 있는 임시 경로를 사용합니다.",
+        "# GitHub App bootstrap 값이 workflow 환경으로 노출되지 않았는지 확인합니다.",
+        "# User-Assigned Managed Identity로 Azure에 로그인합니다.",
+        "# VNet으로 제한된 Blob에 artifact를 업로드한 뒤 다시 내려받아 검증합니다.",
+        "# 최종 Blob 속성과 checksum을 GitHub Actions 로그에 출력합니다.",
+    ):
+        if korean_comment not in workflow_text:
+            fail(f"workflow missing Korean purpose comment: {korean_comment}")
 
     validate_script = get_step(steps, "Validate runner inputs").get("run")
     if not isinstance(validate_script, str):
@@ -116,6 +136,9 @@ def main() -> None:
             r'''#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$MOCK_CALLS"
+if [[ "$1" == "login" || "$1 $2" == "account set" || "$1 $2" == "account show" ]]; then
+  exit 0
+fi
 case "$1 $2 $3" in
   'storage blob upload'|'storage blob upload-batch')
     exit 0
@@ -171,6 +194,7 @@ printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111
                 "AZURE_RESOURCE_GROUP": "rg-test",
                 "AZURE_STORAGE_ACCOUNT": "stacarunnertest",
                 "AZURE_STORAGE_CONTAINER": "runner-artifacts",
+                "AZURE_CONFIG_DIR": str(SCRATCH / "azure-config"),
                 "GITHUB_WORKSPACE": str(SCRATCH),
                 "GITHUB_ENV": str(SCRATCH / "github-env"),
                 "MOCK_CALLS": str(calls_log),
@@ -202,6 +226,15 @@ printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111
                 f"expected: {expected_validation_error!r}\n"
                 f"actual: {combined_validation_output!r}"
             )
+
+        signin_success = run_script(signin_script, env=base_env, cwd=SCRATCH)
+        if signin_success.returncode != 0:
+            fail(
+                "managed identity sign-in step must succeed with a writable Azure config path\n"
+                f"stdout: {signin_success.stdout}\nstderr: {signin_success.stderr}"
+            )
+        if not Path(base_env["AZURE_CONFIG_DIR"]).is_dir():
+            fail("managed identity sign-in step must create AZURE_CONFIG_DIR")
 
         result = run_script(blob_script, env=base_env, cwd=SCRATCH)
         if result.returncode == 0:

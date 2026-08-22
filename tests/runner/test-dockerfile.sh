@@ -20,6 +20,8 @@ dockerfile_text="$(<"$DOCKERFILE")"
   fail 'Dockerfile must expose a shared Azure CLI extension directory'
 [[ "$dockerfile_text" == *'mkdir -p "$AZURE_EXTENSION_DIR"'* ]] ||
   fail 'Dockerfile must create the shared Azure CLI extension directory'
+[[ "$dockerfile_text" == *'install -d -o runner -g runner -m 0700 /home/runner/.azure'* ]] ||
+  fail 'Dockerfile must create a runner-owned Azure CLI config directory'
 
 config_line="$(grep -nF 'APT::Sandbox::User "root";' "$DOCKERFILE" | cut -d: -f1 | head -n 1)"
 apt_line="$(grep -nF 'apt-get update' "$DOCKERFILE" | cut -d: -f1 | head -n 1)"

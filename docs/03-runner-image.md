@@ -172,6 +172,7 @@ RUN chmod 0555 /home/runner/entrypoint.sh
 
 # Container Apps extension을 공유 경로에 고정 버전으로 설치하고 build 시점에 명령 로딩까지 검증합니다.
 RUN mkdir -p "$AZURE_EXTENSION_DIR" \
+    && install -d -o runner -g runner -m 0700 /home/runner/.azure \
     && az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
 RUN az version >/dev/null \
     && az containerapp --help >/dev/null
@@ -314,7 +315,13 @@ create_runner_token() {
 }
 
 run_as_runner() {
-  runuser --preserve-environment -u runner -- "$@"
+  runuser --preserve-environment -u runner -- \
+    env \
+      HOME=/home/runner \
+      USER=runner \
+      LOGNAME=runner \
+      AZURE_CONFIG_DIR=/home/runner/.azure \
+      "$@"
 }
 
 # container 종료 시 fresh installation/removal token으로 ephemeral runner 등록 정보를 정리합니다.

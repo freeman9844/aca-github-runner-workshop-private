@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DOC="$ROOT/docs/05-parallel-scale-validation.md"
+RUN_WORKFLOW_IMAGE="$ROOT/docs/images/05-github-actions-run-workflow.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -17,8 +18,74 @@ assert_contains() {
 }
 
 [[ -f "$DOC" ]] || fail "module 05 missing"
+[[ -f "$RUN_WORKFLOW_IMAGE" ]] || fail "module 05 GitHub Actions Run workflow image missing"
+[[ "$(sha256sum "$RUN_WORKFLOW_IMAGE" | cut -d' ' -f1)" == "8aed85c353ed49ca3e838c8255a0c52e6df6f0f87cb1f324c54aa4e4b71f767b" ]] ||
+  fail "module 05 GitHub Actions Run workflow image is not the approved screenshot"
 
 DOC_TEXT="$(<"$DOC")"
+
+step_four="$(
+  awk '
+    /^## 4\. / { in_section=1 }
+    /^## 5\. / { exit }
+    in_section { print }
+  ' "$DOC"
+)"
+assert_contains "$step_four" \
+  '![GitHub Actions에서 Run workflow 메뉴를 연 화면](images/05-github-actions-run-workflow.png)' \
+  'module 05 step 4 Run workflow screenshot missing'
+run_workflow_image_line="$(printf '%s\n' "$step_four" | grep -nF 'images/05-github-actions-run-workflow.png' | head -n1 | cut -d: -f1)"
+expected_output_line="$(printf '%s\n' "$step_four" | grep -nF '📋 **예상 출력**' | head -n1 | cut -d: -f1)"
+[[ -n "$run_workflow_image_line" && -n "$expected_output_line" &&
+   "$run_workflow_image_line" -lt "$expected_output_line" ]] ||
+  fail "module 05 step 4 Run workflow screenshot must appear immediately after execution guidance"
+
+step_five="$(
+  awk '
+    /^## 5\. / { in_section=1 }
+    /^## 6\. / { exit }
+    in_section { print }
+  ' "$DOC"
+)"
+assert_contains \
+  "$step_five" \
+  $'job-ghrunner-717094-c5jhk  Running   2026-08-22T14:40:22+00:00\njob-ghrunner-717094-db6km  Running   2026-08-22T14:40:22+00:00\njob-ghrunner-717094-jkjx4  Running   2026-08-22T14:40:22+00:00\njob-ghrunner-717094-v2rz4  Running   2026-08-22T14:40:22+00:00' \
+  'module 05 step 5 expected output must use the verified four-execution example'
+
+step_seven="$(
+  awk '
+    /^## 7\. / { in_section=1 }
+    /^## 8\. / { exit }
+    in_section { print }
+  ' "$DOC"
+)"
+for text in \
+  'wait_for_containerapp_console_logs() {' \
+  "trap 'log_wait_interrupted=1' INT" \
+  'return 130' \
+  'if wait_for_containerapp_console_logs; then' \
+  'LOG_WAIT_STATUS=$?' \
+  'Cloud Shell 세션은 유지됩니다.' \
+  'trap - INT' \
+  'unset -f wait_for_containerapp_console_logs'; do
+  assert_contains "$step_seven" "$text" \
+    'module 05 step 7 interruption-safe wait handling missing'
+done
+if [[ "$step_seven" == *'exit 1'* ]]; then
+  fail 'module 05 step 7 must not exit the interactive Cloud Shell session'
+fi
+job_filter_count="$(printf '%s\n' "$step_seven" | grep -cF "| where JobName == '\$JOB'" || true)"
+[[ "$job_filter_count" -eq 3 ]] ||
+  fail "module 05 step 7 must apply the same JobName filter to wait, aggregate, and detail queries"
+assert_contains "$step_seven" \
+  'resource-specific `ContainerAppConsoleLogs`의 `JobName` 열로 현재 ACA Job 로그만 조회합니다.' \
+  'module 05 step 7 must explain the resource-specific JobName filter'
+if [[ "$step_seven" == *"ContainerGroupName startswith '\$EXECUTION'"* ]]; then
+  fail 'module 05 step 7 must not depend on one possibly stale execution prefix'
+fi
+if [[ "$step_seven" == *'TimeGenerated > ago(30m)'* ]]; then
+  fail 'module 05 step 7 detail query must use the same two-hour window as ingestion checks'
+fi
 
 recovery_section="$(
   awk '

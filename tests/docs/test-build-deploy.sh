@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE_DOC="$ROOT/docs/03-runner-image.md"
 JOB_DOC="$ROOT/docs/04-event-job-keda.md"
+JOB_PORTAL_IMAGE="$ROOT/docs/images/04-azure-portal-container-app-job.png"
+JOB_EMPTY_RUNNERS_IMAGE="$ROOT/docs/images/04-github-self-hosted-runners-empty.png"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -28,6 +30,10 @@ extract_objectives() {
 
 [[ -f "$IMAGE_DOC" ]] || fail "module 03 missing"
 [[ -f "$JOB_DOC" ]] || fail "module 04 missing"
+[[ -f "$JOB_PORTAL_IMAGE" ]] || fail "module 04 Azure Portal Container App Job image missing"
+[[ "$(sha256sum "$JOB_PORTAL_IMAGE" | cut -d' ' -f1)" == "4ceb72322eb345250d7433a2b58cfa80b8906e83645445af38c337331db128f0" ]] ||
+  fail "module 04 Azure Portal Container App Job image is not the approved service-endpoint foundation screenshot"
+[[ ! -e "$JOB_EMPTY_RUNNERS_IMAGE" ]] || fail "module 04 obsolete empty runners image must be removed"
 
 IMAGE_TEXT="$(<"$IMAGE_DOC")"
 JOB_TEXT="$(<"$JOB_DOC")"
@@ -38,6 +44,15 @@ JOB_OBJECTIVES="$(extract_objectives "$JOB_DOC")"
 
 [[ -n "$IMAGE_OBJECTIVES" ]] || fail "module 03 missing objective section"
 [[ -n "$JOB_OBJECTIVES" ]] || fail "module 04 missing objective section"
+
+for obsolete in \
+  '## 3. GitHub 쪽에서 미리 확인할 것' \
+  '04-github-self-hosted-runners-empty.png' \
+  'workflow가 queue되기 전에는 self-hosted runner가 0개인 화면이 정상입니다.'; do
+  if [[ "$JOB_TEXT" == *"$obsolete"* ]]; then
+    fail "module 04 still contains obsolete step 3 content: $obsolete"
+  fi
+done
 
 for text in \
   'INFRA_SUBNET="snet-aca-infra"' \
