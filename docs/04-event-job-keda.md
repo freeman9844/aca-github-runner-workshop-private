@@ -154,6 +154,11 @@ Job을 찾습니다.
 🟢 **실행**
 
 ```bash
+# 연속 세션에서도 현재 workshop Job 이름과 검증된 image tag를 명시적으로 설정합니다.
+JOB="job-ghrunner-$SUFFIX"
+IMAGE="github-actions-runner:2.336.0"
+export JOB IMAGE
+
 # 같은 repository와 label을 감시하는 기존 Event Job을 찾아 queue 경쟁을 예방합니다.
 az containerapp job list \
   --query "[?properties.configuration.eventTriggerConfig.scale.rules[?metadata.owner=='$GITHUB_OWNER' && metadata.repos=='$GITHUB_REPO' && metadata.labels=='aca-runner']].{Name:name,ResourceGroup:resourceGroup}" \
@@ -359,7 +364,7 @@ triggerType: Event
 | execution이 곧바로 인증 오류로 끝남 | runner registration 단계에서 private key PEM이 손상되었거나 disabled/deleted key를 참조함 | `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지 확인합니다. PEM을 새 secret version으로 다시 저장했다면 이 워크숍 Job만 삭제 후 재생성해 Key Vault reference를 새 값으로 다시 resolve합니다. |
 | execution 시작 직후 Key Vault reference 오류가 남거나 secret을 읽지 못함 | UAMI의 Key Vault secret get 권한, subnet rule, 또는 Key Vault reference authorization 문제 | `identityref:$UAMI_RID`가 현재 Job에 연결되어 있는지, UAMI에 `Key Vault Secrets User`가 `$KEY_VAULT_ID` scope로 부여되어 있는지, `snet-aca-infra`에 `Microsoft.KeyVault` service endpoint가 있는지, Key Vault에 `$SUBNET_ID` subnet rule이 있는지, `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`, `KEY_VAULT_SECRET_URI`가 모두 맞는지 순서대로 다시 확인합니다. Module 02의 `Microsoft.KeyVault` service endpoint, Key Vault ACA subnet rule, `defaultAction=Deny`, `bypass=None`, `Key Vault Secrets User` foundation도 함께 대조하세요. 모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요. `defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요. |
 | execution은 생기지만 registration token 발급 또는 runner 등록에서 401/404가 남 | GitHub App queue polling은 성공했지만 runner bootstrap이 repository registration 단계에서 실패함 | `az containerapp job execution list --name "$JOB" --resource-group "$RG" --output table`로 execution 생성 여부를 먼저 확인해 KEDA polling 성공 여부를 분리하고, 그 뒤 execution log에서 runner registration API 오류를 확인합니다. 이 경우 `GH_URL`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY` env 연결을 다시 검토합니다. |
-| `unrecognized arguments` 또는 help와 문서가 다름 | Cloud Shell의 containerapp extension 버전이 워크숍 기준과 다름 | 모듈 01의 `az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors`를 다시 실행하고 `az version`으로 버전을 확인한 뒤 명령을 재시도합니다. |
+| `unrecognized arguments` 또는 help와 문서가 다름 | Cloud Shell의 containerapp extension이 오래되었거나 현재 Azure CLI와 호환되지 않음 | 모듈 01의 `az extension add --name containerapp --upgrade --only-show-errors`를 다시 실행하고 `az version`으로 버전을 확인한 뒤 명령을 재시도합니다. |
 | 사용자 지정 NSG/UDR/Firewall 적용 후 execution이 생성되지 않거나 image pull/log 조회가 동시에 실패함 | GitHub API, ACR, Azure identity, ARM, Azure Monitor로 가는 public outbound가 차단됨 | 워크숍 기본값은 outbound를 열어 둔 External ACA Environment입니다. 조직 정책으로 NSG, UDR, Azure Firewall, forced tunneling, ACR Private Endpoint를 추가했다면 GitHub API, ACR, Azure identity, ARM, Azure Monitor 대상이 허용되는지 먼저 검증하고 다시 시도합니다. |
 
 ---

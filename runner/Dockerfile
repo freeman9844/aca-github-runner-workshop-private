@@ -1,7 +1,6 @@
 FROM ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
 
 ARG AZURE_CLI_VERSION=2.89.1-1~noble
-ENV AZURE_EXTENSION_DIR=/opt/azure/cliextensions
 
 USER root
 
@@ -41,16 +40,14 @@ RUN printf 'APT::Sandbox::User "root";\n' >/etc/apt/apt.conf.d/99rootless-build 
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99rootless-build
 
+# workflow가 managed identity login 상태를 저장할 runner 전용 Azure CLI 설정 디렉터리를 준비합니다.
+RUN install -d -o runner -g runner -m 0700 /home/runner/.azure \
+    && az version >/dev/null
+
 # workflow가 등록·정리 로직을 바꾸지 못하도록 entrypoint를 root 소유의 읽기·실행 전용 파일로 배치합니다.
 COPY --chown=root:root entrypoint.sh /home/runner/entrypoint.sh
 RUN chmod 0555 /home/runner/entrypoint.sh
 
-# Container Apps extension을 공유 경로에 고정 버전으로 설치하고 build 시점에 명령 로딩까지 검증합니다.
-RUN mkdir -p "$AZURE_EXTENSION_DIR" \
-    && install -d -o runner -g runner -m 0700 /home/runner/.azure \
-    && az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
-RUN az version >/dev/null \
-    && az containerapp --help >/dev/null
 WORKDIR /home/runner
 
 # container 시작 시 root wrapper가 secret을 보호하고 runner workflow만 non-root로 위임합니다.

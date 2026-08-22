@@ -111,6 +111,42 @@ assert_contains "$IMAGE_TEXT" 'SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 ACR_SERVER=a
 assert_contains "$JOB_TEXT" 'Module 01에서 만든 Key Vault와 Module 02에서 완성한 service endpoint foundation, `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_SECRET_URI`, `UAMI_RID`를 그대로 사용합니다.' 'module 04 must describe split Key Vault ownership'
 assert_contains "$JOB_TEXT" 'Module 02의 `Microsoft.KeyVault` service endpoint, Key Vault ACA subnet rule, `defaultAction=Deny`, `bypass=None`, `Key Vault Secrets User`' 'module 04 troubleshooting must preserve service endpoint ownership order'
 
+module_three_step_three="$(
+  awk '
+    /^## 3\. / { in_section=1 }
+    /^## 4\. / { exit }
+    in_section { print }
+  ' "$IMAGE_DOC"
+)"
+assert_contains \
+  "$module_three_step_three" \
+  'IMAGE="github-actions-runner:2.336.0"' \
+  'module 03 step 3 must initialize IMAGE on the normal first-run path'
+module_three_image_line="$(printf '%s\n' "$module_three_step_three" | grep -nF 'IMAGE="github-actions-runner:2.336.0"' | head -n1 | cut -d: -f1)"
+module_three_build_line="$(printf '%s\n' "$module_three_step_three" | grep -n '^az acr build \\' | head -n1 | cut -d: -f1)"
+[[ -n "$module_three_image_line" && -n "$module_three_build_line" &&
+   "$module_three_image_line" -lt "$module_three_build_line" ]] ||
+  fail 'module 03 step 3 must initialize IMAGE before az acr build'
+
+module_four_step_one="$(
+  awk '
+    /^## 1\. / { in_section=1 }
+    /^## 2\. / { exit }
+    in_section { print }
+  ' "$JOB_DOC"
+)"
+for text in \
+  'JOB="job-ghrunner-$SUFFIX"' \
+  'IMAGE="github-actions-runner:2.336.0"'; do
+  assert_contains "$module_four_step_one" "$text" \
+    'module 04 step 1 must initialize normal-path Job variables'
+done
+module_four_job_line="$(printf '%s\n' "$module_four_step_one" | grep -nF 'JOB="job-ghrunner-$SUFFIX"' | head -n1 | cut -d: -f1)"
+module_four_list_line="$(printf '%s\n' "$module_four_step_one" | grep -n '^az containerapp job list \\' | head -n1 | cut -d: -f1)"
+[[ -n "$module_four_job_line" && -n "$module_four_list_line" &&
+   "$module_four_job_line" -lt "$module_four_list_line" ]] ||
+  fail 'module 04 step 1 must initialize JOB before querying existing jobs'
+
 for obsolete in \
   '저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 모듈 02의 Azure 변수들을 복구한다.'; do
   if grep -F -- "$obsolete" <<<"$IMAGE_OBJECTIVES" >/dev/null; then
@@ -138,6 +174,13 @@ for obsolete in \
 done
 
 assert_contains "$IMAGE_TEXT" '`bash tests/test-artifacts.sh`는 `PASS: workflow artifacts contract`를 출력합니다.' 'missing module 03 expected output'
+assert_contains \
+  "$IMAGE_TEXT" \
+  '| Azure CLI pinning | image 안의 Azure CLI `2.89.1`을 고정해 workflow 명령 동작이 build 시점마다 달라지지 않게 합니다. |' \
+  'module 03 must describe Azure CLI pinning without the unused Container Apps extension'
+if grep -F -- '0.3.55' "$IMAGE_DOC" "$JOB_DOC" >/dev/null; then
+  fail 'modules 03 and 04 must not reference the obsolete Container Apps extension version'
+fi
 
 for text in \
   'KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"' \

@@ -58,6 +58,14 @@ $FOUNDATION_TEXT
 $GITHUB_APP_KEY_STORE_TEXT
 $GITHUB_APP_VERIFIER_TEXT"
 
+assert_contains \
+  "$PREREQ_TEXT" \
+  'az extension add --name containerapp --upgrade --only-show-errors' \
+  'module 01 must install the current Container Apps extension'
+if grep -E -- 'az extension add --name containerapp.*--version' "$PREREQ" >/dev/null; then
+  fail 'module 01 must not pin an obsolete Container Apps extension version'
+fi
+
 architecture_section="$(
   awk '
     /^## 아키텍처 참고$/ { in_section=1 }
@@ -638,6 +646,22 @@ assert_contains_multiline \
 if [[ "$module_two_step_three" == *$'--delegations Microsoft.App/environments \\\n  --service-endpoints Microsoft.Storage Microsoft.KeyVault'* ]]; then
   fail 'module 02 step 3 must not combine delegation and service endpoints in one subnet update'
 fi
+
+module_two_step_four="$(
+  awk '
+    /^## 4\. / { in_section=1 }
+    /^## 5\. / { exit }
+    in_section { print }
+  ' "$FOUNDATION"
+)"
+assert_contains_multiline \
+  "$module_two_step_four" \
+  $'az monitor diagnostic-settings create \\\n  --name aca-runner-logs \\\n  --resource "$ENV_ID" \\\n  --workspace "$LOG_RID" \\\n  --export-to-resource-specific true \\\n  --logs \'[{"categoryGroup":"allLogs","enabled":true}]\' \\\n  --output none' \
+  'module 02 step 4 must route logs to resource-specific ContainerApp tables'
+assert_contains \
+  "$module_two_step_four" \
+  'resource-specific `ContainerAppConsoleLogs`와 `ContainerAppSystemLogs`' \
+  'module 02 step 4 must explain the table contract used by Module 05'
 
 module_two_step_six="$(
   awk '

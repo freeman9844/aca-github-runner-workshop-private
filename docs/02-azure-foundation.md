@@ -248,7 +248,7 @@ az network vnet subnet show \
 
 👁️ **설명**
 
-이 워크숍은 Log Analytics Shared Key를 쓰지 않고, ACA Environment 자체를 Azure Monitor에 연결한 뒤 resource-based diagnostic setting으로 로그를 보냅니다. Task 1의 foundation은 `internal=false`인 **External custom VNet Environment**입니다.
+이 워크숍은 Log Analytics Shared Key를 쓰지 않고, ACA Environment 자체를 Azure Monitor에 연결한 뒤 resource-based diagnostic setting으로 로그를 보냅니다. Diagnostic setting은 Module 05의 KQL과 일치하도록 resource-specific `ContainerAppConsoleLogs`와 `ContainerAppSystemLogs` table을 사용합니다. Task 1의 foundation은 `internal=false`인 **External custom VNet Environment**입니다.
 
 이 워크숍을 처음 실행하는 경우에는 아래 명령으로 새 External custom VNet Environment를 만듭니다.
 이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다.
@@ -277,6 +277,7 @@ az monitor diagnostic-settings create \
   --name aca-runner-logs \
   --resource "$ENV_ID" \
   --workspace "$LOG_RID" \
+  --export-to-resource-specific true \
   --logs '[{"categoryGroup":"allLogs","enabled":true}]' \
   --output none
 ```

@@ -87,14 +87,13 @@ delegated subnet, Storage·Key Vault service endpoint, Storage Account, Key Vaul
 사용합니다. 따라서 Cloud Shell에서 필요한 extension과 resource provider를
 먼저 준비합니다. `Microsoft.Network`는 VNet, subnet, subnet delegation, service endpoint를 위해 필요하고, `Microsoft.ContainerService`는 ACA custom VNet
 infrastructure provisioning에, `Microsoft.Storage`는 Storage Account와 subnet rule 생성에, `Microsoft.KeyVault`는 GitHub App private key를 보관할 Key Vault와 이후 subnet rule 적용에 필요합니다. `--upgrade`를 함께 지정해야 이전 버전의
-`containerapp` extension이 이미 설치된 Cloud Shell에서도 워크숍 기준 버전
-`0.3.55`로 실제 교체됩니다.
+`containerapp` extension이 이미 설치된 Cloud Shell에서도 현재 Azure CLI와 호환되는 최신 버전으로 갱신됩니다.
 
 🟢 **실행**
 
 ```bash
-# ACA 명령 형식을 workshop 기준에 맞추기 위해 containerapp extension 버전을 고정합니다.
-az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
+# 현재 Azure CLI와 호환되는 최신 Container Apps extension을 설치하거나 갱신합니다.
+az extension add --name containerapp --upgrade --only-show-errors
 # VNet, ACA, ACR, Storage, Key Vault, Log Analytics와 diagnostic setting 생성에 필요한 provider를 등록합니다.
 az provider register -n Microsoft.Network --wait
 az provider register -n Microsoft.App --wait

@@ -16,12 +16,16 @@ dockerfile_text="$(<"$DOCKERFILE")"
   fail 'Dockerfile must disable apt sandbox during image builds'
 [[ "$dockerfile_text" == *'gpasswd --delete runner users'* ]] ||
   fail 'Dockerfile must remove runner from supplemental users group for rootless builds'
-[[ "$dockerfile_text" == *'ENV AZURE_EXTENSION_DIR=/opt/azure/cliextensions'* ]] ||
-  fail 'Dockerfile must expose a shared Azure CLI extension directory'
-[[ "$dockerfile_text" == *'mkdir -p "$AZURE_EXTENSION_DIR"'* ]] ||
-  fail 'Dockerfile must create the shared Azure CLI extension directory'
 [[ "$dockerfile_text" == *'install -d -o runner -g runner -m 0700 /home/runner/.azure'* ]] ||
   fail 'Dockerfile must create a runner-owned Azure CLI config directory'
+for obsolete_extension_marker in \
+  'AZURE_EXTENSION_DIR' \
+  'az extension add --name containerapp' \
+  'az containerapp --help'; do
+  if [[ "$dockerfile_text" == *"$obsolete_extension_marker"* ]]; then
+    fail "Dockerfile must not install the unused Container Apps extension: $obsolete_extension_marker"
+  fi
+done
 
 config_line="$(grep -nF 'APT::Sandbox::User "root";' "$DOCKERFILE" | cut -d: -f1 | head -n 1)"
 apt_line="$(grep -nF 'apt-get update' "$DOCKERFILE" | cut -d: -f1 | head -n 1)"

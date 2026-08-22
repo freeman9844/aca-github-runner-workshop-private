@@ -277,36 +277,79 @@ printf '리소스 그룹 삭제 요청됨: %s\n' "$RG"
 
 👁️ **설명**
 
-비동기 삭제 요청 이후에는 조회가 실패하는 시점을 끝으로 판단합니다. `az group show`가 아직 성공하면 삭제가 진행 중이거나 lock이 남아 있을 수 있습니다. Key Vault는 Resource Group과 함께 삭제되더라도 seven-day soft delete가 남고 purge protection은 disabled였으므로, workshop vault는 `az keyvault purge --name "$KEY_VAULT" --location "$LOC"`로 별도 purge해야 이름 재사용과 흔적 제거가 완료됩니다.
+비동기 삭제 요청 이후에는 `az group exists`가 `false`를 반환하는 시점을 끝으로 판단합니다. 이는 `az group show`의 `(ResourceGroupNotFound)`와 같은 완료 상태이지만, 예상된 오류를 발생시키지 않아 이전 모듈에서 설정한 `set -e`에도 안전합니다. Resource Group 삭제 후 Key Vault의 soft-delete proxy가 조회 가능해지는 데 추가 시간이 걸릴 수 있으므로, 두 조건을 각각 제한 시간 내에서 확인한 뒤 purge합니다. Key Vault는 Resource Group과 함께 삭제되더라도 seven-day soft delete가 남고 purge protection은 disabled였으므로, workshop vault는 `az keyvault purge --name "$KEY_VAULT" --location "$LOC"`로 별도 purge해야 이름 재사용과 흔적 제거가 완료됩니다.
 
 🟢 **실행**
 
 ```bash
-# ResourceGroupNotFound를 확인하고 soft-deleted Key Vault purge까지 마무리합니다.
-az group show \
-  --name "$RG" \
-  --query "{name:name,state:properties.provisioningState}" \
-  --output table
+# 예상 오류 대신 실제 삭제 조건을 polling해 ResourceGroupNotFound 상태를 안전하게 확인합니다.
+wait_for_resource_group_deletion() {
+  local cleanup_wait_timeout_seconds=1800
+  local cleanup_wait_interval_seconds=15
+  local cleanup_wait_deadline=$((SECONDS + cleanup_wait_timeout_seconds))
+  local rg_exists=""
 
-az resource list \
-  --resource-group "$RG" \
-  --query "[].{name:name,type:type}" \
-  --output table
+  while (( SECONDS <= cleanup_wait_deadline )); do
+    if ! rg_exists=$(az group exists --name "$RG" --output tsv); then
+      printf 'ERROR: Resource Group 삭제 상태 조회에 실패했습니다: %s\n' "$RG" >&2
+      return 1
+    fi
 
+    if [[ "$rg_exists" == "false" ]]; then
+      printf 'Resource Group 삭제 완료: %s\n' "$RG"
+      return 0
+    fi
+
+    printf 'Resource Group 삭제 대기 중: %s\n' "$RG"
+    sleep "$cleanup_wait_interval_seconds"
+  done
+
+  printf 'ERROR: %s초 안에 Resource Group 삭제가 완료되지 않았습니다: %s\n' \
+    "$cleanup_wait_timeout_seconds" "$RG" >&2
+  return 1
+}
+
+# RG 삭제 후 soft-deleted Key Vault proxy가 조회 가능해질 때까지 별도로 기다립니다.
+wait_for_deleted_key_vault() {
+  local cleanup_wait_timeout_seconds=600
+  local cleanup_wait_interval_seconds=15
+  local cleanup_wait_deadline=$((SECONDS + cleanup_wait_timeout_seconds))
+
+  while (( SECONDS <= cleanup_wait_deadline )); do
+    if az keyvault show-deleted --name "$KEY_VAULT" --location "$LOC" --output none 2>/dev/null; then
+      printf 'soft-deleted Key Vault 확인: %s\n' "$KEY_VAULT"
+      return 0
+    fi
+
+    printf 'soft-deleted Key Vault 생성 대기 중: %s\n' "$KEY_VAULT"
+    sleep "$cleanup_wait_interval_seconds"
+  done
+
+  printf 'ERROR: %s초 안에 soft-deleted Key Vault를 확인하지 못했습니다: %s\n' \
+    "$cleanup_wait_timeout_seconds" "$KEY_VAULT" >&2
+  return 1
+}
+
+wait_for_resource_group_deletion
+wait_for_deleted_key_vault
 az keyvault purge --name "$KEY_VAULT" --location "$LOC"
+printf 'Key Vault purge 완료: %s\n' "$KEY_VAULT"
 ```
 
 📋 **예상 출력**
 
-- 삭제 진행 중에는 `properties.provisioningState`가 `Deleting`으로 보일 수 있습니다.
-- ACR, managed identity, workspace, VNet, Storage account, Key Vault, ACA Environment, provider-managed ACA infrastructure가 차례로 사라질 수 있습니다.
-- 삭제가 완료되면 최종적으로 아래와 비슷한 결과를 기대합니다.
+- 삭제가 진행 중이면 `Resource Group 삭제 대기 중`이 15초 간격으로 출력됩니다.
+- Resource Group이 사라진 뒤 Key Vault soft-delete proxy가 아직 준비되지 않았다면 `soft-deleted Key Vault 생성 대기 중`이 출력됩니다.
+- 두 조건이 모두 충족되면 아래와 비슷한 결과를 기대합니다.
 
 ```text
-(ResourceGroupNotFound) Resource group 'rg-acarunner-a1b2c3' could not be found.
+Resource Group 삭제 완료: rg-acarunner-a1b2c3
+soft-deleted Key Vault 확인: kvacarunnera1b2c3
+Key Vault purge 완료: kvacarunnera1b2c3
 ```
 
-- 즉, asynchronous deletion이 끝난 뒤 `(ResourceGroupNotFound)`가 보이면 Azure cleanup이 완료된 것입니다.
+- `Resource Group 삭제 완료`는 `(ResourceGroupNotFound)`와 같은 최종 상태를 오류 없이 확인했다는 뜻입니다.
+- 30분 안에 Resource Group 삭제가 끝나지 않으면 오류 메시지와 함께 함수가 종료됩니다. Azure Portal에서 lock이나 실패 리소스를 확인한 뒤 이 단계 전체를 다시 실행하세요.
 - purge가 끝난 뒤에는 local workstation에서도 `local PEM`이 남아 있지 않은지 마지막으로 확인하세요.
 
 ## 트러블슈팅
@@ -318,8 +361,8 @@ az keyvault purge --name "$KEY_VAULT" --location "$LOC"
 | `az keyvault secret set --file`이 실패함 | temporary `Key Vault Secrets Officer` assignment 전파 전이거나 현재 IP가 firewall에 없음 | RBAC 전파를 잠시 기다리고, 현재 참가자 IP rule이 추가되었는지 다시 확인합니다. 완료 후에는 temporary IP rule과 temporary role assignment를 모두 제거합니다. |
 | Cloud Shell에서 data-plane `403`이 보임 | Cloud Shell이 workshop ACA subnet 밖에 있음 | 정상입니다. Module 04의 Key Vault runtime proof와 Module 06의 Blob runtime proof를 기준으로 runner 경로를 검증하세요. |
 | GitHub에 stale offline runner가 남음 | UI 반영 지연 또는 이전 execution metadata 잔존 | 몇 분 후 새로고침하고, 계속 남으면 runner 목록에서 stale runner를 수동 제거합니다. persistent online runner가 남는 경우만 문제로 취급합니다. |
-| `az group delete` 후에도 RG가 오래 보임 | ACA Environment 또는 provider-managed ACA infrastructure 삭제가 아직 진행 중 | `az group show`의 `Deleting` 상태와 `az resource list`의 잔여 리소스를 확인합니다. 오류나 lock이 없다면 기다리고, 최종 기준은 `(ResourceGroupNotFound)`입니다. |
-| `az keyvault purge`가 실패함 | RG 삭제가 아직 끝나지 않았거나 soft-deleted vault가 아직 조회되지 않음 | 먼저 `ResourceGroupNotFound`를 확인하고 몇 분 더 기다린 뒤 purge를 다시 시도합니다. purge protection은 disabled이므로 soft-deleted vault가 보이면 purge가 가능합니다. |
+| `az group delete` 후에도 RG가 오래 보임 | ACA Environment 또는 provider-managed ACA infrastructure 삭제가 아직 진행 중 | 8단계의 `az group exists` polling이 30분 timeout에 도달하면 Azure Portal에서 deletion lock이나 실패 리소스를 확인합니다. 최종 기준은 `false`, 즉 `(ResourceGroupNotFound)` 상태입니다. |
+| `az keyvault purge`가 실패함 | soft-deleted vault가 아직 조회되지 않거나 현재 계정에 purge 권한이 없음 | 8단계의 `az keyvault show-deleted` polling 결과를 확인하고, purge protection이 disabled인지와 현재 계정의 purge 권한을 확인한 뒤 단계 전체를 다시 실행합니다. |
 | workflow의 Docker 단계가 실패함 | Docker-in-Docker 또는 Docker daemon/service container 의존 | 이 플랫폼 제약은 우회하지 말고, Docker daemon이 필요한 작업은 다른 runner 환경으로 분리합니다. |
 
 ---

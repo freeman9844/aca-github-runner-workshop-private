@@ -63,6 +63,27 @@ for obsolete in \
   fi
 done
 
+step_eight="$(
+  awk '
+    /^## 8\. / { in_section=1 }
+    /^## 트러블슈팅/ { exit }
+    in_section { print }
+  ' "$DOC"
+)"
+for text in \
+  'wait_for_resource_group_deletion()' \
+  'az group exists --name "$RG" --output tsv' \
+  'wait_for_deleted_key_vault()' \
+  'az keyvault show-deleted --name "$KEY_VAULT" --location "$LOC" --output none' \
+  'cleanup_wait_deadline=$((SECONDS + cleanup_wait_timeout_seconds))' \
+  'sleep "$cleanup_wait_interval_seconds"'; do
+  assert_contains "$step_eight" "$text" \
+    'module 07 step 8 must use condition-based cleanup polling'
+done
+if grep -E '^[[:space:]]*az (group show|resource list)([[:space:]]|$)' <<<"$step_eight" >/dev/null; then
+  fail 'module 07 step 8 must not execute az group show or az resource list after deletion'
+fi
+
 python3 - "$DOC" <<'PY'
 from pathlib import Path
 import sys
@@ -100,6 +121,8 @@ must_appear_in_order(
     "workshop 전용 GitHub App",
     "Azure resource group",
     "ResourceGroupNotFound",
+    "wait_for_resource_group_deletion",
+    "wait_for_deleted_key_vault",
     'az keyvault purge --name "$KEY_VAULT" --location "$LOC"',
     "local PEM",
 )

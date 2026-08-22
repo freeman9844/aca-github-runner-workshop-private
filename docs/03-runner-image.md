@@ -69,7 +69,6 @@ workflow 경계, GitHub App JWT → installation token → runner token 교환,
 FROM ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
 
 ARG AZURE_CLI_VERSION=2.89.1-1~noble
-ENV AZURE_EXTENSION_DIR=/opt/azure/cliextensions
 
 USER root
 
@@ -109,16 +108,14 @@ RUN printf 'APT::Sandbox::User "root";\n' >/etc/apt/apt.conf.d/99rootless-build 
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99rootless-build
 
+# workflow가 managed identity login 상태를 저장할 runner 전용 Azure CLI 설정 디렉터리를 준비합니다.
+RUN install -d -o runner -g runner -m 0700 /home/runner/.azure \
+    && az version >/dev/null
+
 # workflow가 등록·정리 로직을 바꾸지 못하도록 entrypoint를 root 소유의 읽기·실행 전용 파일로 배치합니다.
 COPY --chown=root:root entrypoint.sh /home/runner/entrypoint.sh
 RUN chmod 0555 /home/runner/entrypoint.sh
 
-# Container Apps extension을 공유 경로에 고정 버전으로 설치하고 build 시점에 명령 로딩까지 검증합니다.
-RUN mkdir -p "$AZURE_EXTENSION_DIR" \
-    && install -d -o runner -g runner -m 0700 /home/runner/.azure \
-    && az extension add --name containerapp --upgrade --version 0.3.55 --only-show-errors
-RUN az version >/dev/null \
-    && az containerapp --help >/dev/null
 WORKDIR /home/runner
 
 # container 시작 시 root wrapper가 secret을 보호하고 runner workflow만 non-root로 위임합니다.
@@ -412,6 +409,9 @@ Cloud Shell에는 Docker daemon이 없어도 됩니다. `az acr build`는 소스
 
 ```bash
 # ACR Tasks가 Docker daemon 없이 runner image를 cloud build하고 고정 tag로 저장합니다.
+IMAGE="github-actions-runner:2.336.0"
+export IMAGE
+
 az acr build \
   --resource-group "$RG" \
   --registry "$ACR" \
@@ -458,7 +458,7 @@ az acr show \
 | 항목 | 이유 |
 |------|------|
 | base image pinning | `ghcr.io/actions/actions-runner:2.336.0@sha256:...`처럼 version과 manifest digest를 함께 고정해야 upstream tag 변경에도 워크숍 결과와 트러블슈팅 기준이 흔들리지 않습니다. |
-| Azure CLI pinning | image 안의 Azure CLI `2.89.1`과 Container Apps extension `0.3.55`를 함께 고정해 workflow 명령 동작이 build 시점마다 달라지지 않게 합니다. |
+| Azure CLI pinning | image 안의 Azure CLI `2.89.1`을 고정해 workflow 명령 동작이 build 시점마다 달라지지 않게 합니다. |
 | `--disableupdate` | ephemeral runner가 시작될 때마다 self-update를 시도하면 실행 시간이 늘고 재현성이 떨어집니다. 워크숍은 검증된 tag를 새로 빌드해 배포하는 방식을 사용합니다. |
 | ACR cloud build | Cloud Shell 로컬 Docker에 의존하지 않고 Azure 쪽에서 build/push를 끝내므로 참가자 환경 편차가 작습니다. |
 | non-root 실행 | base image의 `sudo`와 `docker` 그룹에서 `runner`를 제거한 뒤 `USER runner`로 실행합니다. workflow는 container 내부 root 권한으로 상승할 수 없으며 entrypoint도 `root:root`, `0555`로 보호됩니다. |
