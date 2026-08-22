@@ -1,4 +1,4 @@
-name: ACA Runner Private Blob Deploy
+name: ACA Runner VNet-Restricted Blob Deploy
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  deploy-private-blob:
+  deploy-vnet-restricted-blob:
     runs-on: [aca-runner]
     timeout-minutes: 10
     steps:
@@ -31,8 +31,7 @@ jobs:
             AZURE_SUBSCRIPTION_ID \
             AZURE_RESOURCE_GROUP \
             AZURE_STORAGE_ACCOUNT \
-            AZURE_STORAGE_CONTAINER \
-            AZURE_PRIVATE_ENDPOINT_CIDR; do
+            AZURE_STORAGE_CONTAINER; do
             if [[ -z "${!variable:-}" ]]; then
               printf 'ERROR: %s is required.\n' "$variable" >&2
               exit 1
@@ -53,42 +52,12 @@ jobs:
             --query "{subscription:name,subscriptionId:id,user:user.name,type:user.type}" \
             --output table
 
-      - name: Verify Blob DNS resolves to the private endpoint subnet
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Blob private DNS is provided by privatelink.blob.core.windows.net.
-          STORAGE_BLOB_HOSTNAME="${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net"
-          mapfile -t RESOLVED_IPS < <(
-            getent ahostsv4 "$STORAGE_BLOB_HOSTNAME" |
-              awk '{print $1}' |
-              sort -u
-          )
-
-          if [[ "${#RESOLVED_IPS[@]}" -eq 0 ]]; then
-            printf 'ERROR: %s did not resolve to an IPv4 address.\n' "$STORAGE_BLOB_HOSTNAME" >&2
-            exit 1
-          fi
-
-          PRIVATE_IP="$(python3 -c 'import ipaddress, sys; network = ipaddress.ip_network(sys.argv[1], strict=True); matches = [str(ipaddress.ip_address(value)) for value in sys.argv[2:] if ipaddress.ip_address(value) in network]; print(matches[0]) if matches else sys.exit(1)' "$AZURE_PRIVATE_ENDPOINT_CIDR" "${RESOLVED_IPS[@]}")" || {
-            printf 'ERROR: %s resolved outside private endpoint CIDR %s: %s\n' \
-              "$STORAGE_BLOB_HOSTNAME" \
-              "$AZURE_PRIVATE_ENDPOINT_CIDR" \
-              "${RESOLVED_IPS[*]}" >&2
-            exit 1
-          }
-
-          printf 'STORAGE_BLOB_HOSTNAME=%s\n' "$STORAGE_BLOB_HOSTNAME" >> "$GITHUB_ENV"
-          printf 'STORAGE_PRIVATE_IP=%s\n' "$PRIVATE_IP" >> "$GITHUB_ENV"
-          printf 'Resolved %s to private IP %s.\n' \
-            "$STORAGE_BLOB_HOSTNAME" "$PRIVATE_IP"
-
-      - name: Upload and download the private Blob artifact
+      - name: Upload and download the VNet-restricted Blob artifact
         shell: bash
         run: |
           set -euo pipefail
           ARTIFACT_ROOT="${RUNNER_TEMP:-${GITHUB_WORKSPACE:-$PWD}/.runner-temp}"
-          ARTIFACT_DIR="$ARTIFACT_ROOT/private-blob-deploy"
+          ARTIFACT_DIR="$ARTIFACT_ROOT/vnet-restricted-blob-deploy"
           SOURCE_FILE="$ARTIFACT_DIR/source.txt"
           DOWNLOADED_FILE="$ARTIFACT_DIR/downloaded.txt"
           REPOSITORY_VALUE="${GITHUB_REPOSITORY:-unknown/repository}"
@@ -99,13 +68,13 @@ jobs:
           BLOB_NAME="github-actions/${RUN_ID_VALUE}-${RUN_ATTEMPT_VALUE}.txt"
           mkdir -p "$ARTIFACT_DIR"
 
-          cat > "$SOURCE_FILE" <<EOF
+          cat > "$SOURCE_FILE" <<EOF2
           repository=$REPOSITORY_VALUE
           commit=$COMMIT_VALUE
           run_id=$RUN_ID_VALUE
           run_attempt=$RUN_ATTEMPT_VALUE
           actor=$ACTOR_VALUE
-          EOF
+          EOF2
 
           SOURCE_SHA256="$(sha256sum "$SOURCE_FILE" | awk '{print $1}')"
 
@@ -148,7 +117,7 @@ jobs:
           printf 'DOWNLOADED_SHA256=%s\n' "$DOWNLOADED_SHA256" >> "$GITHUB_ENV"
           printf 'BLOB_SHA256=%s\n' "$BLOB_SHA256" >> "$GITHUB_ENV"
 
-      - name: Show private deployment result
+      - name: Show VNet-restricted deployment result
         shell: bash
         run: |
           set -euo pipefail
@@ -159,6 +128,6 @@ jobs:
             --auth-mode login \
             --query "{name:name,size:properties.contentLength,lastModified:properties.lastModified,sha256:metadata.sha256}" \
             --output table
-          printf 'Blob endpoint: %s (%s)\n' \
-            "$STORAGE_BLOB_HOSTNAME" "$STORAGE_PRIVATE_IP"
+          printf 'Blob endpoint: https://%s.blob.core.windows.net/%s/%s\n' \
+            "$AZURE_STORAGE_ACCOUNT" "$AZURE_STORAGE_CONTAINER" "$BLOB_NAME"
           printf 'SHA-256: %s\n' "$SOURCE_SHA256"

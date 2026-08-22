@@ -56,8 +56,9 @@ done
 for text in \
   'Custom VNet 통합 ACA Environment' \
   'ACA Event Job은 ingress를 지원하지 않습니다.' \
-  'Blob Private Endpoint' \
-  'privatelink.blob.core.windows.net' \
+  'Microsoft.Storage service endpoint' \
+  'Storage firewall: default deny' \
+  'standard public DNS' \
   'Storage Blob Data Contributor' \
   'GitHub, ARM, Entra ID, Azure Monitor와 Basic ACR은 public outbound를 사용합니다.'; do
   require "$text" "missing README architecture marker"
@@ -67,8 +68,8 @@ for text in \
   'organization-owned GitHub App' \
   'GitHub App installation' \
   'Azure Key Vault' \
-  'Key Vault Private Endpoint' \
-  'privatelink.vaultcore.azure.net' \
+  'Microsoft.KeyVault service endpoint' \
+  'Key Vault firewall: default deny' \
   'Key Vault Secrets User' \
   'Azure Portal Cloud Shell Bash' \
   'trusted workflow'; do
@@ -76,8 +77,8 @@ for text in \
 done
 
 require '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | GitHub App 설치, Azure Portal Cloud Shell file upload와 installation 범위 검증 | 30분 |' 'README Module 01 row mismatch'
-require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Blob·Key Vault Private Endpoint·Private DNS와 runtime RBAC | 30분 |' 'README Module 02 row mismatch'
-require '| 06 | [Private Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 private Blob 업로드·다운로드와 checksum 검증 | 20분 |' 'README Module 06 row mismatch'
+require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Storage·Key Vault service endpoint와 runtime RBAC | 30분 |' 'README Module 02 row mismatch'
+require '| 06 | [VNet 제한 Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 Blob 업로드·다운로드와 checksum 검증 | 20분 |' 'README Module 06 row mismatch'
 require '**약 150분**' 'README top-level duration mismatch'
 require '|  | **워크숍 합계** |  | **150분** |' 'README module table total mismatch'
 require '| 합계 | 전체 워크숍 | 150분 |' 'README schedule total mismatch'
@@ -85,6 +86,13 @@ require '> 리소스 그룹 삭제 요청은 150분 일정에 포함되지만' '
 require '이 워크숍은 Fine-grained PAT를 사용하지 않습니다.' 'README must explicitly state Fine-grained PAT is not used'
 require '- [ ] GitHub App이 `aca-runner-lab` repository에만 설치되어 있습니다.' 'README completion checklist typo or contract mismatch'
 require 'GitHub App installation 또는 권한 변경은 organization 보안 정책에 따라 owner 승인 또는 재승인이 필요할 수 있습니다.' 'README missing GitHub App approval caveat'
+for text in \
+  'Module 04의 Key Vault reference synchronization/execution을 workshop delivery 전 live rehearsal로 직접 성공시켜야 합니다.' \
+  '저장소 테스트만으로 증명할 수 없습니다.' \
+  '모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요.' \
+  '`defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.'; do
+  require "$text" 'README missing Key Vault service-endpoint caveat'
+done
 
 module_total_check="$(
   awk -F'|' '
@@ -161,7 +169,8 @@ schedule_total_check="$(
 }
 
 require '| Azure Key Vault |' 'README cost table missing Key Vault row'
-require '| Key Vault Private Endpoint |' 'README cost table missing Key Vault Private Endpoint row'
+require '| Virtual network service endpoint | 추가 요금 없음 |' \
+  'README cost table missing service endpoint row'
 
 for obsolete in \
   'GitHub App が' \

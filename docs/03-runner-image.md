@@ -38,25 +38,17 @@ Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 이때 Module 01�
 read -rp "Saved SUFFIX: " SUFFIX
 read -rp "Saved ACR name: " ACR
 
-# suffix에서 파생되는 공통 이름과 private Blob foundation 값을 다시 구성합니다.
+# suffix에서 파생되는 공통 이름과 service endpoint foundation 값을 다시 구성합니다.
 LOC=koreacentral
 RG="rg-acarunner-$SUFFIX"
 LOG="log-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
 VNET="vnet-acarunner-$SUFFIX"
 INFRA_SUBNET="snet-aca-infra"
-PE_SUBNET="snet-private-endpoints"
 STORAGE="stacarunner$SUFFIX"
 STORAGE_CONTAINER="runner-artifacts"
-STORAGE_PE="pe-blob-$SUFFIX"
-STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
-STORAGE_DNS_LINK="link-blob-$SUFFIX"
 KEY_VAULT="kvacarunner$SUFFIX"
-KEY_VAULT_PE="pe-kv-$SUFFIX"
-KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"
-KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"
 GITHUB_APP_KEY_SECRET="github-app-private-key"
-PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
@@ -80,7 +72,7 @@ LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --wo
 LOG_RID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query id   --output tsv)
 ENV_ID=$(az containerapp env show   --resource-group "$RG"   --name "$ENV"   --query id   --output tsv)
 VNET_ID=$(az network vnet show   --resource-group "$RG"   --name "$VNET"   --query id   --output tsv)
-PE_SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$PE_SUBNET"   --query id   --output tsv)
+SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$INFRA_SUBNET"   --query id   --output tsv)
 STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
 ACR_SERVER=$(az acr show --name "$ACR" --query loginServer --output tsv)
 ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
@@ -101,7 +93,7 @@ KEY_VAULT_ID=$(az keyvault show \
 KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
 # 다음 명령과 모듈이 같은 값을 사용하도록 복구한 변수를 현재 shell에 export합니다.
-export SUFFIX LOC RG LOG ENV VNET INFRA_SUBNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK KEY_VAULT KEY_VAULT_PE KEY_VAULT_DNS_ZONE KEY_VAULT_DNS_LINK GITHUB_APP_KEY_SECRET PRIVATE_ENDPOINT_CIDR ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID VNET_ID PE_SUBNET_ID STORAGE_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID KEY_VAULT_ID KEY_VAULT_SECRET_URI
+export SUFFIX LOC RG LOG ENV VNET INFRA_SUBNET STORAGE STORAGE_CONTAINER KEY_VAULT GITHUB_APP_KEY_SECRET ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID VNET_ID SUBNET_ID STORAGE_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID KEY_VAULT_ID KEY_VAULT_SECRET_URI
 
 # 복구한 suffix, 실제 ACR 이름, Storage 이름과 image tag를 출력해 session 상태를 확인합니다.
 printf 'SUFFIX=%s ACR=%s STORAGE=%s KEY_VAULT=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$STORAGE" "$KEY_VAULT" "$IMAGE"

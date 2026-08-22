@@ -53,24 +53,32 @@ def run_script(script: str, *, env: dict[str, str], cwd: Path) -> subprocess.Com
 
 
 def main() -> None:
+    workflow_text = WORKFLOW.read_text(encoding="utf-8")
+    for obsolete in (
+        "AZURE_PRIVATE_ENDPOINT_CIDR",
+        "privatelink.blob.core.windows.net",
+        "Verify Blob DNS resolves to the private endpoint subnet",
+    ):
+        if obsolete in workflow_text:
+            fail(f"workflow contains obsolete Private DNS contract: {obsolete}")
+
     document = load_workflow()
     try:
         deploy_workflow = document["jobs"]
-        deploy_job = deploy_workflow["deploy-private-blob"]
+        deploy_job = deploy_workflow["deploy-vnet-restricted-blob"]
         steps = deploy_job["steps"]
-    except KeyError as exc:
-        fail("workflow must define jobs.deploy-private-blob")
+    except KeyError:
+        fail("workflow must define jobs.deploy-vnet-restricted-blob")
     if not isinstance(deploy_job, dict):
-        fail("deploy-private-blob job must be a mapping")
+        fail("deploy-vnet-restricted-blob job must be a mapping")
     if not isinstance(steps, list):
-        fail("deploy-private-blob job must define steps")
+        fail("deploy-vnet-restricted-blob job must define steps")
 
     required_step_names = {
         "Validate runner inputs",
         "Sign in to Azure with managed identity",
-        "Verify Blob DNS resolves to the private endpoint subnet",
-        "Upload and download the private Blob artifact",
-        "Show private deployment result",
+        "Upload and download the VNet-restricted Blob artifact",
+        "Show VNet-restricted deployment result",
     }
     actual_step_names = {
         step.get("name") for step in steps if isinstance(step, dict) and step.get("name")
@@ -90,13 +98,7 @@ def main() -> None:
     if not isinstance(validate_script, str):
         fail("validation step must contain a run script")
 
-    dns_script = get_step(steps, "Verify Blob DNS resolves to the private endpoint subnet").get("run")
-    if not isinstance(dns_script, str):
-        fail("DNS step must contain a run script")
-    if "ipaddress" not in dns_script or "startswith(" in dns_script:
-        fail("DNS step must use Python ipaddress instead of shell prefix matching")
-
-    blob_script = get_step(steps, "Upload and download the private Blob artifact").get("run")
+    blob_script = get_step(steps, "Upload and download the VNet-restricted Blob artifact").get("run")
     if not isinstance(blob_script, str):
         fail("blob step must contain a run script")
 
@@ -109,30 +111,6 @@ def main() -> None:
         calls_log = SCRATCH / "calls.log"
         sha_log = SCRATCH / "sha.log"
 
-        write_executable(
-            bin_dir / "getent",
-            r'''#!/usr/bin/env bash
-set -euo pipefail
-printf '%s\n' "$*" >> "$MOCK_CALLS"
-case "${MOCK_GETENT_CASE:-}" in
-  private)
-    printf '%s %s\n' "${MOCK_GETENT_IP:-10.20.1.4}" "$2"
-    exit 0
-    ;;
-  public)
-    printf '%s %s\n' "${MOCK_GETENT_IP:-20.60.1.4}" "$2"
-    exit 0
-    ;;
-  unresolved)
-    exit 2
-    ;;
-  *)
-    printf 'unexpected getent scenario\n' >&2
-    exit 99
-    ;;
-esac
-''',
-        )
         write_executable(
             bin_dir / "az",
             r'''#!/usr/bin/env bash
@@ -191,10 +169,8 @@ printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111
                 "AZURE_CLIENT_ID": "client-id",
                 "AZURE_SUBSCRIPTION_ID": "sub-id",
                 "AZURE_RESOURCE_GROUP": "rg-test",
-                "AZURE_CONTAINERAPPS_ENVIRONMENT": "env-test",
                 "AZURE_STORAGE_ACCOUNT": "stacarunnertest",
                 "AZURE_STORAGE_CONTAINER": "runner-artifacts",
-                "AZURE_PRIVATE_ENDPOINT_CIDR": "10.20.1.0/24",
                 "GITHUB_WORKSPACE": str(SCRATCH),
                 "GITHUB_ENV": str(SCRATCH / "github-env"),
                 "MOCK_CALLS": str(calls_log),
@@ -227,22 +203,7 @@ printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111
                 f"actual: {combined_validation_output!r}"
             )
 
-        dns_cases = {
-            "private": ("10.20.1.4", 0),
-            "public": ("20.60.1.4", 1),
-            "unresolved": ("", 1),
-        }
-        for case_name, (ip_value, expected_rc) in dns_cases.items():
-            env = base_env | {"MOCK_GETENT_CASE": case_name, "MOCK_GETENT_IP": ip_value}
-            result = run_script(dns_script, env=env, cwd=SCRATCH)
-            if result.returncode != expected_rc:
-                fail(
-                    f"DNS step returned {result.returncode} for {case_name}; expected {expected_rc}\n"
-                    f"stdout: {result.stdout}\nstderr: {result.stderr}"
-                )
-
-        env = base_env | {"MOCK_GETENT_CASE": "private", "MOCK_GETENT_IP": "10.20.1.4"}
-        result = run_script(blob_script, env=env, cwd=SCRATCH)
+        result = run_script(blob_script, env=base_env, cwd=SCRATCH)
         if result.returncode == 0:
             fail("blob step must fail when checksum mismatches")
         combined_output = result.stdout + result.stderr
@@ -262,7 +223,7 @@ printf '%s  %s\n' "${MOCK_SHA256SUM_VALUE:-1111111111111111111111111111111111111
     finally:
         shutil.rmtree(SCRATCH, ignore_errors=True)
 
-    print("PASS: workflow YAML syntax and private Blob behavior")
+    print("PASS: workflow YAML syntax and VNet-restricted Blob behavior")
 
 
 if __name__ == "__main__":

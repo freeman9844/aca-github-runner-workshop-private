@@ -24,14 +24,12 @@ DOC_TEXT="$(<"$DOC")"
 WORKFLOW_TEXT="$(<"$WORKFLOW")"
 
 for heading in \
-  '# 06. Private Blob 배포와 결과 확인' \
-  '## 0. 세션 재연결 시 변수 복구 (선택)' \
-  '## 1. Storage data-plane 권한과 private endpoint 상태 확인' \
-  '## 2. Private Blob workflow를 GitHub에 생성' \
-  '## 3. GitHub Actions에서 private artifact 배포 실행' \
-  '## 4. Private DNS와 Blob checksum 결과 해석' \
-  '## 5. Cloud Shell과 Azure Portal에서 control-plane 확인' \
-  '## 트러블슈팅'; do
+  '# 06. VNet 제한 Blob 배포와 결과 확인' \
+  '## 1. Storage service endpoint, firewall, RBAC 확인' \
+  '## 2. VNet 제한 Blob workflow를 GitHub에 생성' \
+  '## 3. GitHub Actions에서 Blob artifact 배포 실행' \
+  '## 4. Blob checksum과 network boundary 결과 해석' \
+  '## 5. Cloud Shell과 Azure Portal에서 control-plane 확인'; do
   assert_contains "$DOC_TEXT" "$heading" 'module 06 missing heading'
 done
 
@@ -58,9 +56,10 @@ for text in \
   'ERROR: GitHub App bootstrap variable reached the workflow environment:' \
   'AZURE_STORAGE_ACCOUNT' \
   'AZURE_STORAGE_CONTAINER' \
-  'AZURE_PRIVATE_ENDPOINT_CIDR' \
-  'privatelink.blob.core.windows.net' \
-  'private IP' \
+  'Microsoft.Storage' \
+  'SUBNET_ID' \
+  'virtualNetworkRules' \
+  'bypass' \
   'External ACA Job은 ingress를 지원하지 않으며' \
   'inbound reachability를 증명하지 않습니다' \
   'normal child-environment non-inheritance' \
@@ -69,8 +68,10 @@ for text in \
   'az storage blob download' \
   '--auth-mode login' \
   'sha256sum' \
-  'Cloud Shell은 control-plane만 확인합니다.'; do
-  assert_contains "$DOC_TEXT" "$text" 'module 06 missing private-blob marker'
+  'Cloud Shell은 control-plane만 확인합니다.' \
+  'Cloud Shell에서 같은 Blob data-plane 명령을 실행하면 403' \
+  'defaultAction=Allow'; do
+  assert_contains "$DOC_TEXT" "$text" 'module 06 missing VNet-restricted Blob marker'
 done
 
 section_one="$(
@@ -105,6 +106,12 @@ for old_screenshot in \
 done
 
 for forbidden in \
+  'AZURE_PRIVATE_ENDPOINT_CIDR' \
+  'PRIVATE_ENDPOINT_CIDR' \
+  'privatelink.blob.core.windows.net' \
+  'STORAGE_DNS_ZONE' \
+  'PE_SUBNET' \
+  'private IP' \
   'Container Apps Contributor' \
   'AZURE_SAMPLE_''APP' \
   'SAMPLE_APP' \
@@ -115,8 +122,8 @@ for forbidden in \
   'APP_URL' \
   'FQDN'; do
   if grep -F -- "$forbidden" "$DOC" "$WORKFLOW" >/dev/null; then
-    fail "obsolete sample-app architecture still present: $forbidden"
+    fail "obsolete sample-app or Private DNS architecture still present: $forbidden"
   fi
 done
 
-printf 'PASS: Private Blob 배포와 결과 확인 doc and workflow disclosure\n'
+printf 'PASS: VNet-restricted Blob deployment doc and workflow disclosure\n'

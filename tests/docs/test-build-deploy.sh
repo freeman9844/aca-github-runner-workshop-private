@@ -40,11 +40,12 @@ JOB_OBJECTIVES="$(extract_objectives "$JOB_DOC")"
 [[ -n "$JOB_OBJECTIVES" ]] || fail "module 04 missing objective section"
 
 for text in \
+  'INFRA_SUBNET="snet-aca-infra"' \
+  'SUBNET_ID=$(az network vnet subnet show' \
   'STORAGE="stacarunner$SUFFIX"' \
   'STORAGE_CONTAINER="runner-artifacts"' \
-  'STORAGE_ID=$(az storage account show' \
-  'PE_SUBNET_ID=$(az network vnet subnet show'; do
-  assert_contains "$ALL_TEXT" "$text" 'module 03/04 must restore private-blob variables'
+  'STORAGE_ID=$(az storage account show'; do
+  assert_contains "$ALL_TEXT" "$text" 'module 03/04 service endpoint recovery marker missing'
 done
 
 for text in \
@@ -62,18 +63,27 @@ done
 for text in \
   'AZURE_STORAGE_ACCOUNT' \
   'AZURE_STORAGE_CONTAINER' \
-  'AZURE_PRIVATE_ENDPOINT_CIDR' \
   'Jobs do not support ingress' \
-  '10.20.1.0/24'; do
-  assert_contains "$JOB_TEXT" "$text" 'module 04 private-blob marker missing'
+  'Microsoft.Storage' \
+  'Microsoft.KeyVault'; do
+  assert_contains "$JOB_TEXT" "$text" 'module 04 service endpoint marker missing'
+done
+
+for text in \
+  'Module 04 Key Vault reference synchronization/execution 성공이 acceptance gate입니다.' \
+  'live rehearsal' \
+  '저장소 테스트만으로 증명할 수 없습니다.' \
+  '모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요.' \
+  '`defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.'; do
+  assert_contains "$JOB_TEXT" "$text" 'module 04 Key Vault service-endpoint caveat missing'
 done
 
 assert_contains "$IMAGE_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 'missing module 03 optional recovery heading'
 assert_contains "$JOB_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 'missing module 04 optional recovery heading'
 assert_contains "$IMAGE_TEXT" 'Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, Module 02에서 저장한 실제 `ACR` 이름을 사용해 같은 리소스를 복구합니다.' 'module 03 must preserve Module 01 Key Vault ownership and Module 02 ACR ownership'
 assert_contains "$IMAGE_TEXT" '`KEY_VAULT`도 Module 01에서 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 사용하세요.' 'module 03 must keep actual Key Vault collision recovery with Module 01'
-assert_contains "$JOB_TEXT" 'Module 01에서 만든 Key Vault와 Module 02에서 완성한 private access, `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_SECRET_URI`, `UAMI_RID`를 그대로 사용합니다.' 'module 04 must describe split Key Vault ownership'
-assert_contains "$JOB_TEXT" 'Module 01의 Azure Portal secret 저장과 Module 02의 Key Vault Private Endpoint, Private DNS, `Key Vault Secrets User` 역할을 순서대로 확인합니다.' 'module 04 troubleshooting must preserve Module 01 then Module 02 ownership order'
+assert_contains "$JOB_TEXT" 'Module 01에서 만든 Key Vault와 Module 02에서 완성한 service endpoint foundation, `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_SECRET_URI`, `UAMI_RID`를 그대로 사용합니다.' 'module 04 must describe split Key Vault ownership'
+assert_contains "$JOB_TEXT" 'Module 02의 `Microsoft.KeyVault` service endpoint, Key Vault ACA subnet rule, `defaultAction=Deny`, `bypass=None`, `Key Vault Secrets User`' 'module 04 troubleshooting must preserve service endpoint ownership order'
 
 for obsolete in \
   '저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 모듈 02의 Azure 변수들을 복구한다.'; do
@@ -123,6 +133,20 @@ for obsolete in \
   'GITHUB_PAT'; do
   if grep -F -- "$obsolete" "$JOB_DOC" >/dev/null; then
     fail "module 04 still contains obsolete PAT contract: $obsolete"
+  fi
+done
+
+for forbidden in \
+  'PE_SUBNET' \
+  'STORAGE_PE' \
+  'KEY_VAULT_PE' \
+  'STORAGE_DNS_ZONE' \
+  'KEY_VAULT_DNS_ZONE' \
+  'PRIVATE_ENDPOINT_CIDR' \
+  'AZURE_PRIVATE_ENDPOINT_CIDR' \
+  'privatelink.'; do
+  if grep -F -- "$forbidden" "$IMAGE_DOC" "$JOB_DOC" >/dev/null; then
+    fail "module 03/04 still contains obsolete Private Link state: $forbidden"
   fi
 done
 
