@@ -9,7 +9,7 @@
 - `runner/Dockerfile`과 `runner/entrypoint.sh`를 검토하고 정적 검사를 실행한다.
 - ACR Tasks의 `az acr build`로 runner image를 빌드하고 ACR에 게시한다.
 - ACR image tag와 보안 설정을 확인해 Module 04 입력값을 검증한다.
-- Cloud Shell 세션을 재연결한 경우에만 선택적 복구 절차로 Module 02 변수를 다시 구성한다.
+- Cloud Shell 세션을 재연결한 경우에만 선택적 복구 절차로 `SUFFIX`와 실제 `ACR` 이름을 다시 입력한다.
 
 
 ## 0. 세션 재연결 시 변수 복구 (선택)
@@ -19,85 +19,37 @@
 
 👁️ **설명**
 
-Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 이때 Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, Module 02에서 저장한 실제 `ACR` 이름을 사용해 같은 리소스를 복구합니다. `ACR`과 `STORAGE`는 이름 충돌 복구가 있었다면 `SUFFIX`에서 유도되지 않는 별도 값이므로, Module 02에서 저장해 둔 실제 값을 그대로 입력하세요. `KEY_VAULT`도 Module 01에서 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 사용하세요.
+Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 이때 Module 01에서 저장한 `SUFFIX`와 Module 02에서 저장한 실제 `ACR` 이름을 다시 입력해 runner image 빌드에 필요한 최소 상태만 복구합니다.
 
 🟢 **실행**
 
 세션이 그대로라면 건너뛰어도 되지만, 재접속했다면 아래 블록을 그대로 다시 실행합니다.
 
 ```bash
-# 저장해 둔 suffix와 실제 ACR 이름을 입력해 기존 workshop 리소스 이름을 복원합니다.
+# 저장해 둔 suffix와 실제 ACR 이름으로 image build 변수를 복원합니다.
 read -rp "Saved SUFFIX: " SUFFIX
 read -rp "Saved ACR name: " ACR
 
-# suffix에서 파생되는 공통 이름과 service endpoint foundation 값을 다시 구성합니다.
-LOC=koreacentral
+# suffix와 실제 ACR 이름으로 필요한 최소 변수만 다시 구성합니다.
 RG="rg-acarunner-$SUFFIX"
-LOG="log-acarunner-$SUFFIX"
-ENV="env-acarunner-$SUFFIX"
-VNET="vnet-acarunner-$SUFFIX"
-INFRA_SUBNET="snet-aca-infra"
-STORAGE="stacarunner$SUFFIX"
-STORAGE_CONTAINER="runner-artifacts"
-KEY_VAULT="kvacarunner$SUFFIX"
-GITHUB_APP_KEY_SECRET="github-app-private-key"
-UAMI="id-acarunner-$SUFFIX"
-JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
-
-# Module 02에서 Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
-read -rp "Saved Storage account name if changed (press Enter to keep ${STORAGE}): " SAVED_STORAGE
-if [[ -n "$SAVED_STORAGE" ]]; then
-  STORAGE="$SAVED_STORAGE"
-fi
-unset SAVED_STORAGE
-
-# Module 01에서 Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
-read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
-if [[ -n "$SAVED_KEY_VAULT" ]]; then
-  KEY_VAULT="$SAVED_KEY_VAULT"
-fi
-unset SAVED_KEY_VAULT
-
-# workspace, Environment, ACR, Storage, subscription과 Resource Group ID를 Azure에서 다시 조회합니다.
-LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
-LOG_RID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query id   --output tsv)
-ENV_ID=$(az containerapp env show   --resource-group "$RG"   --name "$ENV"   --query id   --output tsv)
-VNET_ID=$(az network vnet show   --resource-group "$RG"   --name "$VNET"   --query id   --output tsv)
-SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$INFRA_SUBNET"   --query id   --output tsv)
-STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
 ACR_SERVER=$(az acr show --name "$ACR" --query loginServer --output tsv)
 ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
-SUBSCRIPTION_ID=$(az account show --query id --output tsv)
-RG_ID=$(az group show   --name "$RG"   --query id   --output tsv)
-
-# UAMI의 resource, principal, client ID를 각각 Job 연결·RBAC·Azure login 용도로 복원합니다.
-UAMI_RID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query id   --output tsv)
-UAMI_PID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query principalId   --output tsv)
-UAMI_CLIENT_ID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query clientId   --output tsv)
-
-# Key Vault resource ID와 secret URI를 복원합니다.
-KEY_VAULT_ID=$(az keyvault show \
-  --resource-group "$RG" \
-  --name "$KEY_VAULT" \
-  --query id \
-  --output tsv)
-KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
 # 다음 명령과 모듈이 같은 값을 사용하도록 복구한 변수를 현재 shell에 export합니다.
-export SUFFIX LOC RG LOG ENV VNET INFRA_SUBNET STORAGE STORAGE_CONTAINER KEY_VAULT GITHUB_APP_KEY_SECRET ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID VNET_ID SUBNET_ID STORAGE_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID KEY_VAULT_ID KEY_VAULT_SECRET_URI
+export SUFFIX RG ACR IMAGE ACR_SERVER ACR_ID
 
-# 복구한 suffix, 실제 ACR 이름, Storage 이름과 image tag를 출력해 session 상태를 확인합니다.
-printf 'SUFFIX=%s ACR=%s STORAGE=%s KEY_VAULT=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$STORAGE" "$KEY_VAULT" "$IMAGE"
+# 복구한 suffix, 실제 ACR 이름, ACR 서버, image tag를 출력해 session 상태를 확인합니다.
+printf 'SUFFIX=%s ACR=%s ACR_SERVER=%s IMAGE=%s\n' "$SUFFIX" "$ACR" "$ACR_SERVER" "$IMAGE"
 ```
 
 📋 **예상 출력**
 
 ```text
-SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 STORAGE=stacarunnera1b2c3 KEY_VAULT=kvacarunnera1b2c3 IMAGE=github-actions-runner:2.336.0
+SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io IMAGE=github-actions-runner:2.336.0
 ```
 
-`ACR` 값은 위 형식이 기본값일 뿐이며, 모듈 02에서 이름 충돌 복구를 했다면 입력한 실제 `ACR` 값이 그대로 출력되어야 합니다. `STORAGE`도 이름 충돌 복구가 있었다면 저장해 둔 실제 값으로 출력되어야 정상입니다.
+`ACR` 값은 위 형식이 기본값일 뿐이며, 모듈 02에서 이름 충돌 복구를 했다면 입력한 실제 `ACR` 값이 그대로 출력되어야 합니다.
 
 </details>
 

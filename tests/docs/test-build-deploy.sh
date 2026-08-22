@@ -37,8 +37,6 @@ extract_objectives() {
 
 IMAGE_TEXT="$(<"$IMAGE_DOC")"
 JOB_TEXT="$(<"$JOB_DOC")"
-ALL_TEXT="$IMAGE_TEXT
-$JOB_TEXT"
 IMAGE_OBJECTIVES="$(extract_objectives "$IMAGE_DOC")"
 JOB_OBJECTIVES="$(extract_objectives "$JOB_DOC")"
 
@@ -55,12 +53,25 @@ for obsolete in \
 done
 
 for text in \
-  'INFRA_SUBNET="snet-aca-infra"' \
-  'SUBNET_ID=$(az network vnet subnet show' \
-  'STORAGE="stacarunner$SUFFIX"' \
-  'STORAGE_CONTAINER="runner-artifacts"' \
-  'STORAGE_ID=$(az storage account show'; do
-  assert_contains "$ALL_TEXT" "$text" 'module 03/04 service endpoint recovery marker missing'
+  'read -rp "Saved SUFFIX: " SUFFIX' \
+  'read -rp "Saved ACR name: " ACR' \
+  'RG="rg-acarunner-$SUFFIX"' \
+  'IMAGE="github-actions-runner:2.336.0"' \
+  'ACR_SERVER=$(az acr show --name "$ACR" --query loginServer --output tsv)' \
+  'ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)'; do
+  assert_contains "$IMAGE_TEXT" "$text" 'module 03 minimal recovery contract missing'
+done
+
+for removed_text in \
+  'Saved Storage account name if changed' \
+  'Saved Key Vault name if changed' \
+  'STORAGE_ID=$(az storage account show' \
+  'KEY_VAULT_ID=$(az keyvault show' \
+  'UAMI_RID=$(az identity show' \
+  'LOG_ID=$(az monitor log-analytics workspace show'; do
+  if grep -F -- "$removed_text" "$IMAGE_DOC" >/dev/null; then
+    fail "module 03 recovery still restores unused state: $removed_text"
+  fi
 done
 
 for text in \
@@ -95,8 +106,8 @@ done
 
 assert_contains "$IMAGE_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 'missing module 03 optional recovery heading'
 assert_contains "$JOB_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 'missing module 04 optional recovery heading'
-assert_contains "$IMAGE_TEXT" 'Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, Module 02에서 저장한 실제 `ACR` 이름을 사용해 같은 리소스를 복구합니다.' 'module 03 must preserve Module 01 Key Vault ownership and Module 02 ACR ownership'
-assert_contains "$IMAGE_TEXT" '`KEY_VAULT`도 Module 01에서 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 사용하세요.' 'module 03 must keep actual Key Vault collision recovery with Module 01'
+assert_contains "$IMAGE_TEXT" 'Cloud Shell 세션이 끊기면 셸 변수는 사라집니다. 이때 Module 01에서 저장한 `SUFFIX`와 Module 02에서 저장한 실제 `ACR` 이름을 다시 입력해 runner image 빌드에 필요한 최소 상태만 복구합니다.' 'module 03 minimal recovery explanation missing'
+assert_contains "$IMAGE_TEXT" 'SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io IMAGE=github-actions-runner:2.336.0' 'module 03 minimal recovery example output missing'
 assert_contains "$JOB_TEXT" 'Module 01에서 만든 Key Vault와 Module 02에서 완성한 service endpoint foundation, `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_SECRET_URI`, `UAMI_RID`를 그대로 사용합니다.' 'module 04 must describe split Key Vault ownership'
 assert_contains "$JOB_TEXT" 'Module 02의 `Microsoft.KeyVault` service endpoint, Key Vault ACA subnet rule, `defaultAction=Deny`, `bypass=None`, `Key Vault Secrets User`' 'module 04 troubleshooting must preserve service endpoint ownership order'
 
