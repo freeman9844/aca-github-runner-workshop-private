@@ -10,6 +10,7 @@ APP_INSTALL_TARGET_IMAGE="$ROOT/docs/images/01-github-app-install-target.png"
 APP_SELECT_REPOSITORY_IMAGE="$ROOT/docs/images/01-github-app-select-repository.png"
 KEY_VAULT_SECRETS_IMAGE="$ROOT/docs/images/01-key-vault-secrets-list.png"
 KEY_VAULT_CREATE_SECRET_IMAGE="$ROOT/docs/images/01-key-vault-create-secret.png"
+GITHUB_APP_KEY_STORE="$ROOT/scripts/store-github-app-private-key.sh"
 GITHUB_APP_VERIFIER="$ROOT/scripts/verify-github-app-installation.sh"
 
 fail() {
@@ -39,13 +40,17 @@ assert_contains_multiline() {
 [[ -f "$APP_SELECT_REPOSITORY_IMAGE" ]] || fail "module 01 GitHub App repository selection image missing"
 [[ -f "$KEY_VAULT_SECRETS_IMAGE" ]] || fail "module 01 Key Vault secrets list image missing"
 [[ -f "$KEY_VAULT_CREATE_SECRET_IMAGE" ]] || fail "module 01 Key Vault create secret image missing"
+[[ -f "$GITHUB_APP_KEY_STORE" ]] || fail "module 01 GitHub App private key store script missing"
 [[ -f "$GITHUB_APP_VERIFIER" ]] || fail "module 01 GitHub App verifier missing"
 
 PREREQ_TEXT="$(<"$PREREQ")"
 FOUNDATION_TEXT="$(<"$FOUNDATION")"
+GITHUB_APP_KEY_STORE_TEXT="$(<"$GITHUB_APP_KEY_STORE")"
 GITHUB_APP_VERIFIER_TEXT="$(<"$GITHUB_APP_VERIFIER")"
 ALL_TEXT="$PREREQ_TEXT
-$FOUNDATION_TEXT"
+$FOUNDATION_TEXT
+$GITHUB_APP_KEY_STORE_TEXT
+$GITHUB_APP_VERIFIER_TEXT"
 
 architecture_section="$(
   awk '
@@ -280,13 +285,10 @@ done
 for text in \
   '### 7-L. Azure Portal Cloud Shell: GitHub App PEM file 업로드' \
   '**Manage files** → **Upload**' \
-  'UPLOADED_PEM_FILE="$HOME/$UPLOADED_PEM_NAME"' \
-  'openssl pkey -in "$UPLOADED_PEM_FILE" -check -noout' \
-  'az keyvault secret set' \
-  '--name "$GITHUB_APP_KEY_SECRET"' \
-  '--file "$UPLOADED_PEM_FILE"' \
-  '--content-type "application/x-pem-file"' \
-  'rm -f -- "$UPLOADED_PEM_FILE"' \
+  'cd ~/aca-github-runner-workshop' \
+  'bash scripts/store-github-app-private-key.sh "$RG"' \
+  '**실제 Key Vault 확인:**' \
+  '`kvacarunner<suffix>`' \
   '**Objects** → **Secrets**' \
   'Secret Identifier' \
   '![Azure Portal Key Vault의 Secrets 메뉴와 Generate/Import 예시](images/01-key-vault-secrets-list.png)' \
@@ -294,6 +296,28 @@ for text in \
   assert_contains "$step_seven_portal" "$text" \
     'module 01 step 7-L Azure Portal secret guidance missing'
 done
+for text in \
+  'UPLOADED_PEM_FILE="$HOME/$UPLOADED_PEM_NAME"' \
+  'openssl pkey -in "$UPLOADED_PEM_FILE" -check -noout' \
+  'az keyvault list' \
+  '--resource-group "$RG"' \
+  'ERROR: Resource Group에서 Key Vault를 정확히 하나 찾지 못했습니다:' \
+  'az keyvault secret set' \
+  '--name "$GITHUB_APP_KEY_SECRET"' \
+  '--file "$UPLOADED_PEM_FILE"' \
+  '--content-type "application/x-pem-file"' \
+  'rm -f -- "$UPLOADED_PEM_FILE"' \
+  'if ! SECRET_ID="$(' \
+  'ERROR: Key Vault secret 저장에 실패했습니다.' \
+  'PASS: Key Vault secret 저장 완료:'; do
+  assert_contains "$GITHUB_APP_KEY_STORE_TEXT" "$text" \
+    'module 01 private key store behavior missing'
+done
+if grep -F 'store_github_app_private_key()' "$PREREQ" >/dev/null; then
+  fail 'module 01 step 7-L must not expose the private key store implementation inline'
+fi
+bash -n "$GITHUB_APP_KEY_STORE" ||
+  fail 'module 01 GitHub App private key store script has invalid Bash syntax'
 for forbidden in \
   'Value | 로컬 PEM 파일의 전체 내용' \
   '클립보드에 남은 PEM'; do
@@ -346,7 +370,7 @@ step_eight_section="$(
 for text in \
   '## 8. Cloud Shell에서 GitHub App 설치 범위 검증' \
   'cd ~/aca-github-runner-workshop' \
-  'bash scripts/verify-github-app-installation.sh'; do
+  'bash scripts/verify-github-app-installation.sh "$RG"'; do
   assert_contains "$step_eight_section" "$text" \
     'module 01 step 8 intuitive script execution missing'
 done
@@ -378,6 +402,7 @@ for text in \
   'ERROR: required variable is not set:' \
   '# 인증에 필요한 Cloud Shell 명령이 모두 설치되어 있는지 먼저 확인합니다.' \
   '# 앞 단계에서 입력한 Azure와 GitHub 식별자가 현재 Cloud Shell에 있는지 확인합니다.' \
+  '# Resource Group의 실제 Key Vault 이름을 조회해 stale KEY_VAULT 값을 사용하지 않습니다.' \
   '# App ID와 Installation ID가 GitHub에서 사용하는 양의 정수 형식인지 검사합니다.' \
   '# 임시 private key 파일을 만들고 script 종료 시 secret과 JWT를 항상 정리합니다.' \
   '# Key Vault secret을 보호된 임시 파일로 내려받아 JWT 서명에 사용합니다.' \
@@ -405,6 +430,47 @@ fi
 bash -n "$GITHUB_APP_VERIFIER" ||
   fail 'module 01 GitHub App verifier has invalid Bash syntax'
 
+store_fake_bin="$(mktemp -d)"
+store_fake_home="$(mktemp -d)"
+printf '%s\n' 'test private key' >"$store_fake_home/github-app.pem"
+cat >"$store_fake_bin/az" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *'keyvault list'* ]]; then
+  printf 'kvacarunnera1b2c3\n'
+  exit 0
+fi
+if [[ "$*" == *'keyvault secret set'* ]]; then
+  printf 'ERROR: simulated Key Vault DNS failure\n' >&2
+  exit 1
+fi
+exit 0
+EOF
+printf '#!/usr/bin/env bash\nexit 0\n' >"$store_fake_bin/openssl"
+chmod +x "$store_fake_bin/az" "$store_fake_bin/openssl"
+
+if store_failure_output="$(
+  printf 'github-app.pem\n' |
+    env -i \
+      PATH="$store_fake_bin:/usr/bin:/bin" \
+      HOME="$store_fake_home" \
+      KEY_VAULT='kvacarunner' \
+      bash "$GITHUB_APP_KEY_STORE" 'rg-acarunner-a1b2c3' 2>&1
+)"; then
+  fail 'module 01 private key store must fail when az keyvault secret set fails'
+fi
+assert_contains \
+  "$store_failure_output" \
+  '실제 Key Vault 확인: kvacarunnera1b2c3' \
+  'module 01 private key store must resolve the vault from the resource group'
+if [[ "$store_failure_output" == *'PASS: Key Vault secret 저장 완료:'* ]]; then
+  fail 'module 01 private key store must not print PASS after an Azure CLI failure'
+fi
+[[ ! -e "$store_fake_home/github-app.pem" ]] ||
+  fail 'module 01 private key store must remove the uploaded PEM after failure'
+
+rm -f -- "$store_fake_bin/az" "$store_fake_bin/openssl"
+rmdir -- "$store_fake_bin" "$store_fake_home"
+
 fake_bin="$(mktemp -d)"
 for fake_command in az openssl curl jq; do
   printf '#!/usr/bin/env bash\nexit 0\n' >"$fake_bin/$fake_command"
@@ -415,7 +481,7 @@ if missing_variable_output="$(
   env -i \
     PATH="$fake_bin:/usr/bin:/bin" \
     HOME="${HOME:-/tmp}" \
-    bash "$GITHUB_APP_VERIFIER" 2>&1
+    bash "$GITHUB_APP_VERIFIER" 'rg-acarunner-a1b2c3' 2>&1
 )"; then
   fail 'module 01 GitHub App verifier must reject missing variables'
 fi
@@ -434,7 +500,7 @@ if invalid_id_output="$(
     GITHUB_REPO='aca-runner-lab' \
     GITHUB_APP_ID='not-a-number' \
     GITHUB_APP_INSTALLATION_ID='12345678' \
-    bash "$GITHUB_APP_VERIFIER" 2>&1
+    bash "$GITHUB_APP_VERIFIER" 'rg-acarunner-a1b2c3' 2>&1
 )"; then
   fail 'module 01 GitHub App verifier must reject invalid App IDs'
 fi
@@ -473,6 +539,14 @@ assert_contains \
 if [[ "$PREREQ_TEXT" == *'최대 2분'* ]]; then
   fail 'module 01 must not claim Azure RBAC propagation is limited to two minutes'
 fi
+for text in \
+  "Failed to resolve 'kvacarunner.vault.azure.net'" \
+  'PASS: Key Vault secret 저장 완료:' \
+  'git pull --ff-only' \
+  'bash scripts/store-github-app-private-key.sh "$RG"'; do
+  assert_contains "$PREREQ_TEXT" "$text" \
+    'module 01 troubleshooting must cover stale Key Vault names and false PASS output'
+done
 if [[ "$step_five_section" == *'다음 모듈에서는 Cloud Shell의 비밀이 아닌 식별자와 로컬 워크스테이션에만 남겨 둔'* ]]; then
   fail 'module 01 step 5 must not claim the next module directly creates the installation token'
 fi

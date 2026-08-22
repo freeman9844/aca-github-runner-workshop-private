@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 bash -n runner/entrypoint.sh
+bash -n scripts/store-github-app-private-key.sh
 bash -n scripts/verify-github-app-installation.sh
 bash tests/runner/test-dockerfile.sh
 bash tests/runner/test-entrypoint.sh
@@ -37,6 +38,7 @@ required_files=(
   README.md
   runner/Dockerfile
   runner/entrypoint.sh
+  scripts/store-github-app-private-key.sh
   scripts/verify-github-app-installation.sh
   samples/parallel-runner-workflow.yml
   samples/azure-sample-deploy-workflow.yml

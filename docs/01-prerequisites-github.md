@@ -427,7 +427,8 @@ KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=11111111-2222-3333-4444-555555555555
 PEM은 줄바꿈이 포함된 multiline secret이므로 Portal의 `Value` 입력란에 직접 붙여 넣지
 않습니다. Azure Portal Cloud Shell의 file upload를 사용하고, 공식 multiline secret
 방식인 `az keyvault secret set --file`로 저장합니다. Upload한 PEM은 Key Vault 저장 성공
-여부와 관계없이 아래 함수가 종료될 때 Cloud Shell에서 삭제됩니다.
+여부와 관계없이 아래 script가 종료될 때 Cloud Shell에서 삭제됩니다. Script는 현재
+`KEY_VAULT` 변수값을 신뢰하지 않고 `$RG`에서 실제 Key Vault를 다시 조회합니다.
 
 🟢 **실행**
 
@@ -437,61 +438,22 @@ PEM은 줄바꿈이 포함된 multiline secret이므로 Portal의 `Value` 입력
 4. 아래 명령을 같은 Cloud Shell에 붙여 넣고, 방금 upload한 filename만 입력합니다.
 
 ```bash
-# Upload한 PEM file을 검사하고 Key Vault에 multiline secret으로 저장한 뒤 즉시 삭제합니다.
-store_github_app_private_key() (
-  set -euo pipefail
-
-  local UPLOADED_PEM_NAME UPLOADED_PEM_FILE SECRET_ID
-
-  read -rp "Cloud Shell에 upload한 PEM filename (예: aca-runner-lab.pem): " \
-    UPLOADED_PEM_NAME
-  if [[ -z "$UPLOADED_PEM_NAME" || "$UPLOADED_PEM_NAME" == */* ||
-    "$UPLOADED_PEM_NAME" == "." || "$UPLOADED_PEM_NAME" == ".." ]]; then
-    printf 'ERROR: filename만 입력하세요. 경로는 입력하지 않습니다.\n' >&2
-    return 1
-  fi
-
-  UPLOADED_PEM_FILE="$HOME/$UPLOADED_PEM_NAME"
-  if [[ ! -f "$UPLOADED_PEM_FILE" ]]; then
-    printf 'ERROR: upload file을 찾을 수 없습니다: %s\n' "$UPLOADED_PEM_FILE" >&2
-    return 1
-  fi
-
-  cleanup_uploaded_pem() {
-    rm -f -- "$UPLOADED_PEM_FILE"
-  }
-  trap cleanup_uploaded_pem EXIT
-
-  chmod 600 "$UPLOADED_PEM_FILE"
-  openssl pkey -in "$UPLOADED_PEM_FILE" -check -noout
-
-  SECRET_ID="$(
-    az keyvault secret set \
-      --vault-name "$KEY_VAULT" \
-      --name "$GITHUB_APP_KEY_SECRET" \
-      --file "$UPLOADED_PEM_FILE" \
-      --content-type "application/x-pem-file" \
-      --query id \
-      --output tsv
-  )"
-
-  printf 'PASS: Key Vault secret 저장 완료: %s\n' "$SECRET_ID"
-)
-
-# 저장 함수를 실행하고 완료 후 현재 shell에서 함수 정의를 제거합니다.
-store_github_app_private_key &&
-  unset -f store_github_app_private_key
+# Workshop source directory에서 fail-safe PEM 저장 script를 실행합니다.
+cd ~/aca-github-runner-workshop
+bash scripts/store-github-app-private-key.sh "$RG"
 ```
 
 📋 **예상 출력**
 
 ```text
+실제 Key Vault 확인: kvacarunnera1b2c3
 Cloud Shell에 upload한 PEM filename (예: aca-runner-lab.pem): aca-runner-lab.2026-08-22.private-key.pem
 Key is valid
 PASS: Key Vault secret 저장 완료: https://kvacarunnera1b2c3.vault.azure.net/secrets/github-app-private-key/<version>
 ```
 
-5. Azure Portal에서 `$KEY_VAULT` → **Objects** → **Secrets**를 열고
+5. Azure Portal에서 **실제 Key Vault 확인:** 뒤에 출력된 `kvacarunner<suffix>` →
+   **Objects** → **Secrets**를 열고
    `github-app-private-key` → 현재 버전을 선택합니다.
 6. **Enabled**가 `Yes`인지,
    **Secret Identifier**가
@@ -504,7 +466,8 @@ PASS: Key Vault secret 저장 완료: https://kvacarunnera1b2c3.vault.azure.net/
 - **Certificates → Generate/Import**는 X.509 인증서용입니다. GitHub App이 내려준
   private-key-only PEM을 certificate로 가져오지 마세요.
 - PEM 내용을 터미널, 채팅, 문서 또는 저장소에 붙여 넣지 마세요.
-- 함수가 실패하더라도 `trap`이 Cloud Shell upload 파일을 삭제합니다. 다시 시도하려면
+- Script가 실패하더라도 `trap`이 Cloud Shell upload 파일을 삭제하며 `PASS`를 출력하지
+  않습니다. 다시 시도하려면
   로컬 원본 PEM을 다시 upload합니다.
 - Module 02에서 private-access 검증이 끝날 때까지 source PEM 파일은 로컬 워크스테이션에
   그대로 보관하세요.
@@ -534,14 +497,14 @@ PASS: Key Vault secret 저장 완료: https://kvacarunnera1b2c3.vault.azure.net/
 ```bash
 # Workshop source directory로 이동하고 준비된 검증 script를 한 번 실행합니다.
 cd ~/aca-github-runner-workshop
-bash scripts/verify-github-app-installation.sh
+bash scripts/verify-github-app-installation.sh "$RG"
 ```
 
 📋 **예상 출력**
 
 ```text
 [1/4] 입력값 확인
-      Organization=freejava98, Repository=aca-runner-lab
+      Organization=freejava98, Repository=aca-runner-lab, KeyVault=kvacarunnera1b2c3
 [2/4] Key Vault private key 확인
 Key is valid
 [3/4] GitHub App 설치와 권한 확인
@@ -568,6 +531,7 @@ PASS: Key Vault secret과 GitHub App 설치 범위 확인: App 1234567, Installa
 | App ID 또는 Installation ID가 일치하지 않음 | 다른 organization, 다른 App, 다른 설치 URL을 참고함 | App settings 페이지의 `App ID`와 설치 상세 URL의 `/settings/installations/<installation-id>` 숫자를 다시 확인하고 6단계 입력 블록을 다시 실행합니다. |
 | 7-L 외의 위치에 PEM 파일을 upload했거나 저장소에 추가하려고 함 | 비밀 저장 위치를 잘못 선택함 | 불필요한 upload와 commit을 즉시 중단하고 해당 파일을 삭제합니다. Git staging area와 히스토리에 남지 않았는지 확인하고, 노출 가능성이 있다면 GitHub App private key를 새로 생성합니다. |
 | Key Vault 생성이 이름 중복 오류를 반환함 | `KEY_VAULT` 이름은 전역 고유인데 이미 사용 중 | `KEY_VAULT="kvacarunner$(openssl rand -hex 5)"`로 vault 이름만 바꾸고 7-C를 다시 실행한 뒤 실제 이름을 저장합니다. |
+| `Failed to resolve 'kvacarunner.vault.azure.net'` 뒤에 빈 `PASS: Key Vault secret 저장 완료:`가 출력됨 | 이전 7-L 코드가 stale `KEY_VAULT=kvacarunner`를 사용했고 Azure CLI 실패를 `PASS`로 잘못 표시함 | `cd ~/aca-github-runner-workshop && git pull --ff-only`로 최신 script를 받은 뒤 PEM을 다시 upload하고 `bash scripts/store-github-app-private-key.sh "$RG"`를 실행합니다. 새 script는 `$RG`의 실제 vault를 조회하며 실패 시 `PASS`를 출력하지 않습니다. |
 | 7-L secret 저장 또는 step 8 secret download가 `403 Forbidden`으로 실패함 | 현재 Cloud Shell 사용자에게 `Key Vault Secrets Officer`가 없거나 RBAC가 아직 전파되지 않음 | 7-C와 같은 Cloud Shell 계정인지 확인하고 최대 10분 기다린 뒤 7-L 또는 step 8을 다시 실행합니다. |
 | step 8이 GitHub `401` 또는 `404`로 실패함 | App ID, Installation ID, 또는 Key Vault에 저장된 PEM이 서로 다른 GitHub App에 속함 | 5단계 App settings와 installation URL을 다시 확인하고 같은 App의 PEM을 7-L에서 새 secret version으로 다시 저장합니다. |
 | Storage Account, Private Endpoint 또는 Key Vault 생성에서 `MissingSubscriptionRegistration`이 발생함 | `Microsoft.Storage` 또는 `Microsoft.KeyVault` provider가 아직 등록되지 않음 | 2단계의 `az provider register -n Microsoft.Storage --wait`와 `az provider register -n Microsoft.KeyVault --wait`를 다시 실행하고 등록 완료 후 다시 시도합니다. |

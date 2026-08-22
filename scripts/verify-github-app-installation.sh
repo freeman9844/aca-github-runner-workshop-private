@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -ne 1 || -z "$1" ]]; then
+  printf 'Usage: bash scripts/verify-github-app-installation.sh <resource-group>\n' >&2
+  exit 1
+fi
+
+RG="$1"
 GITHUB_APP_KEY_SECRET="${GITHUB_APP_KEY_SECRET:-github-app-private-key}"
 
 printf '[1/4] 입력값 확인\n'
@@ -16,7 +22,6 @@ done
 # 앞 단계에서 입력한 Azure와 GitHub 식별자가 현재 Cloud Shell에 있는지 확인합니다.
 for required_variable in \
   SUBSCRIPTION_ID \
-  KEY_VAULT \
   GITHUB_OWNER \
   GITHUB_REPO \
   GITHUB_APP_ID \
@@ -35,7 +40,26 @@ if [[ ! "$GITHUB_APP_ID" =~ ^[1-9][0-9]*$ ]] ||
 fi
 
 az account set --subscription "$SUBSCRIPTION_ID"
-printf '      Organization=%s, Repository=%s\n' "$GITHUB_OWNER" "$GITHUB_REPO"
+
+# Resource Group의 실제 Key Vault 이름을 조회해 stale KEY_VAULT 값을 사용하지 않습니다.
+vault_names_output="$(
+  az keyvault list \
+    --resource-group "$RG" \
+    --query "[].name" \
+    --output tsv
+)"
+VAULT_NAMES=()
+while IFS= read -r vault_name; do
+  [[ -n "$vault_name" ]] && VAULT_NAMES+=("$vault_name")
+done <<<"$vault_names_output"
+if [[ "${#VAULT_NAMES[@]}" -ne 1 ]]; then
+  printf 'ERROR: Resource Group에서 Key Vault를 정확히 하나 찾지 못했습니다: %s\n' "$RG" >&2
+  exit 1
+fi
+KEY_VAULT="${VAULT_NAMES[0]}"
+
+printf '      Organization=%s, Repository=%s, KeyVault=%s\n' \
+  "$GITHUB_OWNER" "$GITHUB_REPO" "$KEY_VAULT"
 
 printf '[2/4] Key Vault private key 확인\n'
 
