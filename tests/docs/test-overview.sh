@@ -75,8 +75,8 @@ for text in \
   require "$text" "missing README GitHub App architecture marker"
 done
 
-require '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | lab repository, organization-owned GitHub App 설치와 App installation token 흐름 이해 | 20분 |' 'README Module 01 row mismatch'
-require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Blob·Key Vault Private Endpoint·Private DNS와 Storage·Key Vault RBAC | 40분 |' 'README Module 02 row mismatch'
+require '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | GitHub App 설치, Key Vault private key 업로드와 실제 installation 인증 | 30분 |' 'README Module 01 row mismatch'
+require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Blob·Key Vault Private Endpoint·Private DNS와 runtime RBAC | 30분 |' 'README Module 02 row mismatch'
 require '| 06 | [Private Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 private Blob 업로드·다운로드와 checksum 검증 | 20분 |' 'README Module 06 row mismatch'
 require '이 워크숍은 Fine-grained PAT를 사용하지 않습니다.' 'README must explicitly state Fine-grained PAT is not used'
 require '- [ ] GitHub App이 `aca-runner-lab` repository에만 설치되어 있습니다.' 'README completion checklist typo or contract mismatch'
@@ -87,7 +87,7 @@ require '| Key Vault Private Endpoint |' 'README cost table missing Key Vault Pr
 
 for obsolete in \
   'GitHub App が' \
-  '120분 일정' \
+  '150분 일정' \
   'Fine-grained PAT의 organization 승인과 최소 권한 동작은 참가자의 GitHub enterprise/organization 정책에 따라 달라집니다.' \
   'Fine-grained PAT를 사용하지만' \
   'Fine-grained PAT 생성'; do
