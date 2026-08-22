@@ -208,25 +208,65 @@ done
 step_seven_section="$(
   awk '
     /^## 7\. / { in_section=1 }
+    /^## 8\. / { exit }
+    in_section { print }
+  ' "$PREREQ"
+)"
+for text in \
+  '## 7. Key Vault 만들기와 GitHub App private key 업로드' \
+  '### 7-C. Cloud Shell: Key Vault bootstrap' \
+  'SUFFIX="${SUFFIX:-$(openssl rand -hex 3)}"' \
+  'LOC="${LOC:-koreacentral}"' \
+  'RG="${RG:-rg-acarunner-$SUFFIX}"' \
+  'KEY_VAULT="${KEY_VAULT:-kvacarunner$SUFFIX}"' \
+  'GITHUB_APP_KEY_SECRET="${GITHUB_APP_KEY_SECRET:-github-app-private-key}"' \
+  'az group create' \
+  '--name "$RG"' \
+  'az keyvault create' \
+  '--enable-rbac-authorization true' \
+  '--public-network-access Enabled' \
+  '--default-action Deny' \
+  'KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=$(az ad signed-in-user show' \
+  'KEY_VAULT_BOOTSTRAP_CIDR' \
+  'Key Vault Secrets Officer' \
+  '### 7-L. Local workstation: GitHub App PEM 업로드' \
+  'az keyvault secret set' \
+  '--file "$GITHUB_APP_PRIVATE_KEY_FILE"' \
+  '--encoding utf-8'; do
+  assert_contains "$step_seven_section" "$text" \
+    'module 01 step 7 Key Vault bootstrap missing'
+done
+
+step_eight_section="$(
+  awk '
+    /^## 8\. / { in_section=1 }
     /^## 트러블슈팅/ { exit }
     in_section { print }
   ' "$PREREQ"
 )"
 for text in \
-  '## 7. 로컬 명령으로 GitHub App 설치 연결 검증' \
-  '**로컬 워크스테이션 Bash**' \
-  'read -rp "GitHub App PEM file path: " GITHUB_APP_PRIVATE_KEY_FILE' \
-  'base64url_encode()' \
-  'openssl dgst -binary -sha256 -sign "$GITHUB_APP_PRIVATE_KEY_FILE"' \
+  '## 8. Key Vault secret으로 GitHub App 설치 연결 검증' \
+  'az keyvault secret download' \
+  '--name "$GITHUB_APP_KEY_SECRET"' \
+  '--encoding utf-8' \
+  'mktemp' \
+  'trap cleanup EXIT' \
+  'openssl dgst -binary -sha256 -sign "$TEMP_PRIVATE_KEY_FILE"' \
   '"https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID"' \
   'select(.app_id == $app_id)' \
-  '.account.login' \
-  'PASS: App ID와 Installation ID 연결 확인' \
-  'unset app_jwt'; do
-  assert_contains "$step_seven_section" "$text" 'module 01 step 7 App installation authentication missing'
+  'PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인'; do
+  assert_contains "$step_eight_section" "$text" \
+    'module 01 step 8 stored-secret authentication missing'
 done
-if [[ "$step_seven_section" == *'"https://api.github.com/orgs/$GITHUB_OWNER"'* ]]; then
-  fail "module 01 step 7 must authenticate the App installation, not only look up the organization"
+for text in \
+  'GitHub App private key를 Azure Key Vault에 업로드한다.' \
+  'Key Vault에 저장된 private key로 App ID와 Installation ID의 실제 연결을 인증한다.'; do
+  assert_contains "$PREREQ_TEXT" "$text" \
+    'module 01 goals must include Key Vault bootstrap and authentication'
+done
+
+if [[ "$step_eight_section" == *'-sign "$GITHUB_APP_PRIVATE_KEY_FILE"'* ]]; then
+  fail "module 01 step 8 must authenticate with the Key Vault download, not the source PEM"
 fi
 
 step_three_section="$(
