@@ -73,7 +73,7 @@ assert_contains "$JOB_TEXT" '## 0. 세션 재연결 시 변수 복구 (선택)' 
 assert_contains "$IMAGE_TEXT" 'Module 01에서 저장한 `SUFFIX`와 실제 `KEY_VAULT`, Module 02에서 저장한 실제 `ACR` 이름을 사용해 같은 리소스를 복구합니다.' 'module 03 must preserve Module 01 Key Vault ownership and Module 02 ACR ownership'
 assert_contains "$IMAGE_TEXT" '`KEY_VAULT`도 Module 01에서 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 사용하세요.' 'module 03 must keep actual Key Vault collision recovery with Module 01'
 assert_contains "$JOB_TEXT" 'Module 01에서 만든 Key Vault와 Module 02에서 완성한 private access, `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_SECRET_URI`, `UAMI_RID`를 그대로 사용합니다.' 'module 04 must describe split Key Vault ownership'
-assert_contains "$JOB_TEXT" 'Module 01의 secret 업로드와 Module 02의 Key Vault Private Endpoint, Private DNS, `Key Vault Secrets User` 역할을 순서대로 확인합니다.' 'module 04 troubleshooting must preserve Module 01 then Module 02 ownership order'
+assert_contains "$JOB_TEXT" 'Module 01의 Azure Portal secret 저장과 Module 02의 Key Vault Private Endpoint, Private DNS, `Key Vault Secrets User` 역할을 순서대로 확인합니다.' 'module 04 troubleshooting must preserve Module 01 then Module 02 ownership order'
 
 for obsolete in \
   '저장해 둔 `SUFFIX`와 실제 `ACR` 이름으로 모듈 02의 Azure 변수들을 복구한다.'; do

@@ -136,7 +136,7 @@ flowchart LR
 | # | 모듈 | 한 줄 설명 | 시간 |
 |---|------|------------|---:|
 | 00 | (현재 문서) | 전체 개요, 아키텍처, 목표, 비용, 이동 경로 | 5분 |
-| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | GitHub App 설치, Key Vault private key 업로드와 실제 installation 인증 | 30분 |
+| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | GitHub App 설치, Azure Portal Key Vault private key 저장과 실제 installation 인증 | 30분 |
 | 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Blob·Key Vault Private Endpoint·Private DNS와 runtime RBAC | 30분 |
 | 03 | [Runner image 빌드](docs/03-runner-image.md) | root wrapper·non-root runner, App key 배포·권한 제한과 ACR image 빌드 | 15분 |
 | 04 | [Event Job + KEDA 구성](docs/04-event-job-keda.md) | GitHub App scaler metadata·auth, Key Vault secret reference와 Event Job 배포 | 15분 |

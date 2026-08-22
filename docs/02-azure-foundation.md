@@ -462,7 +462,7 @@ RBAC 전파에는 몇 분이 걸릴 수 있습니다. 다음 모듈에서 image 
 
 👁️ **설명**
 
-Module 01에서 만든 Key Vault와 업로드한 secret을 그대로 사용합니다. 이 단계에서는
+Module 01에서 만든 Key Vault와 저장한 secret을 그대로 사용합니다. 이 단계에서는
 Module 02에서 준비한 Private Endpoint subnet과 UAMI를 연결하고 bootstrap public
 access를 제거합니다.
 
@@ -563,7 +563,7 @@ az role assignment list \
 
 ⚠️ **주의**
 
-- 이 단계는 Module 01이 이미 만든 Key Vault와 secret만 사용합니다. vault 생성이나 secret 재업로드 명령을 다시 실행하지 마세요.
+- 이 단계는 Module 01이 이미 만든 Key Vault와 secret만 사용합니다. vault를 다시 만들거나 secret을 다시 등록하지 마세요.
 - `az role assignment delete`와 `az keyvault update --public-network-access Disabled`가 끝나면 bootstrap 사용자 권한과 public access는 제거된 상태여야 합니다.
 
 ## 8-L. Local workstation: private access 검증 후 원본 PEM 삭제

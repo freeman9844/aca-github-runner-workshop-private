@@ -132,8 +132,10 @@ for text in \
   '--retention-days 7' \
   '--default-action Deny' \
   'Key Vault Secrets Officer' \
-  'az keyvault secret set' \
-  '--file "$GITHUB_APP_PRIVATE_KEY_FILE"' \
+  '### 7-L. Azure Portal: GitHub App PEM secret 만들기' \
+  '**Objects** → **Secrets**' \
+  '**+ Generate/Import**' \
+  'Name | `github-app-private-key`' \
   '--group-id vault' \
   'privatelink.vaultcore.azure.net' \
   'az keyvault update' \
@@ -229,6 +231,13 @@ step_seven_cloud_shell="$(
     in_section { print }
   ' "$PREREQ"
 )"
+step_seven_portal="$(
+  awk '
+    /^### 7-L\. / { in_section=1 }
+    /^## 8\. / { exit }
+    in_section { print }
+  ' "$PREREQ"
+)"
 assert_contains \
   "$step_seven_cloud_shell" \
   'set -euo pipefail' \
@@ -252,7 +261,29 @@ for forbidden in \
   fi
 done
 for text in \
-  '## 7. Key Vault 만들기와 GitHub App private key 업로드' \
+  '### 7-L. Azure Portal: GitHub App PEM secret 만들기' \
+  '**Objects** → **Secrets**' \
+  '**+ Generate/Import**' \
+  'Upload options | **Manual**' \
+  'Name | `github-app-private-key`' \
+  'Value | 로컬 PEM 파일의 전체 내용' \
+  '`-----BEGIN RSA PRIVATE KEY-----`' \
+  '`-----END RSA PRIVATE KEY-----`' \
+  '**Create**' \
+  'Secret Identifier'; do
+  assert_contains "$step_seven_portal" "$text" \
+    'module 01 step 7-L Azure Portal secret guidance missing'
+done
+for forbidden in \
+  'az login' \
+  'az keyvault secret set' \
+  'GITHUB_APP_PRIVATE_KEY_FILE'; do
+  if [[ "$step_seven_portal" == *"$forbidden"* ]]; then
+    fail "module 01 step 7-L must not require local Azure CLI: $forbidden"
+  fi
+done
+for text in \
+  '## 7. Key Vault 만들기와 GitHub App private key 저장' \
   '### 7-C. Cloud Shell: Key Vault bootstrap' \
   'SUFFIX="${SUFFIX:-$(openssl rand -hex 3)}"' \
   'LOC="${LOC:-koreacentral}"' \
@@ -267,19 +298,13 @@ for text in \
   '--default-action Allow' \
   'KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=$(az ad signed-in-user show' \
   'Key Vault Secrets Officer' \
-  '### 7-L. Local workstation: GitHub App PEM 업로드' \
-  'az keyvault secret set' \
-  '--file "$GITHUB_APP_PRIVATE_KEY_FILE"' \
-  '--encoding utf-8' \
+  '### 7-L. Azure Portal: GitHub App PEM secret 만들기' \
   '# 동일한 이름을 재사용할 수 있도록 공통 Azure 리소스 이름을 변수로 만듭니다.' \
   '# 이후 모든 Azure 리소스를 함께 정리할 Resource Group을 먼저 만듭니다.' \
   '# GitHub App private key를 보관할 RBAC 기반 Key Vault를 만듭니다.' \
   '# RBAC 설정에 필요한 vault와 현재 사용자 식별자를 조회합니다.' \
-  '# 현재 사용자에게 PEM 업로드에 필요한 임시 secret 관리 권한을 부여합니다.' \
-  '# Module 02에서 다시 사용할 bootstrap 값을 화면에 출력해 따로 기록합니다.' \
-  '# 로컬 Azure CLI에 로그인하고 Key Vault와 PEM 파일 경로를 입력합니다.' \
-  '# 선택한 subscription을 고정하고 PEM 파일 권한을 현재 사용자 전용으로 제한합니다.' \
-  '# PEM 원문을 출력하지 않고 파일에서 Key Vault secret으로 직접 업로드합니다.'; do
+  '# 현재 사용자에게 PEM 저장에 필요한 임시 secret 관리 권한을 부여합니다.' \
+  '# Module 02에서 다시 사용할 bootstrap 값을 화면에 출력해 따로 기록합니다.'; do
   assert_contains "$step_seven_section" "$text" \
     'module 01 step 7 Key Vault bootstrap missing'
 done
@@ -319,7 +344,7 @@ for text in \
     'module 01 step 8 stored-secret authentication missing'
 done
 for text in \
-  'GitHub App private key를 Azure Key Vault에 업로드한다.' \
+  'GitHub App private key를 Azure Portal에서 Key Vault secret으로 저장한다.' \
   'Key Vault에 저장된 private key로 App ID와 Installation ID의 실제 연결을 인증한다.'; do
   assert_contains "$PREREQ_TEXT" "$text" \
     'module 01 goals must include Key Vault bootstrap and authentication'

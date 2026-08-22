@@ -1,6 +1,6 @@
 # 01. GitHub 사전 준비
 
-> Azure Cloud Shell Bash에서 구독, 조직이 소유한 GitHub `Private repository`, organization GitHub App 식별자를 준비하고, GitHub App private key를 Azure Key Vault에 업로드한 뒤 Key Vault secret으로 다음 모듈에서 재사용할 App 설치 연결을 검증합니다.
+> Azure Cloud Shell Bash에서 구독, 조직이 소유한 GitHub `Private repository`, organization GitHub App 식별자를 준비하고, GitHub App private key를 Azure Portal에서 Key Vault secret으로 저장한 뒤 다음 모듈에서 재사용할 App 설치 연결을 검증합니다.
 
 ## 목표
 
@@ -12,7 +12,7 @@
 - 조직이 소유한 `aca-runner-lab` 이름의 `Private repository`를 준비한다.
 - `aca-runner-lab` 하나에만 설치된 organization GitHub App을 준비한다.
 - `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`를 Cloud Shell에 안전하게 로드하고, private key PEM 파일은 로컬 워크스테이션에만 보관한다.
-- GitHub App private key를 Azure Key Vault에 업로드한다.
+- GitHub App private key를 Azure Portal에서 Key Vault secret으로 저장한다.
 - Key Vault에 저장된 private key로 App ID와 Installation ID의 실제 연결을 인증한다.
 
 ## 태그 범례
@@ -268,7 +268,7 @@ App 생성이 끝나면 먼저 아래 값을 기록합니다.
 - Homepage URL은 반드시 private lab repository URL인 `https://github.com/<organization>/aca-runner-lab`이어야 합니다.
 - `Only select repositories`를 유지하고 반드시 `aca-runner-lab` 하나만 선택합니다.
 - private key PEM 파일은 로컬 워크스테이션에만 보관하고 Cloud Shell에 업로드하거나 Git에 commit하지 않습니다.
-- PEM 파일은 다음 모듈에서 `로컬 Azure CLI` 세션이 JWT 서명에 사용할 비밀입니다.
+- PEM 파일은 7-L에서 Azure Portal에 저장하고 8단계의 `로컬 Azure CLI` 세션이 JWT 서명 검증에 사용할 비밀입니다.
 - PEM 파일의 로컬 경로는 참가자 메모로만 유지하고 Cloud Shell 환경 변수로 추가하지 않습니다.
 
 > **참고 화면:** 아래 이미지는 `freejava98` organization에서
@@ -333,7 +333,7 @@ GITHUB_APP_INSTALLATION_ID=98765432
 - 이 단계에서는 PEM 원문이나 경로를 출력하지 않습니다.
 - 이후 같은 Cloud Shell 세션에서 네 변수를 그대로 재사용할 수 있습니다.
 
-## 7. Key Vault 만들기와 GitHub App private key 업로드
+## 7. Key Vault 만들기와 GitHub App private key 저장
 
 👁️ **설명**
 
@@ -388,7 +388,7 @@ KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=$(az ad signed-in-user show \
   --query id \
   --output tsv)
 
-# 현재 사용자에게 PEM 업로드에 필요한 임시 secret 관리 권한을 부여합니다.
+# 현재 사용자에게 PEM 저장에 필요한 임시 secret 관리 권한을 부여합니다.
 az role assignment create \
   --assignee-object-id "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID" \
   --assignee-principal-type User \
@@ -414,50 +414,54 @@ KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID=11111111-2222-3333-4444-555555555555
 `GITHUB_APP_KEY_SECRET`, `KEY_VAULT_ID`도 남아 있으므로 Module 02에서 그대로 재사용할 수 있습니다.
 `Key Vault Secrets Officer` RBAC 전파에는 최대 2분이 걸릴 수 있습니다.
 
-### 7-L. Local workstation: GitHub App PEM 업로드
+### 7-L. Azure Portal: GitHub App PEM secret 만들기
+
+👁️ **설명**
+
+Azure Portal의 Key Vault secret 화면은 PEM 파일 자체를 직접 업로드하지 않습니다. 로컬
+텍스트 편집기에서 PEM 파일을 열고 첫 줄부터 마지막 줄까지 전체 내용을 복사한 뒤 secret의
+`Value`에 붙여 넣습니다.
 
 🟢 **실행**
 
-```bash
-# 로컬 PEM 파일을 화면에 출력하지 않고 Module 01에서 만든 Key Vault에 업로드합니다.
-set -euo pipefail
-# 로컬 Azure CLI에 로그인하고 Key Vault와 PEM 파일 경로를 입력합니다.
-az login
-read -rp "Azure subscription ID: " SUBSCRIPTION_ID
-read -rp "Key Vault name: " KEY_VAULT
-read -rp "GitHub App PEM file path: " GITHUB_APP_PRIVATE_KEY_FILE
-GITHUB_APP_KEY_SECRET="github-app-private-key"
+1. [Azure Portal](https://portal.azure.com)에 로그인합니다.
+2. **Resource groups** → 7-C에서 만든 `$RG` → `$KEY_VAULT`를 선택합니다.
+3. 왼쪽 메뉴에서 **Objects** → **Secrets**를 선택합니다.
+4. **+ Generate/Import**를 선택합니다.
+5. 로컬 텍스트 편집기에서 GitHub가 내려준 PEM 파일을 엽니다.
+6. `-----BEGIN RSA PRIVATE KEY-----`부터 `-----END RSA PRIVATE KEY-----`까지
+   줄바꿈을 포함한 전체 내용을 복사합니다. 파일이 `-----BEGIN PRIVATE KEY-----`로
+   시작한다면 해당 시작·종료 줄을 그대로 포함합니다.
+7. **Create a secret** 화면에 다음 값을 입력합니다.
 
-# 선택한 subscription을 고정하고 PEM 파일 권한을 현재 사용자 전용으로 제한합니다.
-az account set --subscription "$SUBSCRIPTION_ID"
-test -f "$GITHUB_APP_PRIVATE_KEY_FILE"
-chmod 600 "$GITHUB_APP_PRIVATE_KEY_FILE"
+| 설정 | 값 |
+|---|---|
+| Upload options | **Manual** |
+| Name | `github-app-private-key` |
+| Value | 로컬 PEM 파일의 전체 내용 |
+| Content type | `text/plain` |
+| Enabled | **Yes** |
 
-# PEM 원문을 출력하지 않고 파일에서 Key Vault secret으로 직접 업로드합니다.
-az keyvault secret set \
-  --vault-name "$KEY_VAULT" \
-  --name "$GITHUB_APP_KEY_SECRET" \
-  --file "$GITHUB_APP_PRIVATE_KEY_FILE" \
-  --encoding utf-8 \
-  --query "{id:id,enabled:attributes.enabled}" \
-  --output yaml
-```
+8. **Create**를 선택합니다.
+9. 생성된 `github-app-private-key` → 현재 버전을 선택하고 **Enabled**가 `Yes`인지,
+   **Secret Identifier**가
+   `https://<vault>.vault.azure.net/secrets/github-app-private-key/<version>` 형식인지 확인합니다.
+   **Show Secret Value**는 선택하지 않습니다.
+10. 클립보드에 남은 PEM 내용을 비밀이 아닌 짧은 텍스트로 덮어씁니다.
 
-📋 **예상 출력**
+⚠️ **주의**
 
-```yaml
-enabled: true
-id: https://kvacarunnera1b2c3.vault.azure.net/secrets/github-app-private-key/0123456789abcdef0123456789abcdef
-```
-
-명령은 secret 메타데이터만 출력하며 PEM 원문은 출력하지 않습니다. Module 02에서
-private-access 검증이 끝날 때까지 source PEM 파일은 로컬 워크스테이션에 그대로 보관하세요.
+- **Certificates → Generate/Import**의 파일 업로드는 X.509 인증서용입니다. GitHub App이
+  내려준 private-key-only PEM을 certificate로 가져오지 마세요.
+- PEM 내용을 터미널, 채팅, 문서 또는 저장소에 붙여 넣지 마세요.
+- Module 02에서 private-access 검증이 끝날 때까지 source PEM 파일은 로컬 워크스테이션에
+  그대로 보관하세요.
 
 ## 8. Key Vault secret으로 GitHub App 설치 연결 검증
 
 👁️ **설명**
 
-이 단계는 Key Vault에 업로드한 secret, App ID, Installation ID가 하나의 실제
+이 단계는 Key Vault에 저장한 secret, App ID, Installation ID가 하나의 실제
 GitHub App 설치를 가리키는지 확인합니다. 인증에는 **로컬 워크스테이션 Bash**에서
 Key Vault로부터 임시 파일로 내려받은 private key만 사용하며 source PEM 파일은 여기서
 삭제하지 않습니다.
@@ -465,7 +469,7 @@ Key Vault로부터 임시 파일로 내려받은 private key만 사용하며 sou
 🟢 **실행**
 
 ```bash
-# Key Vault에 업로드한 private key로 App ID와 Installation ID의 실제 연결을 검증합니다.
+# Key Vault에 저장한 private key로 App ID와 Installation ID의 실제 연결을 검증합니다.
 verify_key_vault_app_installation() (
   set -euo pipefail
 
@@ -568,9 +572,9 @@ GitHub App Installation ID: 155640565
 PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인: App 1234567, Installation 155640565, Owner freejava98
 ```
 
-`PASS`가 출력되면 업로드한 Key Vault secret, App ID, Installation ID가 같은 GitHub App의
+`PASS`가 출력되면 저장한 Key Vault secret, App ID, Installation ID가 같은 GitHub App의
 실제 설치를 가리킨다는 뜻입니다. `ERROR`가 출력되면 5단계 App settings와 installation URL,
-그리고 7-L에서 업로드한 PEM이 모두 같은 App에 속하는지 다시 확인한 후 재실행합니다.
+그리고 7-L에서 저장한 PEM이 모두 같은 App에 속하는지 다시 확인한 후 재실행합니다.
 
 
 ## 트러블슈팅
@@ -586,8 +590,8 @@ PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인: App 123456
 | App ID 또는 Installation ID가 일치하지 않음 | 다른 organization, 다른 App, 다른 설치 URL을 참고함 | App settings 페이지의 `App ID`와 설치 상세 URL의 `/settings/installations/<installation-id>` 숫자를 다시 확인하고 6단계 입력 블록을 다시 실행합니다. |
 | PEM 파일을 Cloud Shell에 올렸거나 저장소에 추가하려고 함 | 비밀 저장 위치를 잘못 선택함 | Cloud Shell 업로드와 commit을 즉시 중단하고, 로컬 워크스테이션에만 새 private key를 다시 생성합니다. 이전 파일은 안전하게 폐기하고 Git staging area와 히스토리에 남지 않았는지 확인합니다. |
 | Key Vault 생성이 이름 중복 오류를 반환함 | `KEY_VAULT` 이름은 전역 고유인데 이미 사용 중 | `KEY_VAULT="kvacarunner$(openssl rand -hex 5)"`로 vault 이름만 바꾸고 7-C를 다시 실행한 뒤 실제 이름을 저장합니다. |
-| local PEM 업로드 또는 step 8 secret download가 `403 Forbidden`으로 실패함 | workstation CIDR이 다르거나 `Key Vault Secrets Officer` RBAC가 아직 전파되지 않음 | 로컬에서 `curl -s https://ifconfig.me`를 확인하고 firewall CIDR을 수정하거나 최대 2분 기다린 뒤 다시 실행합니다. |
-| step 8이 GitHub `401` 또는 `404`로 실패함 | App ID, Installation ID, 또는 Key Vault에 저장된 PEM이 서로 다른 GitHub App에 속함 | 5단계 App settings와 installation URL을 다시 확인하고 같은 App의 PEM을 7-L에서 다시 업로드합니다. |
+| Azure Portal에서 secret 생성 또는 step 8 secret download가 `403 Forbidden`으로 실패함 | 현재 로그인한 사용자에게 `Key Vault Secrets Officer`가 없거나 RBAC가 아직 전파되지 않음 | 7-C를 실행한 사용자와 Portal 로그인 계정이 같은지 확인하고 최대 2분 기다린 뒤 Portal을 새로 고치거나 step 8을 다시 실행합니다. |
+| step 8이 GitHub `401` 또는 `404`로 실패함 | App ID, Installation ID, 또는 Key Vault에 저장된 PEM이 서로 다른 GitHub App에 속함 | 5단계 App settings와 installation URL을 다시 확인하고 같은 App의 PEM을 7-L에서 새 secret version으로 다시 저장합니다. |
 | Storage Account, Private Endpoint 또는 Key Vault 생성에서 `MissingSubscriptionRegistration`이 발생함 | `Microsoft.Storage` 또는 `Microsoft.KeyVault` provider가 아직 등록되지 않음 | 2단계의 `az provider register -n Microsoft.Storage --wait`와 `az provider register -n Microsoft.KeyVault --wait`를 다시 실행하고 등록 완료 후 다시 시도합니다. |
 
 Key Vault 이름 충돌이 났다면 `SUFFIX`, `RG`, 다른 리소스 이름은 그대로 두고 vault 이름만 바꿉니다.
