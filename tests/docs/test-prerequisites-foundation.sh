@@ -250,8 +250,11 @@ for text in \
   '--name "$GITHUB_APP_KEY_SECRET"' \
   '--encoding utf-8' \
   'mktemp' \
+  'rm -f -- "$TEMP_PRIVATE_KEY_FILE"' \
   'trap cleanup EXIT' \
+  'unset app_jwt' \
   'openssl dgst -binary -sha256 -sign "$TEMP_PRIVATE_KEY_FILE"' \
+  'Authorization: Bearer $app_jwt' \
   '"https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID"' \
   'select(.app_id == $app_id)' \
   'PASS: Key Vault secret으로 App ID와 Installation ID 연결 확인'; do

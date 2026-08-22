@@ -523,7 +523,7 @@ verify_key_vault_app_installation() (
   if ! installation_owner="$(
     curl -fsSL \
         -H "Accept: application/vnd.github+json" \
-        -H "Authorization: ******" \
+        -H "Authorization: Bearer $app_jwt" \
         -H "X-GitHub-Api-Version: 2022-11-28" \
         "https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID" |
       jq -er --argjson app_id "$GITHUB_APP_ID" \
