@@ -63,8 +63,32 @@ for text in \
   require "$text" "missing README architecture marker"
 done
 
-require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Blob Private Endpoint·Private DNS와 Storage data-plane RBAC | 25분 |' 'README Module 02 row mismatch'
+for text in \
+  'organization-owned GitHub App' \
+  'GitHub App installation' \
+  'Azure Key Vault' \
+  'Key Vault Private Endpoint' \
+  'privatelink.vaultcore.azure.net' \
+  'Key Vault Secrets User' \
+  '로컬 Azure CLI' \
+  'trusted workflow'; do
+  require "$text" "missing README GitHub App architecture marker"
+done
+
+require '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | lab repository, organization-owned GitHub App 설치와 App installation token 흐름 이해 | 20분 |' 'README Module 01 row mismatch'
+require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Blob·Key Vault Private Endpoint·Private DNS와 Storage·Key Vault RBAC | 40분 |' 'README Module 02 row mismatch'
 require '| 06 | [Private Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 private Blob 업로드·다운로드와 checksum 검증 | 20분 |' 'README Module 06 row mismatch'
+
+require '| Azure Key Vault |' 'README cost table missing Key Vault row'
+require '| Key Vault Private Endpoint |' 'README cost table missing Key Vault Private Endpoint row'
+
+for obsolete in \
+  'Fine-grained PAT를 사용하지만' \
+  'Fine-grained PAT 생성'; do
+  if grep -F -- "$obsolete" "$README" >/dev/null; then
+    fail "README contains PAT operational guidance: $obsolete"
+  fi
+done
 
 for obsolete in \
   '--internal-only ''true' \
