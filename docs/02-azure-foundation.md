@@ -196,7 +196,7 @@ custom VNet 기반 ACA Environment는 environment 전용 infrastructure subnet�
 🟢 **실행**
 
 ```bash
-# ACA Environment에서 사용할 VNet과 delegated subnet, service endpoint를 준비합니다.
+# ACA Environment 전용 VNet과 /27 infrastructure subnet을 만듭니다.
 az network vnet create \
   --resource-group "$RG" \
   --name "$VNET" \
@@ -211,14 +211,23 @@ az network vnet subnet create \
   --address-prefixes 10.20.0.0/27 \
   --output none
 
+# ACA가 infrastructure subnet을 관리할 수 있도록 delegation을 먼저 적용합니다.
 az network vnet subnet update \
   --resource-group "$RG" \
   --vnet-name "$VNET" \
   --name "$INFRA_SUBNET" \
   --delegations Microsoft.App/environments \
+  --output none
+
+# delegation과 별도 명령으로 Storage와 Key Vault service endpoint를 적용합니다.
+az network vnet subnet update \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$INFRA_SUBNET" \
   --service-endpoints Microsoft.Storage Microsoft.KeyVault \
   --output none
 
+# 이후 단계에서 재사용할 VNet과 subnet resource ID를 저장합니다.
 VNET_ID=$(az network vnet show \
   --resource-group "$RG" \
   --name "$VNET" \
@@ -272,6 +281,7 @@ ENV_ID=$(az containerapp env show \
   --query id \
   --output tsv)
 
+# ACA 시스템 로그를 앞 단계에서 만든 Log Analytics workspace로 보냅니다.
 az monitor diagnostic-settings create \
   --name aca-runner-logs \
   --resource "$ENV_ID" \
@@ -317,6 +327,7 @@ ACR_ID=$(az acr show --name "$ACR" --query id --output tsv)
 ```
 
 ```bash
+# ACR 관리자 계정이 꺼져 있고 ARM authentication이 켜졌는지 확인합니다.
 az acr show \
   --name "$ACR" \
   --query "{loginServer:loginServer,adminUserEnabled:adminUserEnabled}" \
@@ -337,7 +348,23 @@ Storage는 public endpoint를 유지하지만 `defaultAction=Deny`, `bypass=None
 🟢 **실행**
 
 ```bash
-# Storage account를 만들고 ACA subnet만 허용하는 firewall rule과 container를 준비합니다.
+# ACA Environment 생성 후에도 Storage와 Key Vault service endpoint가 유지되도록 다시 적용합니다.
+az network vnet subnet update \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$INFRA_SUBNET" \
+  --service-endpoints Microsoft.Storage Microsoft.KeyVault \
+  --output none
+
+# Storage firewall rule을 추가하기 전에 두 service endpoint의 현재 상태를 확인합니다.
+az network vnet subnet show \
+  --resource-group "$RG" \
+  --vnet-name "$VNET" \
+  --name "$INFRA_SUBNET" \
+  --query "{delegation:delegations[].serviceName,serviceEndpoints:serviceEndpoints[].service}" \
+  --output json
+
+# public endpoint는 유지하되 기본 차단 상태인 Storage account를 만듭니다.
 az storage account create \
   --resource-group "$RG" \
   --name "$STORAGE" \
@@ -352,12 +379,14 @@ az storage account create \
   --bypass None \
   --output none
 
+# RBAC scope와 다음 모듈에서 사용할 Storage resource ID를 저장합니다.
 STORAGE_ID=$(az storage account show \
   --resource-group "$RG" \
   --name "$STORAGE" \
   --query id \
   --output tsv)
 
+# shared key 없이 management plane으로 private Blob container를 만듭니다.
 az storage container-rm create \
   --resource-group "$RG" \
   --storage-account "$STORAGE" \
@@ -365,6 +394,7 @@ az storage container-rm create \
   --public-access off \
   --output none
 
+# Storage data-plane 접근을 ACA infrastructure subnet에서만 허용합니다.
 az storage account network-rule add \
   --resource-group "$RG" \
   --account-name "$STORAGE" \
@@ -373,6 +403,7 @@ az storage account network-rule add \
 ```
 
 ```bash
+# Storage의 public access, 기본 차단, subnet rule, shared key 차단 상태를 확인합니다.
 az storage account show \
   --resource-group "$RG" \
   --name "$STORAGE" \
@@ -394,12 +425,13 @@ az storage account show \
 🟢 **실행**
 
 ```bash
-# UAMI를 만들고 ACR·Storage·Key Vault 최소 권한 및 Key Vault firewall을 적용합니다.
+# ACA Job이 사용할 User-Assigned Managed Identity를 만듭니다.
 az identity create \
   --resource-group "$RG" \
   --name "$UAMI" \
   --output none
 
+# 역할 할당과 Job 설정에 사용할 UAMI 식별자를 저장합니다.
 UAMI_RID=$(az identity show \
   --resource-group "$RG" \
   --name "$UAMI" \
@@ -416,6 +448,7 @@ UAMI_CLIENT_ID=$(az identity show \
   --query clientId \
   --output tsv)
 
+# UAMI에 ACR pull, Blob data-plane, Key Vault secret 읽기 최소 권한을 부여합니다.
 az role assignment create \
   --assignee-object-id "$UAMI_PID" \
   --assignee-principal-type ServicePrincipal \
@@ -437,12 +470,14 @@ az role assignment create \
   --scope "$KEY_VAULT_ID" \
   --output none
 
+# Key Vault data-plane 접근을 ACA infrastructure subnet에서만 허용합니다.
 az keyvault network-rule add \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
   --subnet "$SUBNET_ID" \
   --output none
 
+# public endpoint는 유지하되 허용된 subnet 외의 요청은 모두 차단합니다.
 az keyvault update \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
@@ -453,18 +488,21 @@ az keyvault update \
 
 KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
+# Key Vault firewall과 subnet rule이 예상대로 적용됐는지 확인합니다.
 az keyvault show \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
   --query "{publicNetworkAccess:properties.publicNetworkAccess,defaultAction:properties.networkAcls.defaultAction,bypass:properties.networkAcls.bypass,vnetRules:properties.networkAcls.virtualNetworkRules[].{id:id,ignoreMissingVnetServiceEndpoint:ignoreMissingVnetServiceEndpoint}}" \
   --output json
 
+# UAMI의 세 가지 runtime 역할과 각 scope를 확인합니다.
 az role assignment list \
   --assignee "$UAMI_PID" \
   --all \
   --query "[?scope=='$ACR_ID' || scope=='$STORAGE_ID' || scope=='$KEY_VAULT_ID'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \
   --output table
 
+# runtime 권한 확인이 끝났으므로 Module 01의 일회성 secret 쓰기 권한을 제거합니다.
 az role assignment delete \
   --assignee "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID" \
   --role "Key Vault Secrets Officer" \
@@ -529,6 +567,7 @@ printf 'RG=%s\nENV=%s\nVNET_ID=%s\nSUBNET_ID=%s\nACR_ID=%s\nSTORAGE_ID=%s\nUAMI_
 | Storage container 생성이 data plane 인증 오류로 실패함 | shared key가 꺼진 상태에서 data-plane 명령을 사용함 | `az storage container create`로 우회하지 말고 문서의 `az storage container-rm create --public-access off` management plane 경로를 다시 실행합니다. |
 | Cloud Shell에서 Storage blob upload/download가 `403`으로 실패함 | Storage firewall이 ACA subnet만 허용하도록 잠김 | 정상입니다. Cloud Shell이 아니라 ACA Job runtime에서 Blob data-plane을 검증하고, Module 06은 runner 내부에서 업로드·다운로드를 수행합니다. |
 | Cloud Shell에서 Key Vault secret 조회가 `403`으로 실패함 | Key Vault firewall이 ACA subnet만 허용하도록 잠김 | 정상입니다. `az keyvault show`로 control-plane 속성과 subnet rule을 확인하고 secret 값 자체는 Cloud Shell에서 다시 읽지 마세요. |
+| `SubnetsHaveNoServiceEndpointsConfigured`가 발생함 | delegation과 service endpoint를 한 번에 설정한 이전 명령에서 endpoint가 반영되지 않음 | `az network vnet subnet update --resource-group "$RG" --vnet-name "$VNET" --name "$INFRA_SUBNET" --service-endpoints Microsoft.Storage Microsoft.KeyVault --output none`을 실행한 뒤 실패했던 `network-rule add` 명령부터 다시 실행합니다. Storage account를 새로 만들 필요는 없습니다. |
 | `az storage account network-rule add`가 실패함 | 잘못된 subnet ID를 사용했거나 subnet update가 끝나지 않음 | 3단계의 `SUBNET_ID`가 `snet-aca-infra`를 가리키는지 확인하고 `az network vnet subnet show` 검증 블록을 다시 실행합니다. |
 | `az keyvault network-rule add`가 실패함 | Key Vault 이름이 stale 값이거나 잘못된 subscription을 사용 중 | 1단계의 실제 Key Vault 자동 조회 블록을 다시 실행해 `$RG`의 실제 vault 이름을 복원한 뒤 시도합니다. |
 | role assignment는 성공했는데 image pull 또는 secret access가 아직 실패함 | RBAC propagation 지연 | 몇 분 기다린 뒤 `az role assignment list --assignee "$UAMI_PID" --all --output table`로 역할 전파를 확인하고 다음 모듈을 재시도합니다. |

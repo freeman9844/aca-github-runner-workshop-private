@@ -617,6 +617,46 @@ if [[ "$module_two_step_two" == *'az group create'* ]]; then
   fail "module 02 must not recreate the Module 01 resource group"
 fi
 
+module_two_step_three="$(
+  awk '
+    /^## 3\. / { in_section=1 }
+    /^## 4\. / { exit }
+    in_section { print }
+  ' "$FOUNDATION"
+)"
+assert_contains_multiline \
+  "$module_two_step_three" \
+  $'az network vnet subnet update \\\n  --resource-group "$RG" \\\n  --vnet-name "$VNET" \\\n  --name "$INFRA_SUBNET" \\\n  --delegations Microsoft.App/environments \\\n  --output none' \
+  'module 02 step 3 must apply the ACA delegation in its own subnet update'
+assert_contains_multiline \
+  "$module_two_step_three" \
+  $'az network vnet subnet update \\\n  --resource-group "$RG" \\\n  --vnet-name "$VNET" \\\n  --name "$INFRA_SUBNET" \\\n  --service-endpoints Microsoft.Storage Microsoft.KeyVault \\\n  --output none' \
+  'module 02 step 3 must apply service endpoints in a separate subnet update'
+if [[ "$module_two_step_three" == *$'--delegations Microsoft.App/environments \\\n  --service-endpoints Microsoft.Storage Microsoft.KeyVault'* ]]; then
+  fail 'module 02 step 3 must not combine delegation and service endpoints in one subnet update'
+fi
+
+module_two_step_six="$(
+  awk '
+    /^## 6\. / { in_section=1 }
+    /^## 7\. / { exit }
+    in_section { print }
+  ' "$FOUNDATION"
+)"
+step_six_endpoint_line="$(printf '%s\n' "$module_two_step_six" | grep -nF -- '--service-endpoints Microsoft.Storage Microsoft.KeyVault' | head -n1 | cut -d: -f1)"
+step_six_storage_line="$(printf '%s\n' "$module_two_step_six" | grep -nF -- 'az storage account create' | head -n1 | cut -d: -f1)"
+[[ -n "$step_six_endpoint_line" && -n "$step_six_storage_line" &&
+   "$step_six_endpoint_line" -lt "$step_six_storage_line" ]] ||
+  fail 'module 02 step 6 must restore service endpoints before creating Storage firewall rules'
+for text in \
+  'ACA Environment 생성 후에도 Storage와 Key Vault service endpoint가 유지되도록 다시 적용합니다.' \
+  'serviceEndpoints:serviceEndpoints[].service' \
+  'SubnetsHaveNoServiceEndpointsConfigured' \
+  'az network vnet subnet update --resource-group "$RG" --vnet-name "$VNET" --name "$INFRA_SUBNET" --service-endpoints Microsoft.Storage Microsoft.KeyVault --output none'; do
+  assert_contains "$FOUNDATION_TEXT" "$text" \
+    'module 02 service endpoint recovery guidance missing'
+done
+
 module_two_step_seven="$(
   awk '
     /^## 7\. / { in_section=1 }
