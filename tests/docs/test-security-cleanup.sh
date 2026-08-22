@@ -21,30 +21,37 @@ assert_contains() {
 DOC_TEXT="$(<"$DOC")"
 
 for text in \
-  'GitHub App' \
-  'Key Vault' \
+  'Microsoft.Storage' \
+  'Microsoft.KeyVault' \
+  'service endpoint' \
+  'publicNetworkAccess=Enabled' \
+  'defaultAction=Deny' \
+  'bypass=None' \
+  'standard public DNS' \
+  'private IP를 만들지 않습니다' \
+  'Private Link' \
   'Key Vault Secrets User' \
-  'trusted workflow authors' \
-  'fork pull request' \
-  'token broker' \
-  '새 GitHub App private key' \
-  '새 Key Vault secret version' \
-  '기존 GitHub App private key' \
-  'az containerapp job delete' \
-  'GitHub App installation' \
-  'workshop 전용 GitHub App' \
-  'public network access' \
+  'Storage Blob Data Contributor' \
+  'Cloud Shell' \
+  '403' \
   'ResourceGroupNotFound'; do
-  assert_contains "$DOC_TEXT" "$text" 'module 07 missing cleanup marker'
+  assert_contains "$DOC_TEXT" "$text" 'module 07 service endpoint security marker missing'
 done
 
 for obsolete in \
+  'snet-private-endpoints' \
+  'privatelink.blob.core.windows.net' \
+  'privatelink.vaultcore.azure.net' \
+  'PE_SUBNET' \
+  'STORAGE_PE' \
+  'KEY_VAULT_PE' \
+  'public access remains disabled' \
   'PAT rotation' \
   'Fine-grained PAT' \
   'unset GITHUB_PAT' \
   'PAT를 revoke'; do
   if grep -F -- "$obsolete" "$DOC" >/dev/null; then
-    fail "module 07 still uses obsolete PAT guidance: $obsolete"
+    fail "module 07 contains obsolete guidance: $obsolete"
   fi
 done
 
@@ -65,7 +72,7 @@ def must_appear_in_order(*phrases: str) -> None:
 must_appear_in_order(
     "새 GitHub App private key",
     "Key Vault Secrets Officer",
-    "public network access",
+    "현재 참가자 IP",
     "새 Key Vault secret version",
     "App JWT",
     "installation token",
