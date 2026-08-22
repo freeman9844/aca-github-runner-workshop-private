@@ -50,6 +50,10 @@ fi
 
 for text in \
   'Storage Blob Data Contributor' \
+  'GITHUB_APP_ID' \
+  'GITHUB_APP_INSTALLATION_ID' \
+  'GITHUB_APP_PRIVATE_KEY' \
+  'ERROR: GitHub App bootstrap variable reached the workflow environment:' \
   'AZURE_STORAGE_ACCOUNT' \
   'AZURE_STORAGE_CONTAINER' \
   'AZURE_PRIVATE_ENDPOINT_CIDR' \
@@ -57,6 +61,8 @@ for text in \
   'private IP' \
   'External ACA Job은 ingress를 지원하지 않으며' \
   'inbound reachability를 증명하지 않습니다' \
+  'normal child-environment non-inheritance' \
+  'malicious code with access to the Job'\''s managed identity/runtime boundary' \
   'az storage blob upload' \
   'az storage blob download' \
   '--auth-mode login' \
