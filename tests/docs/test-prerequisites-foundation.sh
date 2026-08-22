@@ -8,8 +8,7 @@ ORG_REPO_IMAGE="$ROOT/docs/images/01-github-organization-private-repository.png"
 APP_SETTINGS_IMAGE="$ROOT/docs/images/01-github-app-settings-example.png"
 APP_INSTALL_TARGET_IMAGE="$ROOT/docs/images/01-github-app-install-target.png"
 APP_SELECT_REPOSITORY_IMAGE="$ROOT/docs/images/01-github-app-select-repository.png"
-KEY_VAULT_SECRETS_IMAGE="$ROOT/docs/images/01-key-vault-secrets-list.png"
-KEY_VAULT_CREATE_SECRET_IMAGE="$ROOT/docs/images/01-key-vault-create-secret.png"
+KEY_VAULT_RESULT_IMAGE="$ROOT/docs/images/01-key-vault-secret-created.png"
 GITHUB_APP_KEY_STORE="$ROOT/scripts/store-github-app-private-key.sh"
 GITHUB_APP_VERIFIER="$ROOT/scripts/verify-github-app-installation.sh"
 
@@ -38,8 +37,11 @@ assert_contains_multiline() {
 [[ -f "$APP_SETTINGS_IMAGE" ]] || fail "module 01 GitHub App settings example image missing"
 [[ -f "$APP_INSTALL_TARGET_IMAGE" ]] || fail "module 01 GitHub App install target image missing"
 [[ -f "$APP_SELECT_REPOSITORY_IMAGE" ]] || fail "module 01 GitHub App repository selection image missing"
-[[ -f "$KEY_VAULT_SECRETS_IMAGE" ]] || fail "module 01 Key Vault secrets list image missing"
-[[ -f "$KEY_VAULT_CREATE_SECRET_IMAGE" ]] || fail "module 01 Key Vault create secret image missing"
+[[ -f "$KEY_VAULT_RESULT_IMAGE" ]] || fail "module 01 Key Vault result image missing"
+[[ ! -e "$ROOT/docs/images/01-key-vault-secrets-list.png" ]] ||
+  fail "obsolete module 01 Key Vault secrets list image must be removed"
+[[ ! -e "$ROOT/docs/images/01-key-vault-create-secret.png" ]] ||
+  fail "obsolete module 01 Key Vault create secret image must be removed"
 [[ -f "$GITHUB_APP_KEY_STORE" ]] || fail "module 01 GitHub App private key store script missing"
 [[ -f "$GITHUB_APP_VERIFIER" ]] || fail "module 01 GitHub App verifier missing"
 
@@ -290,12 +292,13 @@ for text in \
   '**실제 Key Vault 확인:**' \
   '`kvacarunner<suffix>`' \
   '**Objects** → **Secrets**' \
-  'Secret Identifier' \
-  '![Azure Portal Key Vault의 Secrets 메뉴와 Generate/Import 예시](images/01-key-vault-secrets-list.png)' \
-  '![Azure Portal의 github-app-private-key secret 설정 화면 참고](images/01-key-vault-create-secret.png)'; do
+  'Secret Identifier'; do
   assert_contains "$step_seven_portal" "$text" \
     'module 01 step 7-L Azure Portal secret guidance missing'
 done
+if [[ "$step_seven_section" == *'!['* ]]; then
+  fail 'module 01 step 7 must not include reference images'
+fi
 for text in \
   'UPLOADED_PEM_FILE="$HOME/$UPLOADED_PEM_NAME"' \
   'openssl pkey -in "$UPLOADED_PEM_FILE" -check -noout' \
@@ -370,7 +373,10 @@ step_eight_section="$(
 for text in \
   '## 8. Cloud Shell에서 GitHub App 설치 범위 검증' \
   'cd ~/aca-github-runner-workshop' \
-  'bash scripts/verify-github-app-installation.sh "$RG"'; do
+  'bash scripts/verify-github-app-installation.sh "$RG"' \
+  'Azure Portal의 Key Vault → **Objects** → **Secrets**' \
+  '`github-app-private-key`가 **Enabled** 상태인지 확인할 수 있습니다.' \
+  '![Azure Portal에서 생성된 github-app-private-key secret 확인](images/01-key-vault-secret-created.png)'; do
   assert_contains "$step_eight_section" "$text" \
     'module 01 step 8 intuitive script execution missing'
 done
@@ -579,17 +585,21 @@ for text in \
   'if [[ -z "${SUBSCRIPTION_ID:-}" ]]; then' \
   'read -rp "Saved SUFFIX:' \
   'read -rp "Saved subscription ID:' \
-  'read -rp "Saved Key Vault name:' \
   'read -rp "Saved Key Vault bootstrap principal object ID:' \
   'az account set --subscription "$SUBSCRIPTION_ID"' \
+  'az keyvault list' \
+  '--resource-group "$RG"' \
+  'KEY_VAULT="${VAULT_NAMES[0]}"' \
   'KEY_VAULT_ID=$(az keyvault show'; do
   assert_contains "$module_two_step_one" "$text" \
     'module 02 must restore Module 01 Key Vault values'
 done
 subscription_set_line="$(printf '%s\n' "$module_two_step_one" | grep -nF 'az account set --subscription "$SUBSCRIPTION_ID"' | head -n1 | cut -d: -f1)"
+keyvault_list_line="$(printf '%s\n' "$module_two_step_one" | grep -nF 'az keyvault list' | head -n1 | cut -d: -f1)"
 keyvault_show_line="$(printf '%s\n' "$module_two_step_one" | grep -nF 'KEY_VAULT_ID=$(az keyvault show' | head -n1 | cut -d: -f1)"
-[[ -n "$subscription_set_line" && -n "$keyvault_show_line" && "$subscription_set_line" -lt "$keyvault_show_line" ]] ||
-  fail 'module 02 must select the saved subscription before az keyvault show'
+[[ -n "$subscription_set_line" && -n "$keyvault_list_line" && -n "$keyvault_show_line" &&
+  "$subscription_set_line" -lt "$keyvault_list_line" && "$keyvault_list_line" -lt "$keyvault_show_line" ]] ||
+  fail 'module 02 must select the subscription and resolve the actual vault before az keyvault show'
 for text in \
   'Module 01에서 만든 Key Vault를 재사용한다.' \
   'Key Vault Private Endpoint와 runtime RBAC를 완성한다.'; do
@@ -601,6 +611,9 @@ if [[ "$module_two_step_one" == *'SUFFIX="$(openssl rand -hex 3)"'* ]]; then
 fi
 if [[ "$module_two_step_one" == *'KEY_VAULT_BOOTSTRAP_CIDR'* ]]; then
   fail 'module 02 must not restore a Key Vault bootstrap CIDR'
+fi
+if [[ "$module_two_step_one" == *'read -rp "Saved Key Vault name:'* ]]; then
+  fail 'module 02 must not prompt for a stale Key Vault name'
 fi
 
 module_two_step_two="$(

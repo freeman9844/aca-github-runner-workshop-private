@@ -12,6 +12,7 @@ bash tests/runner/test-entrypoint.sh
 bash tests/test-artifacts.sh
 bash tests/docs/test-overview.sh
 bash tests/docs/test-prerequisites-foundation.sh
+bash tests/docs/test-module02-keyvault-restore.sh
 bash tests/docs/test-runner-image.sh
 bash tests/docs/test-build-deploy.sh
 bash tests/docs/test-scale-validation.sh

@@ -472,14 +472,6 @@ PASS: Key Vault secret 저장 완료: https://kvacarunnera1b2c3.vault.azure.net/
 - Module 02에서 private-access 검증이 끝날 때까지 source PEM 파일은 로컬 워크스테이션에
   그대로 보관하세요.
 
-> **참고 화면:** 아래 이미지는 Key Vault의 **Objects → Secrets** 위치와
-> `github-app-private-key` secret의 이름·Enabled 설정을 찾는 참고 화면입니다.
-> 이 워크숍에서는 두 번째 화면의 `Value` 입력란을 사용하지 않고 위의 `--file` 명령을 사용합니다.
-
-![Azure Portal Key Vault의 Secrets 메뉴와 Generate/Import 예시](images/01-key-vault-secrets-list.png)
-
-![Azure Portal의 github-app-private-key secret 설정 화면 참고](images/01-key-vault-create-secret.png)
-
 ## 8. Cloud Shell에서 GitHub App 설치 범위 검증
 
 👁️ **설명**
@@ -517,6 +509,10 @@ PASS: Key Vault secret과 GitHub App 설치 범위 확인: App 1234567, Installa
 `Administration: Read and write`, `Actions: Read-only`, repository 선택이 모두 올바릅니다.
 `ERROR`가 출력되면 멈춘 번호의 항목만 수정한 후 8단계를 다시 실행합니다.
 
+Azure Portal의 Key Vault → **Objects** → **Secrets**에서도
+`github-app-private-key`가 **Enabled** 상태인지 확인할 수 있습니다.
+
+![Azure Portal에서 생성된 github-app-private-key secret 확인](images/01-key-vault-secret-created.png)
 
 ## 트러블슈팅
 
