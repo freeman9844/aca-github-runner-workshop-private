@@ -77,7 +77,26 @@ for text in \
   'az network private-endpoint dns-zone-group create' \
   'networkInterfaces[0].id' \
   'Storage Blob Data Contributor' \
-  '--scope "$STORAGE_ID"'; do
+  '--scope "$STORAGE_ID"' \
+  'KEY_VAULT="kvacarunner$SUFFIX"' \
+  'KEY_VAULT_PE="pe-kv-$SUFFIX"' \
+  'KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"' \
+  'KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"' \
+  'GITHUB_APP_KEY_SECRET="github-app-private-key"' \
+  'az keyvault create' \
+  '--enable-rbac-authorization true' \
+  '--retention-days 7' \
+  '--enable-purge-protection false' \
+  '--default-action Deny' \
+  'Key Vault Secrets Officer' \
+  'az keyvault secret set' \
+  '--file "$GITHUB_APP_PRIVATE_KEY_FILE"' \
+  '--group-id vault' \
+  'privatelink.vaultcore.azure.net' \
+  'az keyvault update' \
+  '--public-network-access Disabled' \
+  'Key Vault Secrets User' \
+  '--scope "$KEY_VAULT_ID"'; do
   assert_contains "$ALL_TEXT" "$text" 'missing foundation marker'
 done
 
@@ -98,8 +117,15 @@ assert_contains_multiline \
 
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \
-  $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --all \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
-  'module 02 must verify only ACR_ID and STORAGE_ID scopes'
+  $'az role assignment list \\\n  --assignee "$UAMI_PID" \\\n  --all \\\n  --query "[?scope==\'$ACR_ID\' || scope==\'$STORAGE_ID\' || scope==\'$KEY_VAULT_ID\'].{role:roleDefinitionName,principalType:principalType,scope:scope}" \\\n  --output table' \
+  'module 02 must verify ACR_ID, STORAGE_ID, and KEY_VAULT_ID scopes'
+
+for forbidden in \
+  '--value "$GITHUB_APP_PRIVATE_KEY"'; do
+  if grep -F -- "$forbidden" "$FOUNDATION" >/dev/null; then
+    fail "PEM value must not appear in module 02: $forbidden"
+  fi
+done
 
 assert_contains \
   "$FOUNDATION_TEXT" \

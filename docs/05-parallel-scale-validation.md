@@ -41,6 +41,11 @@ STORAGE_CONTAINER="runner-artifacts"
 STORAGE_PE="pe-blob-$SUFFIX"
 STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
 STORAGE_DNS_LINK="link-blob-$SUFFIX"
+KEY_VAULT="kvacarunner$SUFFIX"
+KEY_VAULT_PE="pe-kv-$SUFFIX"
+KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"
+KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"
+GITHUB_APP_KEY_SECRET="github-app-private-key"
 PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 
 # Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
@@ -50,13 +55,26 @@ if [[ -n "$SAVED_STORAGE" ]]; then
 fi
 unset SAVED_STORAGE
 
-# Log Analytics, PE subnet, Storage를 다시 조회하고 복구한 값을 출력합니다.
+# Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
+if [[ -n "$SAVED_KEY_VAULT" ]]; then
+  KEY_VAULT="$SAVED_KEY_VAULT"
+fi
+unset SAVED_KEY_VAULT
+
+# Log Analytics, PE subnet, Storage, Key Vault를 다시 조회하고 복구한 값을 출력합니다.
 LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
 PE_SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$PE_SUBNET"   --query id   --output tsv)
 STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
+KEY_VAULT_ID=$(az keyvault show \
+  --resource-group "$RG" \
+  --name "$KEY_VAULT" \
+  --query id \
+  --output tsv)
+KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
-printf 'RG=%s\nLOG=%s\nJOB=%s\nSTORAGE=%s\nLOG_ID=%s\n' \
-  "$RG" "$LOG" "$JOB" "$STORAGE" "$LOG_ID"
+printf 'RG=%s\nLOG=%s\nJOB=%s\nSTORAGE=%s\nKEY_VAULT=%s\nLOG_ID=%s\n' \
+  "$RG" "$LOG" "$JOB" "$STORAGE" "$KEY_VAULT" "$LOG_ID"
 ```
 
 📋 **예상 출력**

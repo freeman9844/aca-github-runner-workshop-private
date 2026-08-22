@@ -41,6 +41,11 @@ STORAGE_CONTAINER="runner-artifacts"
 STORAGE_PE="pe-blob-$SUFFIX"
 STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
 STORAGE_DNS_LINK="link-blob-$SUFFIX"
+KEY_VAULT="kvacarunner$SUFFIX"
+KEY_VAULT_PE="pe-kv-$SUFFIX"
+KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"
+KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"
+GITHUB_APP_KEY_SECRET="github-app-private-key"
 PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 UAMI="id-acarunner-$SUFFIX"
 
@@ -50,6 +55,13 @@ if [[ -n "$SAVED_STORAGE" ]]; then
   STORAGE="$SAVED_STORAGE"
 fi
 unset SAVED_STORAGE
+
+# Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
+if [[ -n "$SAVED_KEY_VAULT" ]]; then
+  KEY_VAULT="$SAVED_KEY_VAULT"
+fi
+unset SAVED_KEY_VAULT
 
 # Azure CLI context를 원래 workshop subscription으로 되돌린 뒤 식별자를 조회합니다.
 az account set --subscription "$SUBSCRIPTION_ID"
@@ -74,10 +86,16 @@ PE_SUBNET_ID=$(az network vnet subnet show \
   --name "$PE_SUBNET" \
   --query id \
   --output tsv)
+KEY_VAULT_ID=$(az keyvault show \
+  --resource-group "$RG" \
+  --name "$KEY_VAULT" \
+  --query id \
+  --output tsv)
+KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
-export SUFFIX LOC RG ENV VNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK PRIVATE_ENDPOINT_CIDR ACR UAMI SUBSCRIPTION_ID STORAGE_ID UAMI_PID UAMI_CLIENT_ID PE_SUBNET_ID
-printf 'RG=%s\nENV=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID=%s\nPRIVATE_ENDPOINT_CIDR=%s\n' \
-  "$RG" "$ENV" "$STORAGE" "$STORAGE_CONTAINER" "$UAMI" "$UAMI_CLIENT_ID" "$PRIVATE_ENDPOINT_CIDR"
+export SUFFIX LOC RG ENV VNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK KEY_VAULT KEY_VAULT_PE KEY_VAULT_DNS_ZONE KEY_VAULT_DNS_LINK GITHUB_APP_KEY_SECRET PRIVATE_ENDPOINT_CIDR ACR UAMI SUBSCRIPTION_ID STORAGE_ID UAMI_PID UAMI_CLIENT_ID PE_SUBNET_ID KEY_VAULT_ID KEY_VAULT_SECRET_URI
+printf 'RG=%s\nENV=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID=%s\nKEY_VAULT=%s\nPRIVATE_ENDPOINT_CIDR=%s\n' \
+  "$RG" "$ENV" "$STORAGE" "$STORAGE_CONTAINER" "$UAMI" "$UAMI_CLIENT_ID" "$KEY_VAULT" "$PRIVATE_ENDPOINT_CIDR"
 ```
 
 📋 **예상 출력**

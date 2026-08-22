@@ -67,6 +67,11 @@ STORAGE_CONTAINER="runner-artifacts"
 STORAGE_PE="pe-blob-$SUFFIX"
 STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
 STORAGE_DNS_LINK="link-blob-$SUFFIX"
+KEY_VAULT="kvacarunner$SUFFIX"
+KEY_VAULT_PE="pe-kv-$SUFFIX"
+KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"
+KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"
+GITHUB_APP_KEY_SECRET="github-app-private-key"
 PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
@@ -78,6 +83,13 @@ if [[ -n "$SAVED_STORAGE" ]]; then
   STORAGE="$SAVED_STORAGE"
 fi
 unset SAVED_STORAGE
+
+# Key Vault 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
+read -rp "Saved Key Vault name if changed (press Enter to keep ${KEY_VAULT}): " SAVED_KEY_VAULT
+if [[ -n "$SAVED_KEY_VAULT" ]]; then
+  KEY_VAULT="$SAVED_KEY_VAULT"
+fi
+unset SAVED_KEY_VAULT
 
 # Job 생성에 필요한 workspace, Environment, ACR, Storage, subscription과 identity ID를 다시 조회합니다.
 LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
@@ -93,16 +105,22 @@ RG_ID=$(az group show   --name "$RG"   --query id   --output tsv)
 UAMI_RID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query id   --output tsv)
 UAMI_PID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query principalId   --output tsv)
 UAMI_CLIENT_ID=$(az identity show   --resource-group "$RG"   --name "$UAMI"   --query clientId   --output tsv)
+KEY_VAULT_ID=$(az keyvault show \
+  --resource-group "$RG" \
+  --name "$KEY_VAULT" \
+  --query id \
+  --output tsv)
+KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
 
 # 복구한 Azure 변수를 현재 shell에 export하고 핵심 값을 출력해 확인합니다.
-export SUFFIX LOC RG LOG ENV VNET INFRA_SUBNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK PRIVATE_ENDPOINT_CIDR ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID VNET_ID PE_SUBNET_ID STORAGE_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID
-printf 'JOB=%s ENV=%s STORAGE=%s ACR_SERVER=%s\n' "$JOB" "$ENV" "$STORAGE" "$ACR_SERVER"
+export SUFFIX LOC RG LOG ENV VNET INFRA_SUBNET PE_SUBNET STORAGE STORAGE_CONTAINER STORAGE_PE STORAGE_DNS_ZONE STORAGE_DNS_LINK KEY_VAULT KEY_VAULT_PE KEY_VAULT_DNS_ZONE KEY_VAULT_DNS_LINK GITHUB_APP_KEY_SECRET PRIVATE_ENDPOINT_CIDR ACR UAMI JOB IMAGE LOG_ID LOG_RID ENV_ID VNET_ID PE_SUBNET_ID STORAGE_ID ACR_SERVER ACR_ID SUBSCRIPTION_ID RG_ID UAMI_RID UAMI_PID UAMI_CLIENT_ID KEY_VAULT_ID KEY_VAULT_SECRET_URI
+printf 'JOB=%s ENV=%s STORAGE=%s ACR_SERVER=%s KEY_VAULT=%s\n' "$JOB" "$ENV" "$STORAGE" "$ACR_SERVER" "$KEY_VAULT"
 ```
 
 📋 **예상 출력**
 
 ```text
-JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 STORAGE=stacarunnera1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io
+JOB=job-ghrunner-a1b2c3 ENV=env-acarunner-a1b2c3 STORAGE=stacarunnera1b2c3 ACR_SERVER=acracarunnera1b2c3.azurecr.io KEY_VAULT=kvacarunnera1b2c3
 ```
 
 `ACR_SERVER`는 입력한 `ACR` 값을 그대로 조회한 결과이므로, 모듈 02에서 이름 충돌 복구를 했다면 다른 registry 이름으로 출력되어야 정상입니다. `STORAGE` 역시 이름 충돌 복구가 있었다면 저장해 둔 실제 값으로 복원되어야 합니다.
