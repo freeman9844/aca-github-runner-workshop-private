@@ -205,6 +205,30 @@ for text in \
   assert_contains "$step_five_section" "$text" 'module 01 step 5 App installation guidance missing'
 done
 
+step_seven_section="$(
+  awk '
+    /^## 7\. / { in_section=1 }
+    /^## 트러블슈팅/ { exit }
+    in_section { print }
+  ' "$PREREQ"
+)"
+for text in \
+  '## 7. 명령으로 다음 모듈 입력값 검증' \
+  'validate_github_inputs()' \
+  'GITHUB_OWNER GITHUB_REPO GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID' \
+  '[[ "$GITHUB_REPO" != "aca-runner-lab" ]]' \
+  '[[ ! "$GITHUB_APP_ID" =~ ^[1-9][0-9]*$ ]]' \
+  '[[ ! "$GITHUB_APP_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]' \
+  '"https://api.github.com/orgs/$GITHUB_OWNER"' \
+  'PASS: GitHub Organization 확인' \
+  'PASS: GitHub App ID 형식 확인' \
+  'PASS: Installation ID 형식 확인'; do
+  assert_contains "$step_seven_section" "$text" 'module 01 step 7 command validation missing'
+done
+if [[ "$step_seven_section" == *'이 단계는 체크리스트 확인 단계입니다.'* ]]; then
+  fail "module 01 step 7 must execute validation commands instead of using a checklist only"
+fi
+
 step_three_section="$(
   awk '
     /^## 3\. / { in_section=1 }

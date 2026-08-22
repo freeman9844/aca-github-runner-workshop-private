@@ -329,32 +329,102 @@ GITHUB_APP_INSTALLATION_ID=98765432
 - 이 단계에서는 PEM 원문이나 경로를 출력하지 않습니다.
 - 이후 같은 Cloud Shell 세션에서 네 변수를 그대로 재사용할 수 있습니다.
 
-## 7. 다음 모듈 입력값 점검
+## 7. 명령으로 다음 모듈 입력값 검증
 
 👁️ **설명**
 
-다음 모듈은 Cloud Shell에 저장한 네 개의 식별자와 로컬 워크스테이션에만 남겨 둔 PEM 파일을 함께 사용합니다.
-Cloud Shell에서는 식별자만 유지하고, PEM 파일 검증과 JWT 서명은 로컬 Azure CLI 또는 로컬 워크스테이션 셸에서 수행합니다.
+6단계에서 입력한 값이 비어 있지 않은지, repository 이름과 ID 형식이 올바른지,
+`GITHUB_OWNER`가 실제 GitHub Organization인지 명령으로 검증합니다.
+
+Cloud Shell에는 private key가 없으므로 App ID와 Installation ID가 서로 연결된 실제
+GitHub App 설치인지 인증하는 단계는 아닙니다. 여기서는 잘못된 입력 형식을 먼저
+차단하며, 실제 App 인증은 이후 runner가 Key Vault의 private key로 App JWT와
+installation token을 발급할 때 검증됩니다.
 
 🟢 **실행**
 
-아래 항목을 모두 확인합니다.
+```bash
+# 6단계에서 입력한 GitHub App 식별자와 Organization을 다음 모듈 전에 검증합니다.
+validate_github_inputs() {
+  local variable value required_command organization_type
 
-- `GITHUB_OWNER`가 organization 이름인지 확인합니다.
-- `GITHUB_REPO`가 `aca-runner-lab`인지 확인합니다.
-- `GITHUB_APP_ID`가 App settings 페이지의 값과 일치하는지 확인합니다.
-- `GITHUB_APP_INSTALLATION_ID`가 `/settings/installations/` URL의 숫자와 일치하는지 확인합니다.
-- PEM 파일이 로컬 워크스테이션의 안전한 경로에만 존재하는지 확인합니다.
-- PEM 파일 경로 메모가 로컬 워크스테이션 또는 `로컬 Azure CLI` 세션에서만 접근 가능한지 확인합니다.
-- Cloud Shell 업로드, 메신저 전송, Git commit, 저장소 체크인을 하지 않았는지 확인합니다.
+  for required_command in curl jq; do
+    if ! command -v "$required_command" >/dev/null 2>&1; then
+      printf 'ERROR: required command not found: %s\n' "$required_command" >&2
+      return 1
+    fi
+  done
+
+  for variable in GITHUB_OWNER GITHUB_REPO GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID; do
+    value="${!variable:-}"
+    if [[ -z "$value" ]]; then
+      printf 'ERROR: %s is empty. Run step 6 again.\n' "$variable" >&2
+      return 1
+    fi
+  done
+
+  if [[ ! "$GITHUB_OWNER" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$ ]]; then
+    printf 'ERROR: invalid GitHub Organization name: %s\n' "$GITHUB_OWNER" >&2
+    return 1
+  fi
+
+  if [[ "$GITHUB_REPO" != "aca-runner-lab" ]]; then
+    printf 'ERROR: GITHUB_REPO must be aca-runner-lab: %s\n' "$GITHUB_REPO" >&2
+    return 1
+  fi
+
+  if [[ ! "$GITHUB_APP_ID" =~ ^[1-9][0-9]*$ ]]; then
+    printf 'ERROR: GITHUB_APP_ID must be a positive integer: %s\n' "$GITHUB_APP_ID" >&2
+    return 1
+  fi
+
+  if [[ ! "$GITHUB_APP_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]; then
+    printf 'ERROR: GITHUB_APP_INSTALLATION_ID must be a positive integer: %s\n' \
+      "$GITHUB_APP_INSTALLATION_ID" >&2
+    return 1
+  fi
+
+  if ! organization_type="$(
+    curl -fsSL \
+      -H "Accept: application/vnd.github+json" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      "https://api.github.com/orgs/$GITHUB_OWNER" |
+      jq -er '.type'
+  )"; then
+    printf 'ERROR: GitHub Organization lookup failed: %s\n' "$GITHUB_OWNER" >&2
+    return 1
+  fi
+
+  if [[ "$organization_type" != "Organization" ]]; then
+    printf 'ERROR: GITHUB_OWNER is not an Organization: %s\n' "$GITHUB_OWNER" >&2
+    return 1
+  fi
+
+  printf 'PASS: GitHub Organization 확인: %s\n' "$GITHUB_OWNER"
+  printf 'PASS: repository 이름 확인: %s\n' "$GITHUB_REPO"
+  printf 'PASS: GitHub App ID 형식 확인: %s\n' "$GITHUB_APP_ID"
+  printf 'PASS: Installation ID 형식 확인: %s\n' "$GITHUB_APP_INSTALLATION_ID"
+}
+
+validate_github_inputs
+```
 
 📋 **예상 출력**
 
-이 단계는 체크리스트 확인 단계입니다. 별도 명령 출력 대신 다음 상태를 만족하면 됩니다.
+```text
+PASS: GitHub Organization 확인: contoso
+PASS: repository 이름 확인: aca-runner-lab
+PASS: GitHub App ID 형식 확인: 1234567
+PASS: Installation ID 형식 확인: 98765432
+```
 
-- Cloud Shell에는 `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`만 남아 있습니다.
-- PEM 파일은 로컬 워크스테이션 또는 `로컬 Azure CLI` 세션에서만 접근할 수 있습니다.
-- GitHub App 설치 범위는 `aca-runner-lab` 한 개 저장소로 제한되어 있습니다.
+네 줄이 모두 출력되어야 다음 모듈로 진행합니다. `ERROR`가 출력되면 메시지에 표시된
+값을 5단계의 GitHub App 설정 또는 설치 URL과 다시 비교한 후 6단계부터 재실행합니다.
+GitHub API 호출이 일시적인 네트워크 오류나 rate limit으로 실패한 경우에는 잠시 후
+같은 검증 명령을 다시 실행합니다.
+
+⚠️ 이 검증을 위해 PEM 파일을 Cloud Shell에 업로드하지 마세요. PEM 파일은 계속 로컬
+워크스테이션의 안전한 경로에만 보관합니다.
 
 ## 트러블슈팅
 
