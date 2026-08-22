@@ -213,20 +213,20 @@ step_seven_section="$(
   ' "$PREREQ"
 )"
 for text in \
-  '## 7. 명령으로 다음 모듈 입력값 검증' \
-  'validate_github_inputs()' \
-  'GITHUB_OWNER GITHUB_REPO GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID' \
-  '[[ "$GITHUB_REPO" != "aca-runner-lab" ]]' \
-  '[[ ! "$GITHUB_APP_ID" =~ ^[1-9][0-9]*$ ]]' \
-  '[[ ! "$GITHUB_APP_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]' \
-  '"https://api.github.com/orgs/$GITHUB_OWNER"' \
-  'PASS: GitHub Organization 확인' \
-  'PASS: GitHub App ID 형식 확인' \
-  'PASS: Installation ID 형식 확인'; do
-  assert_contains "$step_seven_section" "$text" 'module 01 step 7 command validation missing'
+  '## 7. 로컬 명령으로 GitHub App 설치 연결 검증' \
+  '**로컬 워크스테이션 Bash**' \
+  'read -rp "GitHub App PEM file path: " GITHUB_APP_PRIVATE_KEY_FILE' \
+  'base64url_encode()' \
+  'openssl dgst -binary -sha256 -sign "$GITHUB_APP_PRIVATE_KEY_FILE"' \
+  '"https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID"' \
+  'select(.app_id == $app_id)' \
+  '.account.login' \
+  'PASS: App ID와 Installation ID 연결 확인' \
+  'unset app_jwt'; do
+  assert_contains "$step_seven_section" "$text" 'module 01 step 7 App installation authentication missing'
 done
-if [[ "$step_seven_section" == *'이 단계는 체크리스트 확인 단계입니다.'* ]]; then
-  fail "module 01 step 7 must execute validation commands instead of using a checklist only"
+if [[ "$step_seven_section" == *'"https://api.github.com/orgs/$GITHUB_OWNER"'* ]]; then
+  fail "module 01 step 7 must authenticate the App installation, not only look up the organization"
 fi
 
 step_three_section="$(
