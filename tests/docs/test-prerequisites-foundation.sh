@@ -123,7 +123,6 @@ for text in \
   'networkInterfaces[0].id' \
   'Storage Blob Data Contributor' \
   '--scope "$STORAGE_ID"' \
-  'KEY_VAULT="kvacarunner$SUFFIX"' \
   'KEY_VAULT_PE="pe-kv-$SUFFIX"' \
   'KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"' \
   'KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"' \
@@ -283,6 +282,76 @@ assert_contains \
   "$step_three_section" \
   '![freejava98 organization의 Private aca-runner-lab 저장소 예시](images/01-github-organization-private-repository.png)' \
   'module 01 step 3 must reference the organization repository example image'
+
+module_two_step_one="$(
+  awk '
+    /^## 1\. / { in_section=1 }
+    /^## 2\. / { exit }
+    in_section { print }
+  ' "$FOUNDATION"
+)"
+for text in \
+  'Module 01에서 저장한 `SUFFIX`' \
+  'read -rp "Saved SUFFIX:' \
+  'read -rp "Saved Key Vault name:' \
+  'read -rp "Saved Key Vault bootstrap CIDR:' \
+  'read -rp "Saved Key Vault bootstrap principal object ID:' \
+  'KEY_VAULT_ID=$(az keyvault show'; do
+  assert_contains "$module_two_step_one" "$text" \
+    'module 02 must restore Module 01 Key Vault values'
+done
+for text in \
+  'Module 01에서 만든 Key Vault를 재사용한다.' \
+  'Key Vault Private Endpoint와 runtime RBAC를 완성한다.'; do
+  assert_contains "$FOUNDATION_TEXT" "$text" \
+    'module 02 goals must describe Key Vault reuse and hardening'
+done
+if [[ "$module_two_step_one" == *'SUFFIX="$(openssl rand -hex 3)"'* ]]; then
+  fail "module 02 must not generate a new suffix"
+fi
+
+module_two_step_two="$(
+  awk '
+    /^## 2\. / { in_section=1 }
+    /^## 3\. / { exit }
+    in_section { print }
+  ' "$FOUNDATION"
+)"
+assert_contains "$module_two_step_two" 'az group show' \
+  'module 02 step 2 must verify the Module 01 resource group'
+if [[ "$module_two_step_two" == *'az group create'* ]]; then
+  fail "module 02 must not recreate the Module 01 resource group"
+fi
+
+module_two_step_eight="$(
+  awk '
+    /^## 8\. / { in_section=1 }
+    /^## 트러블슈팅/ { exit }
+    in_section { print }
+  ' "$FOUNDATION"
+)"
+for text in \
+  '## 8. Key Vault private network와 runtime access 완성' \
+  '--group-id vault' \
+  'privatelink.vaultcore.azure.net' \
+  'Key Vault Secrets User' \
+  '--public-network-access Disabled' \
+  '--assignee "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID"' \
+  '--role "Key Vault Secrets Officer"' \
+  '--ip-address "$KEY_VAULT_BOOTSTRAP_CIDR"' \
+  'KEY_VAULT_SECRET_URI=' \
+  '## 8-L. Local workstation: private access 검증 후 원본 PEM 삭제'; do
+  assert_contains "$module_two_step_eight" "$text" \
+    'module 02 step 8 Key Vault hardening missing'
+done
+for forbidden in \
+  'az keyvault create' \
+  'az keyvault secret set' \
+  '## 8-L. Local workstation: GitHub App PEM 업로드'; do
+  if [[ "$module_two_step_eight" == *"$forbidden"* ]]; then
+    fail "module 02 step 8 still owns Module 01 bootstrap behavior: $forbidden"
+  fi
+done
 
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \

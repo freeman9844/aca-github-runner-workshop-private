@@ -1,6 +1,6 @@
 # 02. Azure 기반 리소스 준비
 
-> Azure Cloud Shell Bash에서 리소스 그룹, Log Analytics workspace, Virtual Network, External Azure Container Apps Environment, locked-down Blob Storage, Blob Private Endpoint, Private DNS, Azure Monitor diagnostic settings, Azure Container Registry, User-Assigned Managed Identity를 만들고 least-privilege RBAC를 연결합니다.
+> Azure Cloud Shell Bash에서 Module 01 Resource Group과 Key Vault를 재사용하면서 Log Analytics workspace, custom Virtual Network, External Azure Container Apps Environment, locked-down Blob Storage, Private Endpoint, Private DNS, Azure Container Registry, User-Assigned Managed Identity, least-privilege RBAC를 완성합니다.
 
 ## 아키텍처 참고
 
@@ -49,9 +49,11 @@ flowchart TB
 
 - External ACA Environment는 custom VNet에 통합되지만 internal environment는
   아니며, Module 04에서 추가할 ACA Event Job은 ingress를 제공하지 않습니다.
-- Blob과 Key Vault data-plane은 각각 전용 Private Endpoint와 Private DNS를
-  사용합니다. ACR image pull과 Azure control-plane 호출은 public outbound를
-  사용합니다.
+- Module 01에서 만든 Key Vault를 재사용한다. Module 02는 vault 자체를 다시
+  만들거나 GitHub App private key를 다시 업로드하지 않습니다.
+- Key Vault Private Endpoint와 runtime RBAC를 완성한다. Blob과 Key Vault
+  data-plane은 각각 전용 Private Endpoint와 Private DNS를 사용하고, ACR image
+  pull과 Azure control-plane 호출은 public outbound를 사용합니다.
 - UAMI의 세 역할은 각 대상 리소스 범위에만 부여합니다. Resource Group 전체
   범위의 광범위한 data-plane 역할은 사용하지 않습니다.
 
@@ -59,11 +61,13 @@ flowchart TB
 
 이 모듈을 완료하면 다음을 할 수 있습니다.
 
-- `koreacentral`에 실습용 리소스 그룹과 공통 이름 변수를 만든다.
+- Module 01에서 저장한 `SUFFIX`, 실제 `KEY_VAULT` 이름, bootstrap 접근 정보로 공통 이름 변수를 복원한다.
 - External ACA Environment용 custom VNet, delegated ACA subnet, non-delegated Private Endpoint subnet을 각각 준비한다.
 - Azure Monitor 로그 대상으로 ACA Environment를 연결하고, Blob 전용 Private DNS를 구성한다.
 - ACR을 관리자 계정 없이 만들고 ARM authentication을 활성화한다.
 - Storage Account를 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `allowSharedKeyAccess=false` 상태로 만들고 Blob container를 management plane으로 생성한다.
+- Module 01에서 만든 Key Vault를 재사용한다.
+- Key Vault Private Endpoint와 runtime RBAC를 완성한다.
 - UAMI를 만들고 ACR 범위에 `AcrPull`, Storage 범위에 `Storage Blob Data Contributor`, Key Vault 범위에 `Key Vault Secrets User` 역할을 부여한다.
 - 다음 모듈에서 사용할 `SUBSCRIPTION_ID`, `RG_ID`, `LOG_ID`, `LOG_RID`, `VNET_ID`, `SUBNET_ID`, `PE_SUBNET_ID`, `ENV_ID`, `ACR_SERVER`, `ACR_ID`, `STORAGE`, `STORAGE_ID`, `STORAGE_CONTAINER`, `STORAGE_PE`, `STORAGE_DNS_ZONE`, `UAMI_RID`, `UAMI_PID`, `UAMI_CLIENT_ID`, `KEY_VAULT`, `KEY_VAULT_ID`, `KEY_VAULT_SECRET_URI`를 확보한다.
 - 이후 세션 재연결이 필요할 때 사용할 수 있도록 `SUFFIX`, 실제 `ACR` 이름, 원래 `SUBSCRIPTION_ID`를 각각 별도 값으로 저장한다. Storage 이름은 충돌 복구가 있었을 때만 실제 값을 추가로 저장한다.
@@ -77,24 +81,34 @@ flowchart TB
 | 📋 **예상 출력** | 실행 결과와 비교할 기준 출력 |
 | ⚠️ **주의** | 보안, 비용, 제약 사항 안내 |
 
-## 1. 공통 변수 재설정
+## 1. Module 01 공통 변수 복원
 
 👁️ **설명**
 
-각 참가자가 충돌 없이 리소스를 만들 수 있도록 6자리 소문자 16진수 `SUFFIX`를 붙입니다. `ACR`과 `STORAGE` 이름은 전역 고유해야 하므로 기본값은 `SUFFIX`에서 만들되, 이름 충돌 복구가 발생하면 실제 이름이 `SUFFIX`와 달라질 수 있습니다. 반면 `RG`, `LOG`, `ENV`, `VNET`, `INFRA_SUBNET`, `PE_SUBNET`, `UAMI`, `JOB`, `STORAGE_PE`, `STORAGE_DNS_LINK`는 항상 같은 규칙으로 계산됩니다.
+Module 02는 Module 01에서 이미 만든 Resource Group과 Key Vault를 그대로 이어받습니다. Module 01에서 저장한 `SUFFIX`, 실제 `KEY_VAULT` 이름, bootstrap CIDR, bootstrap principal object ID를 복원한 뒤 나머지 리소스 이름을 같은 suffix에서 다시 계산합니다.
 
-`INFRA_SUBNET`은 ACA infrastructure를 위한 delegated subnet이고, `PE_SUBNET`은 Blob Private Endpoint만 넣는 **non-delegated subnet**입니다. delegated ACA subnet과 Private Endpoint subnet을 분리해야 하며, Storage service endpoint나 storage firewall 예외 추가 같은 우회 규칙은 이 워크숍에 포함하지 않습니다.
+아래 `az keyvault show`가 실패하면 Module 01의 Key Vault bootstrap이 아직 끝나지 않은 상태입니다. 이 경우 새 suffix를 만들거나 두 번째 Key Vault를 만들지 말고, Module 01에서 저장한 값을 다시 확인한 뒤 같은 workshop 상태로 이어서 실행하세요.
 
 🟢 **실행**
 
 ```bash
-# 참가자마다 충돌하지 않는 6자리 suffix를 만들고 모든 실습 리소스 이름의 기준으로 사용합니다.
-SUFFIX="$(openssl rand -hex 3)"
-LOC=koreacentral
+# Module 01에서 저장한 식별자를 복원하고 나머지 Azure 리소스 이름을 같은 suffix에서 파생합니다.
+if [[ -z "${SUFFIX:-}" ]]; then
+  read -rp "Saved SUFFIX: " SUFFIX
+fi
+if [[ -z "${KEY_VAULT:-}" ]]; then
+  read -rp "Saved Key Vault name: " KEY_VAULT
+fi
+if [[ -z "${KEY_VAULT_BOOTSTRAP_CIDR:-}" ]]; then
+  read -rp "Saved Key Vault bootstrap CIDR: " KEY_VAULT_BOOTSTRAP_CIDR
+fi
+if [[ -z "${KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID:-}" ]]; then
+  read -rp "Saved Key Vault bootstrap principal object ID: " \
+    KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID
+fi
 
-# 뒤 모듈이 같은 리소스를 찾을 수 있도록 suffix에서 일관된 이름을 파생합니다.
-# ACR과 Storage는 전역 고유 이름 충돌 시 별도로 바꿀 수 있으므로 SUFFIX와 독립된 값으로 관리합니다.
-RG="rg-acarunner-$SUFFIX"
+LOC="${LOC:-koreacentral}"
+RG="${RG:-rg-acarunner-$SUFFIX}"
 LOG="log-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
 VNET="vnet-acarunner-$SUFFIX"
@@ -106,7 +120,6 @@ STORAGE_CONTAINER="runner-artifacts"
 STORAGE_PE="pe-blob-$SUFFIX"
 STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
 STORAGE_DNS_LINK="link-blob-$SUFFIX"
-KEY_VAULT="kvacarunner$SUFFIX"
 KEY_VAULT_PE="pe-kv-$SUFFIX"
 KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"
 KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"
@@ -116,8 +129,14 @@ UAMI="id-acarunner-$SUFFIX"
 JOB="job-ghrunner-$SUFFIX"
 IMAGE="github-actions-runner:2.336.0"
 
-# 재접속 시 복원해야 할 핵심 이름이 올바르게 만들어졌는지 먼저 확인합니다.
-printf 'SUFFIX=%s RG=%s ACR=%s STORAGE=%s KEY_VAULT=%s\n' "$SUFFIX" "$RG" "$ACR" "$STORAGE" "$KEY_VAULT"
+KEY_VAULT_ID=$(az keyvault show \
+  --resource-group "$RG" \
+  --name "$KEY_VAULT" \
+  --query id \
+  --output tsv)
+
+printf 'SUFFIX=%s RG=%s ACR=%s STORAGE=%s KEY_VAULT=%s\n' \
+  "$SUFFIX" "$RG" "$ACR" "$STORAGE" "$KEY_VAULT"
 ```
 
 📋 **예상 출력**
@@ -128,32 +147,44 @@ SUFFIX=a1b2c3 RG=rg-acarunner-a1b2c3 ACR=acracarunnera1b2c3 STORAGE=stacarunnera
 
 ⚠️ **주의**
 
-- `SUFFIX`와 함께 위 출력의 실제 `ACR` 값을 지금 별도로 저장하세요.
+- `SUFFIX`, `KEY_VAULT`, `KEY_VAULT_BOOTSTRAP_CIDR`, `KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID`에는 반드시 Module 01에서 저장한 값을 넣으세요.
+- `KEY_VAULT_ID` 조회가 실패하면 Module 01이 끝나지 않은 것입니다. 새 `SUFFIX`를 만들거나 다른 `KEY_VAULT` 이름으로 우회하지 마세요.
 - `STORAGE`는 기본적으로 `stacarunner$SUFFIX`를 그대로 사용합니다. Storage 이름 충돌 복구가 발생한 경우에만 실제 `STORAGE` 값을 추가로 저장하세요.
-- `KEY_VAULT`는 기본적으로 `kvacarunner$SUFFIX`를 그대로 사용합니다. Key Vault 이름 충돌 복구가 발생한 경우에만 실제 `KEY_VAULT` 값을 추가로 저장하세요.
 
-## 2. Resource group과 Log Analytics workspace 만들기
+## 2. Resource Group 확인과 Log Analytics workspace 만들기
 
 👁️ **설명**
 
-Log Analytics는 runner 등록/실행/정리 로그를 한곳에서 확인하는 기준이 됩니다. `LOG_ID`는 workspace customer ID이고, `LOG_RID`는 Azure Monitor diagnostic setting에서 사용할 resource ID입니다.
+Module 01이 Key Vault를 만들면서 같은 workshop suffix의 Resource Group도 이미 만들었습니다. Module 02는 그 Resource Group을 다시 만들지 않고 확인만 한 뒤, 이후 foundation 리소스에 필요한 Log Analytics workspace를 추가합니다.
 
 🟢 **실행**
 
 ```bash
-# 모든 Azure 리소스를 같은 위치와 수명 주기로 관리할 실습용 Resource Group을 만듭니다.
-az group create --name "$RG" --location "$LOC" --output none
-
-# 현재 구독과 Resource Group의 전체 ID를 저장해 이후 조회와 RBAC scope에 재사용합니다.
+# Module 01에서 만든 Resource Group을 확인하고 이후 조회에 사용할 ID를 저장합니다.
 SUBSCRIPTION_ID=$(az account show --query id --output tsv)
-RG_ID=$(az group show   --name "$RG"   --query id   --output tsv)
+RG_ID=$(az group show \
+  --name "$RG" \
+  --query id \
+  --output tsv)
 
 # ACA environment의 시스템 로그를 수집할 Log Analytics workspace를 만듭니다.
-az monitor log-analytics workspace create   --resource-group "$RG"   --workspace-name "$LOG"   --location "$LOC"   --output none
+az monitor log-analytics workspace create \
+  --resource-group "$RG" \
+  --workspace-name "$LOG" \
+  --location "$LOC" \
+  --output none
 
 # customer ID는 workspace 식별에, resource ID는 diagnostic setting 연결에 사용합니다.
-LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
-LOG_RID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query id   --output tsv)
+LOG_ID=$(az monitor log-analytics workspace show \
+  --resource-group "$RG" \
+  --workspace-name "$LOG" \
+  --query customerId \
+  --output tsv)
+LOG_RID=$(az monitor log-analytics workspace show \
+  --resource-group "$RG" \
+  --workspace-name "$LOG" \
+  --query id \
+  --output tsv)
 
 # 다음 Cloud Shell 세션에서도 같은 workshop 리소스를 복원할 수 있도록 세 값을 기록합니다.
 printf '다음 값을 저장하세요: SUFFIX=%s ACR=%s SUBSCRIPTION_ID=%s\n' \
@@ -162,8 +193,8 @@ printf '다음 값을 저장하세요: SUFFIX=%s ACR=%s SUBSCRIPTION_ID=%s\n' \
 
 📋 **예상 출력**
 
-- 명령은 출력 없이 끝나고, `LOG_ID`와 `LOG_RID`가 셸 변수에 저장됩니다.
-- `LOG_RID`는 `/subscriptions/.../resourceGroups/.../providers/Microsoft.OperationalInsights/workspaces/...` 형식입니다.
+- `az group show`와 workspace 생성 명령은 출력 없이 끝나고, `RG_ID`, `LOG_ID`, `LOG_RID`가 셸 변수에 저장됩니다.
+- `RG_ID`는 `/subscriptions/.../resourceGroups/rg-acarunner-...` 형식이고, `LOG_RID`는 `/subscriptions/.../resourceGroups/.../providers/Microsoft.OperationalInsights/workspaces/...` 형식입니다.
 - `다음 값을 저장하세요: SUFFIX=a1b2c3 ACR=acracarunnera1b2c3 SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000`처럼 현재 workshop 기준 값을 바로 기록할 수 있어야 합니다.
 
 Module 03~06을 Cloud Shell 재접속 후 이어가려면 위에서 출력한 `SUBSCRIPTION_ID`를 `SUFFIX`, 실제 `ACR` 이름과 함께 저장해 둡니다. Storage 이름은 기본값이면 다시 계산되므로 여기서는 저장하지 않습니다.
@@ -426,113 +457,22 @@ az role assignment list \
 
 RBAC 전파에는 몇 분이 걸릴 수 있습니다. 다음 모듈에서 image pull이나 Blob access 오류가 보이면 즉시 다시 만들지 말고 역할 할당 조회를 먼저 확인하세요.
 
-## 8. Key Vault 만들기와 GitHub App private key 업로드
+## 8. Key Vault private network와 runtime access 완성
 
 👁️ **설명**
 
-GitHub App private key는 runner container가 GitHub API와 통신할 때 필요합니다. 이 워크숍은 PEM 파일을 Cloud Shell에 업로드하거나 셸 변수로 전달하는 대신, RBAC 기반 Key Vault에 secret으로 저장하고 UAMI를 통해 런타임에 읽는 방식을 사용합니다.
+Module 01에서 만든 Key Vault와 업로드한 secret을 그대로 사용합니다. 이 단계에서는
+Module 02에서 준비한 Private Endpoint subnet과 UAMI를 연결하고 bootstrap public
+access를 제거합니다.
 
-Key Vault는 먼저 public network access를 일시적으로 허용해 로컬 workstation에서 PEM을 업로드한 뒤, Private Endpoint가 준비되면 public access를 닫습니다. 그 사이에 로컬 workstation IP 대역을 firewall 예외로 추가하고, 현재 사용자에게 `Key Vault Secrets Officer`를 임시로 부여해 secret을 업로드합니다.
-
-⚠️ **주의**
-
-아래 CIDR 프롬프트에는 PEM 파일이 있는 **로컬 workstation**의 공인 IP를 입력해야 합니다. Cloud Shell IP를 입력하면 다음 local 단계에서 secret 업로드가 실패합니다. `curl -s https://ifconfig.me`를 로컬 터미널에서 실행하면 현재 공인 IP를 확인할 수 있습니다.
+Key Vault Private DNS zone은 `privatelink.vaultcore.azure.net`을 사용합니다. 원본
+PEM은 계속 로컬 워크스테이션에만 두고, Cloud Shell에서는 secret value를 조회하거나
+출력하지 않습니다.
 
 🟢 **실행**
 
 ```bash
-# GitHub App private key를 저장할 RBAC 기반 전용 Key Vault를 만듭니다.
-az keyvault create \
-  --resource-group "$RG" \
-  --name "$KEY_VAULT" \
-  --location "$LOC" \
-  --enable-rbac-authorization true \
-  --retention-days 7 \
-  --enable-purge-protection false \
-  --public-network-access Enabled \
-  --default-action Deny \
-  --bypass None \
-  --output none
-
-KEY_VAULT_ID=$(az keyvault show \
-  --resource-group "$RG" \
-  --name "$KEY_VAULT" \
-  --query id \
-  --output tsv)
-CURRENT_USER_OBJECT_ID=$(az ad signed-in-user show --query id --output tsv)
-read -rp "Local workstation public IPv4 CIDR (for example 203.0.113.10/32): " \
-  KEY_VAULT_BOOTSTRAP_CIDR
-
-az keyvault network-rule add \
-  --name "$KEY_VAULT" \
-  --ip-address "$KEY_VAULT_BOOTSTRAP_CIDR" \
-  --output none
-
-BOOTSTRAP_ROLE_ASSIGNMENT_ID=$(az role assignment create \
-  --assignee-object-id "$CURRENT_USER_OBJECT_ID" \
-  --assignee-principal-type User \
-  --role "Key Vault Secrets Officer" \
-  --scope "$KEY_VAULT_ID" \
-  --query id \
-  --output tsv)
-```
-
-📋 **예상 출력**
-
-- `KEY_VAULT_ID`는 `/subscriptions/.../providers/Microsoft.KeyVault/vaults/...` 형식입니다.
-- RBAC 전파에 최대 2분이 걸릴 수 있습니다. 다음 local 단계에서 `403 Forbidden`이 나오면 잠시 기다렸다가 다시 시도합니다.
-
-## 8-L. Local workstation: GitHub App PEM 업로드 (로컬 Azure CLI 전용)
-
-👁️ **설명**
-
-이 단계는 **로컬 워크스테이션 Bash**에서 실행합니다. Cloud Shell에서는 실행하지 마세요. PEM 파일 내용을 화면에 출력하지 않고 `--file` 옵션으로 직접 Key Vault에 업로드합니다.
-
-🟢 **실행**
-
-```bash
-# 로컬 PEM 파일을 값으로 출력하지 않고 Key Vault secret에 직접 업로드합니다.
-set -euo pipefail
-az login
-read -rp "Azure subscription ID: " SUBSCRIPTION_ID
-read -rp "Key Vault name: " KEY_VAULT
-read -rp "GitHub App PEM file path: " GITHUB_APP_PRIVATE_KEY_FILE
-az account set --subscription "$SUBSCRIPTION_ID"
-test -f "$GITHUB_APP_PRIVATE_KEY_FILE"
-chmod 600 "$GITHUB_APP_PRIVATE_KEY_FILE"
-
-az keyvault secret set \
-  --vault-name "$KEY_VAULT" \
-  --name github-app-private-key \
-  --file "$GITHUB_APP_PRIVATE_KEY_FILE" \
-  --query "{id:id,enabled:attributes.enabled}" \
-  --output yaml
-```
-
-📋 **예상 출력**
-
-예상 출력에는 secret metadata만 포함되고 PEM 값은 포함되지 않습니다.
-
-```text
-enabled: true
-id: https://<vault>.vault.azure.net/secrets/github-app-private-key/<version>
-```
-
-⚠️ **주의**
-
-- Private Endpoint 전환과 public access 잠금 검증이 성공할 때까지 로컬 PEM 파일을 삭제하지 마세요.
-- `az login` 대신 Cloud Shell에서 이 명령을 실행하면 Key Vault firewall이 Cloud Shell IP를 차단합니다.
-
-## 8-C. Cloud Shell: Key Vault Private Endpoint, Private DNS, public access 잠금, UAMI RBAC
-
-👁️ **설명**
-
-PEM이 Key Vault에 저장되면 Cloud Shell로 돌아와 Private Endpoint를 연결하고 public access를 닫습니다. 이 순서를 지켜야 PE 전환 중 secret 접근이 끊기지 않습니다.
-
-🟢 **실행**
-
-```bash
-# Key Vault data plane을 기존 Private Endpoint subnet에 연결합니다.
+# Module 01 Key Vault에 Private Endpoint, Private DNS, runtime access hardening을 적용하고 검증합니다.
 az network private-endpoint create \
   --resource-group "$RG" \
   --name "$KEY_VAULT_PE" \
@@ -564,7 +504,7 @@ az network private-endpoint dns-zone-group create \
   --zone-name vault \
   --output none
 
-# UAMI가 Private Endpoint 경로로 secret을 읽을 수 있도록 Key Vault 범위에 최소 권한을 부여합니다.
+# UAMI runtime access를 부여하고 bootstrap public access를 제거합니다.
 az role assignment create \
   --assignee-object-id "$UAMI_PID" \
   --assignee-principal-type ServicePrincipal \
@@ -572,24 +512,24 @@ az role assignment create \
   --scope "$KEY_VAULT_ID" \
   --output none
 
-# Public network access를 비활성화하고 임시 bootstrap 접근 권한과 firewall 예외를 제거합니다.
 az keyvault update \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
   --public-network-access Disabled \
   --output none
 
-az role assignment delete --ids "$BOOTSTRAP_ROLE_ASSIGNMENT_ID"
+az role assignment delete \
+  --assignee "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID" \
+  --role "Key Vault Secrets Officer" \
+  --scope "$KEY_VAULT_ID"
 az keyvault network-rule remove \
   --name "$KEY_VAULT" \
   --ip-address "$KEY_VAULT_BOOTSTRAP_CIDR" \
   --output none
-unset BOOTSTRAP_ROLE_ASSIGNMENT_ID KEY_VAULT_BOOTSTRAP_CIDR
+unset KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID KEY_VAULT_BOOTSTRAP_CIDR
 
-# Key Vault URI를 저장해 이후 모듈에서 secret 참조에 사용합니다.
+# Key Vault URI를 저장하고 control-plane 상태를 검증합니다.
 KEY_VAULT_SECRET_URI="https://$KEY_VAULT.vault.azure.net/secrets/$GITHUB_APP_KEY_SECRET"
-
-# Key Vault 제어 plane 상태, Private Endpoint 승인·subnet, UAMI 역할을 control-plane으로 확인합니다.
 az keyvault show \
   --resource-group "$RG" \
   --name "$KEY_VAULT" \
@@ -618,22 +558,29 @@ az role assignment list \
 
 📋 **예상 출력**
 
+- `KEY_VAULT_SECRET_URI`는 `https://<vault>.vault.azure.net/secrets/github-app-private-key` 형식입니다.
 - `publicNetworkAccess`는 `Disabled`여야 합니다.
 - Private Endpoint status는 `Approved`여야 합니다.
 - Private DNS A record 조회 결과에는 Key Vault Private Endpoint의 private IPv4가 보여야 합니다.
 - 역할 목록에 `AcrPull`, `Storage Blob Data Contributor`, `Key Vault Secrets User`가 모두 `ServicePrincipal` 유형으로 보여야 합니다.
 
-## 8-L2. Local workstation: 검증 후 PEM 파일 삭제 (로컬 Azure CLI 전용)
+⚠️ **주의**
+
+- 이 단계는 Module 01이 이미 만든 Key Vault와 secret만 사용합니다. vault 생성이나 secret 재업로드 명령을 다시 실행하지 마세요.
+- `az role assignment delete`와 `az keyvault network-rule remove`가 끝나면 bootstrap public access는 제거된 상태여야 합니다.
+
+## 8-L. Local workstation: private access 검증 후 원본 PEM 삭제
 
 👁️ **설명**
 
-위 Cloud Shell 검증에서 `publicNetworkAccess=Disabled`와 Private Endpoint `Approved`가 확인되면 로컬 workstation으로 돌아와 PEM 파일을 삭제합니다.
+이 단계는 **로컬 워크스테이션 Bash**에서 실행합니다. 8단계의 private access 검증이 끝난 뒤에만 원본 PEM을 삭제하세요. 새 로컬 셸에서도 바로 실행할 수 있도록 파일 경로를 다시 묻습니다.
 
 🟢 **실행**
 
 ```bash
-# Private Endpoint 전환을 확인한 뒤 로컬 GitHub App PEM 파일을 삭제합니다.
+# Module 02의 private access 검증 후 원본 GitHub App PEM 파일을 삭제합니다.
 set -euo pipefail
+read -rp "Original GitHub App PEM file path: " GITHUB_APP_PRIVATE_KEY_FILE
 test -f "$GITHUB_APP_PRIVATE_KEY_FILE"
 rm -- "$GITHUB_APP_PRIVATE_KEY_FILE"
 unset GITHUB_APP_PRIVATE_KEY_FILE
@@ -643,7 +590,7 @@ unset GITHUB_APP_PRIVATE_KEY_FILE
 
 이 단계는 **선택 참고**입니다. 워크숍의 필수 명령은 Cloud Shell에서 완료되며, Azure 관리 포털에서는 생성 결과를 시각적으로 확인할 수 있습니다.
 
-Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로 이동하면 Module 02에서 만든 다음 리소스를 확인할 수 있습니다.
+Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로 이동하면 Module 01~02에서 준비한 다음 리소스를 확인할 수 있습니다.
 
 - Azure Container Registry
 - Container Apps Environment
@@ -657,9 +604,9 @@ Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로 �
 - Managed Identity
 - Log Analytics workspace
 
-![Module 02에서 생성한 Azure 리소스 목록](images/02-azure-portal-resource-group-resources.png)
+![Module 01~02 foundation Azure 리소스 목록](images/02-azure-portal-resource-group-resources.png)
 
-화면의 suffix와 리소스 이름은 예시이며 참가자마다 달라집니다. 리소스 정렬 순서와 필터 상태도 다를 수 있으므로, 자신의 `$RG`에서 위 여덟 가지 리소스 유형과 이름 형식을 확인하세요.
+화면의 suffix와 리소스 이름은 예시이며 참가자마다 달라집니다. 리소스 정렬 순서와 필터 상태도 다를 수 있으므로, 자신의 `$RG`에서 위 리소스 유형과 이름 형식을 확인하세요.
 
 ## 트러블슈팅
 
@@ -676,13 +623,9 @@ Azure Portal에서 **Resource groups → `$RG` → Overview → Resources**로 �
 | `az storage account create`가 이름 중복 오류를 반환함 | `STORAGE` 이름은 전역 고유인데 이미 다른 구독에서 사용 중 | 아래 Storage 이름 충돌 복구 절차에 따라 Storage 이름만 바꾸고, 바뀐 실제 `STORAGE` 이름을 새로 저장한 뒤 6단계를 다시 실행합니다. |
 | `az monitor diagnostic-settings create`가 권한 오류를 반환함 | 현재 구독/리소스 그룹에서 diagnostic setting을 만들 권한이 없음 | Contributor 이상 권한인지 확인하고, 잘못된 구독에 배포했다면 `az account show`로 현재 구독을 다시 확인합니다. |
 | role assignment는 성공했는데 image pull 또는 Blob access가 아직 실패함 | RBAC propagation 지연 | 몇 분 기다린 뒤 `az role assignment list --assignee "$UAMI_PID" --all --query "[?scope=='$ACR_ID' || scope=='$STORAGE_ID'].roleDefinitionName" --output tsv`로 역할 전파를 확인하고 다음 모듈을 재시도합니다. |
-| `az keyvault create`가 이름 중복 오류를 반환함 | `KEY_VAULT` 이름은 전역 고유인데 이미 다른 구독에서 사용 중 | 아래 Key Vault 이름 충돌 복구 절차에 따라 vault 이름만 바꾸고, 바뀐 실제 `KEY_VAULT` 이름을 저장한 뒤 8단계를 다시 실행합니다. |
-| local PEM 업로드 단계에서 `403 Forbidden`이 발생함 | bootstrap CIDR이 로컬 workstation IP와 다르거나 RBAC 전파가 아직 완료되지 않음 | `curl -s https://ifconfig.me`로 현재 공인 IP를 확인하고 CIDR을 수정한 뒤 `az keyvault network-rule add` 명령을 다시 실행합니다. RBAC 전파에 최대 2분이 걸릴 수 있습니다. |
-| `Key Vault Secrets Officer` role assignment 후 secret set이 `Forbidden`으로 실패함 | RBAC 전파 지연 | 2분 기다린 뒤 `az role assignment list --assignee "$CURRENT_USER_OBJECT_ID" --scope "$KEY_VAULT_ID" --output table`로 역할이 할당됐는지 확인하고 다시 시도합니다. |
-| PEM 파일 경로 오류 또는 `--file` 인식 실패 | 경로가 잘못되었거나 파일이 UTF-8이 아닌 인코딩으로 저장됨 | `test -f "$GITHUB_APP_PRIVATE_KEY_FILE"` 명령으로 경로를 확인하고, PEM 파일이 표준 ASCII/UTF-8인지 확인합니다. |
 | Key Vault Private Endpoint가 `Pending` 상태로 남음 | auto-approval이 적용되지 않거나 Private Endpoint connection이 아직 승인되지 않음 | `az keyvault private-endpoint-connection approve` 명령으로 수동 승인하거나 잠시 기다린 뒤 상태를 다시 조회합니다. |
 | `publicNetworkAccess`가 `Disabled`로 바뀌지 않음 | `az keyvault update` 명령이 실패했거나 실행되지 않음 | `az keyvault update --resource-group "$RG" --name "$KEY_VAULT" --public-network-access Disabled --output none`을 다시 실행하고 상태를 조회합니다. |
-| UAMI가 runtime에 secret을 읽지 못함 | `Key Vault Secrets User` role이 UAMI principal ID에 Key Vault scope로 할당되지 않음 | `az role assignment list --assignee "$UAMI_PID" --scope "$KEY_VAULT_ID" --output table`로 역할 할당을 확인하고, 없다면 8-C 단계의 role assignment 명령을 다시 실행합니다. |
+| UAMI가 runtime에 secret을 읽지 못함 | `Key Vault Secrets User` role이 UAMI principal ID에 Key Vault scope로 할당되지 않음 | `az role assignment list --assignee "$UAMI_PID" --scope "$KEY_VAULT_ID" --output table`로 역할 할당을 확인하고, 없다면 8단계의 role assignment 명령을 다시 실행합니다. |
 
 ### ACR 이름 충돌 복구
 
@@ -711,20 +654,6 @@ printf 'STORAGE=%s\n' "$STORAGE"
 ⚠️ **주의**
 
 이 시점부터 `STORAGE`는 더 이상 `SUFFIX`에서 유도되지 않습니다. 방금 출력된 실제 `STORAGE` 값을 저장하고, 이후 재접속 복구 블록에서는 기본값 대신 이 값을 다시 넣어야 합니다.
-
-### Key Vault 이름 충돌 복구
-
-Key Vault 이름 충돌이 났더라도 RG, Environment, ACR, Storage는 그대로 둡니다. vault 이름만 새 전역 고유 값으로 바꾸고 8단계를 다시 실행합니다.
-
-```bash
-# 기존 foundation은 유지하고 충돌한 Key Vault 이름만 더 긴 무작위 suffix로 교체합니다.
-KEY_VAULT="kvacarunner$(openssl rand -hex 5)"
-printf '새 Key Vault 이름을 저장하세요: %s\n' "$KEY_VAULT"
-```
-
-⚠️ **주의**
-
-이 시점부터 `KEY_VAULT`는 더 이상 `SUFFIX`에서 유도되지 않습니다. 방금 출력된 실제 `KEY_VAULT` 값을 저장하고, 이후 재접속 복구 블록에서는 기본값 대신 이 값을 다시 넣어야 합니다.
 
 ---
 
