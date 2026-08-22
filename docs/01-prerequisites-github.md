@@ -15,14 +15,6 @@
 - GitHub App private key를 Azure Portal Cloud Shell의 file upload로 Key Vault secret에 저장한다.
 - Key Vault에 저장된 private key로 App ID, Installation ID, 권한과 repository 범위를 인증한다.
 
-## 태그 범례
-
-| 태그 | 의미 |
-|------|------|
-| 🟢 **실행** | 참가자가 직접 입력하거나 수행해야 하는 단계 |
-| 👁️ **설명** | 개념 설명 또는 읽기 전용 안내 |
-| 📋 **예상 출력** | 실행 결과와 비교할 기준 출력 |
-| ⚠️ **주의** | 보안, 비용, 제약 사항 안내 |
 
 ## Cloud Shell 최초 준비
 

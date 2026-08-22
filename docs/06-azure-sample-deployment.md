@@ -106,14 +106,6 @@ printf 'RG=%s\nENV=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID
 
 </details>
 
-## 태그 범례
-
-| 태그 | 의미 |
-|------|------|
-| 🟢 **실행** | 참가자가 직접 입력하거나 수행해야 하는 단계 |
-| 👁️ **설명** | 개념 설명 또는 읽기 전용 안내 |
-| 📋 **예상 출력** | 실행 결과와 비교할 기준 출력 |
-| ⚠️ **주의** | 보안, 권한, 복구 관련 안내 |
 
 ## 1. Storage service endpoint, firewall, RBAC 확인
 

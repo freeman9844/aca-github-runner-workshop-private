@@ -35,6 +35,12 @@ for heading in \
   require "$heading" "missing README heading"
 done
 
+for module in "$ROOT"/docs/0[1-7]-*.md; do
+  if grep -F -- '## 태그 범례' "$module" >/dev/null; then
+    fail "module duplicates the README tag legend: ${module#$ROOT/}"
+  fi
+done
+
 require '처음 Cloud Shell을 사용하는 경우 **Mount storage account**를 선택해 영구 스토리지를 연결한 뒤 Bash를 엽니다.' 'missing README first-run storage guidance'
 
 storage_line=$(grep -nF '처음 Cloud Shell을 사용하는 경우 **Mount storage account**를 선택해 영구 스토리지를 연결한 뒤 Bash를 엽니다.' "$README" | cut -d: -f1)
