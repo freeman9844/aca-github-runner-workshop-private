@@ -36,19 +36,11 @@ LOG="log-acarunner-$SUFFIX"
 ENV="env-acarunner-$SUFFIX"
 VNET="vnet-acarunner-$SUFFIX"
 INFRA_SUBNET="snet-aca-infra"
-PE_SUBNET="snet-private-endpoints"
 JOB="job-ghrunner-$SUFFIX"
 STORAGE="stacarunner$SUFFIX"
 STORAGE_CONTAINER="runner-artifacts"
-STORAGE_PE="pe-blob-$SUFFIX"
-STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"
-STORAGE_DNS_LINK="link-blob-$SUFFIX"
 KEY_VAULT="kvacarunner$SUFFIX"
-KEY_VAULT_PE="pe-kv-$SUFFIX"
-KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"
-KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"
 GITHUB_APP_KEY_SECRET="github-app-private-key"
-PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"
 
 # Module 02에서 Storage 이름 충돌 복구가 있었다면 저장해 둔 실제 값을 덮어씁니다.
 read -rp "Saved Storage account name if changed (press Enter to keep ${STORAGE}): " SAVED_STORAGE
@@ -64,9 +56,9 @@ if [[ -n "$SAVED_KEY_VAULT" ]]; then
 fi
 unset SAVED_KEY_VAULT
 
-# Log Analytics, PE subnet, Storage, Key Vault를 다시 조회하고 복구한 값을 출력합니다.
+# Log Analytics, ACA subnet, Storage, Key Vault를 다시 조회하고 복구한 값을 출력합니다.
 LOG_ID=$(az monitor log-analytics workspace show   --resource-group "$RG"   --workspace-name "$LOG"   --query customerId   --output tsv)
-PE_SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$PE_SUBNET"   --query id   --output tsv)
+SUBNET_ID=$(az network vnet subnet show   --resource-group "$RG"   --vnet-name "$VNET"   --name "$INFRA_SUBNET"   --query id   --output tsv)
 STORAGE_ID=$(az storage account show   --resource-group "$RG"   --name "$STORAGE"   --query id   --output tsv)
 KEY_VAULT_ID=$(az keyvault show \
   --resource-group "$RG" \
@@ -106,7 +98,7 @@ printf 'GITHUB_APP_ID=%s\nGITHUB_APP_INSTALLATION_ID=%s\n' \
 
 모듈 04의 Event Job은 `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `applicationID`, `installationID`, `appKey`를 KEDA queue monitoring과 runner bootstrap에 연결합니다. 이 모듈은 그 foundation 위에서 queue-driven scale만 검증합니다.
 
-Module 04의 Event Job에는 이미 `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`, `AZURE_PRIVATE_ENDPOINT_CIDR=10.20.1.0/24`가 설정되어 있습니다. 이 모듈은 그 foundation 위에서 queue-driven scale만 검증합니다. Jobs do not support ingress 이므로 이번 검증 대상은 public inbound endpoint가 아니라 queued workflow를 처리하는 ephemeral runner lifecycle입니다.
+Module 04의 Event Job에는 이미 `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`가 설정되어 있습니다. Storage와 Key Vault는 `Microsoft.Storage`, `Microsoft.KeyVault` service endpoint와 ACA subnet rule로 제한되며, DNS는 계속 public service IP를 가리킵니다. 이 모듈은 그 foundation 위에서 queue-driven scale만 검증합니다. Jobs do not support ingress 이므로 이번 검증 대상은 public inbound endpoint가 아니라 queued workflow를 처리하는 ephemeral runner lifecycle입니다.
 
 🟢 **실행**
 
@@ -512,7 +504,7 @@ queued workflow가 생겼는데 runner가 뜨지 않으면 `applicationID`, `ins
 
 ### Key Vault resolution failure memo
 
-`github-app-private-key`가 resolve되지 않으면 KEDA auth와 분리해서 Key Vault 경로부터 확인합니다. `identityref`가 현재 Job의 UAMI를 가리키는지, 그 UAMI에 `Key Vault Secrets User`가 vault scope로 부여되어 있는지, vault의 Private DNS와 private endpoint가 `privatelink.vaultcore.azure.net`을 실제 private IP로 해석하는지, `publicNetworkAccess`가 `Disabled`라 private path만 허용되는지 순서대로 봅니다. secret 값 자체는 읽지 말고 Key Vault reference와 network path만 검증합니다.
+`github-app-private-key`가 resolve되지 않으면 KEDA auth와 분리해서 Key Vault 경로부터 확인합니다. `identityref`가 현재 Job의 UAMI를 가리키는지, 그 UAMI에 `Key Vault Secrets User`가 `$KEY_VAULT_ID` scope로 부여되어 있는지, `snet-aca-infra`에 `Microsoft.KeyVault` service endpoint가 있는지, Key Vault에 `$SUBNET_ID` subnet rule이 있는지, `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`이 유지되는지, `KEY_VAULT_SECRET_URI`가 기존 secret을 가리키는지 순서대로 봅니다. secret 값 자체는 읽지 말고 Key Vault reference와 service endpoint path만 검증합니다.
 
 ### Runner registration failure memo
 
@@ -534,7 +526,7 @@ az containerapp job show \
 - `applicationID`, `installationID`, `appKey`가 보입니다.
 - `github-app-private-key` secretRef가 유지되어야 하고, `identityref`도 현재 UAMI를 가리켜야 합니다.
 - `GitHub App installation`이 `aca-runner-lab` repository에 설치된 상태여야 합니다.
-- `Key Vault Secrets User`, Private DNS/private endpoint, `publicNetworkAccess` 상태는 KEDA auth와 별개로 확인합니다.
+- `Key Vault Secrets User`, `Microsoft.KeyVault` service endpoint, Key Vault subnet rule, `publicNetworkAccess`, `defaultAction=Deny`, `bypass=None` 상태는 KEDA auth와 별개로 확인합니다.
 - `401`과 `403`은 서로 다른 복구 경로를 뜻합니다.
 
 ## 10. GitHub Settings에서 permanent online runner가 남지 않았는지 확인
@@ -561,7 +553,7 @@ GitHub repository에서 **Settings → Actions → Runners**로 이동합니다.
 | 증상 | 주요 원인 | 해결 방법 |
 |------|-----------|-----------|
 | GitHub job이 계속 queued 상태로 남음 | GitHub App이 `aca-runner-lab` repository에 설치되지 않았거나, `applicationID`/`installationID`가 틀렸거나, workflow label이 다름 | GitHub App installation이 선택한 `aca-runner-lab` repository에 남아 있는지 확인하고, `az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.configuration.eventTriggerConfig.scale.rules"`에서 `githubApiURL=https://api.github.com`, `owner`, `runnerScope=repo`, `repos=$GITHUB_REPO`, `labels=aca-runner`, `noDefaultLabels=true`, `targetWorkflowQueueLength=1`, `applicationID`, `installationID`, `appKey -> github-app-private-key`가 모두 정확한지 다시 확인합니다. |
-| `github-app-private-key`가 resolve되지 않음 | `identityref`가 잘못되었거나 UAMI의 Key Vault 권한 또는 private DNS/private endpoint 경로가 깨짐 | `az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.configuration.secrets"`와 Key Vault 설정을 함께 확인해 `github-app-private-key=keyvaultref:...,identityref:$UAMI_RID`가 유지되는지, UAMI에 `Key Vault Secrets User`가 있는지, vault `publicNetworkAccess=Disabled`와 `privatelink.vaultcore.azure.net` DNS가 같은 private endpoint를 가리키는지 다시 검증합니다. |
+| `github-app-private-key`가 resolve되지 않음 | `identityref`가 잘못되었거나 UAMI의 Key Vault 권한 또는 service endpoint/subnet rule 경로가 깨짐 | `az containerapp job show --name "$JOB" --resource-group "$RG" --query "properties.configuration.secrets"`와 Key Vault 설정을 함께 확인해 `github-app-private-key=keyvaultref:...,identityref:$UAMI_RID`가 유지되는지, UAMI에 `Key Vault Secrets User`가 있는지, `snet-aca-infra`에 `Microsoft.KeyVault` service endpoint가 있는지, Key Vault가 `$SUBNET_ID` rule과 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`를 유지하는지 다시 검증합니다. |
 | `ContainerAppJobsExecutionNotFound`와 `execution - replicas`가 표시됨 | `EXECUTION`이 비어 있으며, 흔히 기존 workflow가 default label을 계속 요구해 KEDA가 queued Job을 세지 못한 상태 | GitHub workflow를 최신 sample 전체로 교체해 `runs-on: [aca-runner]`로 만들고, 기존 queued run을 취소한 뒤 다시 실행합니다. ACA execution이 생성된 후 6단계의 `EXECUTION=$(...)` 블록부터 다시 실행합니다. |
 | workflow hostname의 suffix가 현재 `$SUFFIX`와 다르거나 현재 execution이 timeout됨 | 다른 Event Job이 같은 repository와 `aca-runner` label을 감시함 | 모듈 04의 중복 watcher query로 이전 Job을 찾습니다. 이전 실습 Job을 정리하거나 새 lab repository를 사용한 뒤 다시 실행합니다. |
 | Running execution이 항상 1개만 보임 | polling 타이밍상 동시에 관찰하지 못했거나 Azure quota/시작 지연이 있음 | 먼저 GitHub에서 네 job이 모두 생성되었는지 확인하고, 30~90초 동안 같은 `Running` query를 반복합니다. 네 개가 항상 한 번에 보여야 한다고 가정하지 마세요. |

@@ -38,20 +38,17 @@ assert_contains "$recovery_section" 'Module 01에서 저장한 `SUFFIX`를 그�
 for text in \
   '## 0. 세션 재연결 시 변수 복구 (선택)' \
   'INFRA_SUBNET="snet-aca-infra"' \
-  'PE_SUBNET="snet-private-endpoints"' \
+  'SUBNET_ID=$(az network vnet subnet show' \
   'STORAGE="stacarunner$SUFFIX"' \
   'STORAGE_CONTAINER="runner-artifacts"' \
-  'STORAGE_PE="pe-blob-$SUFFIX"' \
-  'STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"' \
-  'STORAGE_DNS_LINK="link-blob-$SUFFIX"' \
-  'PRIVATE_ENDPOINT_CIDR="10.20.1.0/24"' \
   'STORAGE_ID=$(az storage account show' \
-  'PE_SUBNET_ID=$(az network vnet subnet show' \
+  'KEY_VAULT_ID=$(az keyvault show' \
+  'Microsoft.Storage' \
+  'Microsoft.KeyVault' \
   'AZURE_STORAGE_ACCOUNT' \
   'AZURE_STORAGE_CONTAINER' \
-  'AZURE_PRIVATE_ENDPOINT_CIDR' \
   'Jobs do not support ingress'; do
-  assert_contains "$DOC_TEXT" "$text" 'module 05 recovery/private-blob marker missing'
+  assert_contains "$DOC_TEXT" "$text" 'module 05 recovery/service-endpoint marker missing'
 done
 
 for text in \
@@ -65,8 +62,8 @@ for text in \
   'identityref' \
   'Key Vault Secrets User' \
   'publicNetworkAccess' \
-  'Private DNS' \
-  'private endpoint' \
+  'defaultAction=Deny' \
+  'bypass=None' \
   '401' \
   '403'; do
   assert_contains "$DOC_TEXT" "$text" 'module 05 GitHub App failure marker missing'
@@ -97,6 +94,20 @@ for obsolete in \
   'internal ''ingress'; do
   if grep -F -- "$obsolete" "$DOC" >/dev/null; then
     fail "obsolete internal-sample-app text still present: $obsolete"
+  fi
+done
+
+for forbidden in \
+  'PE_SUBNET' \
+  'STORAGE_PE' \
+  'KEY_VAULT_PE' \
+  'STORAGE_DNS_ZONE' \
+  'KEY_VAULT_DNS_ZONE' \
+  'PRIVATE_ENDPOINT_CIDR' \
+  'AZURE_PRIVATE_ENDPOINT_CIDR' \
+  'privatelink.'; do
+  if grep -F -- "$forbidden" "$DOC" >/dev/null; then
+    fail "module 05 still contains obsolete Private Link state: $forbidden"
   fi
 done
 
