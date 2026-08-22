@@ -183,6 +183,29 @@ Public workshop source clone과 organization GitHub App 준비는 서로 다른 
 
 ## 5. 조직 GitHub App 만들기
 
+### 일반 GitHub 무료 계정 사용자의 경우
+
+개인 GitHub Free 계정만 있어도 실습은 가능하지만, 이 워크숍은 개인 계정 저장소가 아니라
+**Organization 소유 Private repository**와 **Organization 소유 GitHub App**을 전제로 합니다.
+
+따라서 Organization이 없다면 먼저 무료 Organization을 생성합니다.
+
+1. GitHub 우측 상단 프로필 → **Your organizations** → **New organization**을 선택합니다.
+2. 무료 플랜을 선택합니다.
+3. Organization 이름을 정합니다. 예: `my-aca-runner-lab`
+4. 본인을 Organization owner로 유지합니다.
+5. 이후 3단계의 `aca-runner-lab` 저장소를 개인 계정이 아니라 이 Organization 아래에 생성합니다.
+
+이후 GitHub App 생성 시에도 **App owner**를 개인 계정이 아니라 방금 만든 Organization으로 선택해야 합니다.
+
+| 설정 | 값 |
+|---|---|
+| App owner | 개인 계정이 아닌 GitHub Organization |
+| Repository access | Only select repositories |
+| Selected repository | `aca-runner-lab` |
+
+⚠️ 개인 계정 아래에 만든 GitHub App 또는 개인 계정 Private repository로 진행하면 이 워크숍의 조직 runner/App 설치 흐름과 맞지 않을 수 있습니다.
+
 👁️ **설명**
 
 이 워크숍은 개인 사용자 토큰 대신 organization GitHub App 설치를 사용합니다.

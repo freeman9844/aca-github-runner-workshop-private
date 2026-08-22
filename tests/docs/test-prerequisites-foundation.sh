@@ -147,6 +147,31 @@ assert_contains \
   'private key PEM 파일은 로컬 워크스테이션에만 보관하고 Cloud Shell에 업로드하거나 Git에 commit하지 않습니다.' \
   'module 01 must forbid PEM upload or commit'
 
+for text in \
+  '### 일반 GitHub 무료 계정 사용자의 경우' \
+  '**Organization 소유 Private repository**와 **Organization 소유 GitHub App**' \
+  '프로필 → **Your organizations** → **New organization**' \
+  '무료 플랜을 선택합니다.' \
+  '`my-aca-runner-lab`' \
+  '본인을 Organization owner로 유지합니다.' \
+  'App owner | 개인 계정이 아닌 GitHub Organization' \
+  'Selected repository | `aca-runner-lab`'; do
+  assert_contains "$PREREQ_TEXT" "$text" 'module 01 free-account organization guide missing'
+done
+
+step_five_line="$(grep -nF '## 5. 조직 GitHub App 만들기' "$PREREQ" | head -n1 | cut -d: -f1)"
+free_account_line="$(grep -nF '### 일반 GitHub 무료 계정 사용자의 경우' "$PREREQ" | head -n1 | cut -d: -f1)"
+step_five_explanation_line="$(
+  awk '
+    /^## 5\. 조직 GitHub App 만들기$/ { in_step=1; next }
+    in_step && /^👁️ \*\*설명\*\*$/ { print NR; exit }
+  ' "$PREREQ"
+)"
+[[ -n "$step_five_line" && -n "$free_account_line" && -n "$step_five_explanation_line" ]] ||
+  fail "module 01 step 5 free-account guide ordering markers missing"
+[[ "$step_five_line" -lt "$free_account_line" && "$free_account_line" -lt "$step_five_explanation_line" ]] ||
+  fail "module 01 free-account guide must appear at the start of step 5"
+
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \
   $'az role assignment create \\\n  --assignee-object-id "$UAMI_PID" \\\n  --assignee-principal-type ServicePrincipal \\\n  --role "Storage Blob Data Contributor" \\\n  --scope "$STORAGE_ID" \\\n  --output none' \
