@@ -58,9 +58,7 @@ az keyvault list --query "[?starts_with(name, 'kvacarunner')].name" --output tab
 
 - fallback 목록에서 비슷한 이름이 여러 개 보이면, 메모해 둔 원래 suffix와 대조한 뒤에만 삭제 명령을 실행하세요.
 - 잘못된 RG를 지우면 다른 실습/리소스까지 함께 삭제될 수 있습니다.
-
 </details>
-
 
 ## 1. 워크숍 선택과 production 확장 지점 비교
 

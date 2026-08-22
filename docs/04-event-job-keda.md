@@ -35,7 +35,6 @@ subnet의 `Microsoft.Storage`·`Microsoft.KeyVault` service endpoint가 Azure ba
 > workshop delivery 전에 같은 구독·정책 경계에서 live rehearsal로 직접 성공을 확인하세요.
 > 이 경로는 저장소 테스트만으로 증명할 수 없습니다.
 
-
 ## 0. 세션 재연결 시 변수 복구 (선택)
 
 <details>

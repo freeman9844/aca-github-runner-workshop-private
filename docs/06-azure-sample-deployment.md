@@ -89,7 +89,6 @@ printf 'RG=%s\nSTORAGE=%s\nSTORAGE_CONTAINER=%s\nUAMI=%s\nUAMI_CLIENT_ID=%s\nSUB
 
 </details>
 
-
 ## 1. Storage service endpoint, firewall, RBAC 확인
 
 👁️ **설명**

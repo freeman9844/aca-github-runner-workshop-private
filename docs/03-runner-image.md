@@ -11,7 +11,6 @@
 - ACR image tag와 보안 설정을 확인해 Module 04 입력값을 검증한다.
 - Cloud Shell 세션을 재연결한 경우에만 선택적 복구 절차로 `SUFFIX`와 실제 `ACR` 이름을 다시 입력한다.
 
-
 ## 0. 세션 재연결 시 변수 복구 (선택)
 
 <details>

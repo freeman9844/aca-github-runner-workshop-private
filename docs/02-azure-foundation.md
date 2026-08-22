@@ -60,7 +60,6 @@ flowchart TB
 > ⚠️ **중요**
 > 이 문서는 **새 foundation** 기준입니다. 이전 버전에서 ACA subnet 외 별도 subnet, Private Endpoint, Private DNS link를 이미 만들었다면 기존 리소스에 service endpoint 계약을 섞지 말고 [Module 07](07-security-limitations-cleanup.md) cleanup을 완료한 뒤 **새 suffix**로 처음부터 다시 시작하세요.
 
-
 ## 1. Module 01 공통 변수 복원
 
 👁️ **설명**

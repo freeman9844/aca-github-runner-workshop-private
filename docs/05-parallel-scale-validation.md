@@ -48,7 +48,6 @@ printf 'RG=%s\nLOG=%s\nJOB=%s\nLOG_ID=%s\n' \
 
 </details>
 
-
 ## 1. 샘플 workflow를 Cloud Shell에서 열고 GitHub 웹 UI로 생성
 
 👁️ **설명**
