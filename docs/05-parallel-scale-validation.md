@@ -518,9 +518,10 @@ queued workflow가 생겼는데 runner가 뜨지 않으면 `applicationID`, `ins
 
 KEDA auth와 Key Vault resolution이 맞는데도 runner가 등록되지 않으면 registration token 단계로 좁혀 봅니다. 이 경우 `github-app-private-key` secret이 현재 GitHub App의 활성 private key와 일치하는지, execution log에서 `Requesting registration token` 다음에 `Runner configured`가 나오는지 확인합니다.
 
-🟢 **실행**
+👁️ **설명**
 
 ```bash
+# GitHub App scaler rule과 secretRef 매핑만 읽기 전용으로 점검합니다.
 az containerapp job show \
   --name "$JOB" \
   --resource-group "$RG" \
