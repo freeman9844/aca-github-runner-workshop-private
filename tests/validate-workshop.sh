@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 bash -n runner/entrypoint.sh
+bash tests/runner/test-dockerfile.sh
 bash tests/runner/test-entrypoint.sh
 bash tests/test-artifacts.sh
 bash tests/docs/test-overview.sh
