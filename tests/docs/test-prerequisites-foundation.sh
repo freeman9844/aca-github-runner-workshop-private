@@ -70,11 +70,11 @@ for text in \
   'Custom VNet' \
   'Delegated ACA subnet' \
   'External ACA Environment' \
-  'Non-delegated Private Endpoint subnet' \
-  'Blob Private Endpoint' \
-  'Key Vault Private Endpoint' \
-  'privatelink.blob.core.windows.net' \
-  'privatelink.vaultcore.azure.net' \
+  'Microsoft.Storage service endpoint' \
+  'Microsoft.KeyVault service endpoint' \
+  'Storage firewall: default deny' \
+  'Key Vault firewall: default deny' \
+  'standard public DNS' \
   'Log Analytics' \
   'Basic ACR' \
   'User-Assigned Managed Identity' \
@@ -109,15 +109,9 @@ for text in \
   'Install is prohibited' \
   'Cloud Shell 검증 script' \
   'Microsoft.Storage' \
-  'PE_SUBNET="snet-private-endpoints"' \
-  'PE_SUBNET_ID=$(az network vnet subnet show' \
   'STORAGE="stacarunner$SUFFIX"' \
   'STORAGE_CONTAINER="runner-artifacts"' \
-  'STORAGE_PE="pe-blob-$SUFFIX"' \
-  'STORAGE_DNS_ZONE="privatelink.blob.core.windows.net"' \
-  'STORAGE_DNS_LINK="link-blob-$SUFFIX"' \
-  '--address-prefixes 10.20.1.0/24' \
-  '--disable-private-endpoint-network-policies true' \
+  '--service-endpoints Microsoft.Storage Microsoft.KeyVault' \
   '--infrastructure-subnet-resource-id "$SUBNET_ID"' \
   'internal:properties.vnetConfiguration.internal' \
   'az storage account create' \
@@ -126,26 +120,18 @@ for text in \
   '--min-tls-version TLS1_2' \
   '--allow-blob-public-access false' \
   '--allow-shared-key-access false' \
-  'defaultAction' \
-  'Deny' \
+  '--public-network-access Enabled' \
+  '--default-action Deny' \
+  '--bypass None' \
   'az storage container-rm create' \
   '--public-access off' \
-  'az network private-endpoint create' \
-  '--group-id blob' \
-  'az network private-dns zone create' \
-  'privatelink.blob.core.windows.net' \
-  'az network private-endpoint dns-zone-group create' \
-  'networkInterfaces[0].id' \
+  '--subnet "$SUBNET_ID"' \
   'Storage Blob Data Contributor' \
   '--scope "$STORAGE_ID"' \
-  'KEY_VAULT_PE="pe-kv-$SUFFIX"' \
-  'KEY_VAULT_DNS_ZONE="privatelink.vaultcore.azure.net"' \
-  'KEY_VAULT_DNS_LINK="link-kv-$SUFFIX"' \
   'GITHUB_APP_KEY_SECRET="github-app-private-key"' \
   'az keyvault create' \
   '--enable-rbac-authorization true' \
   '--retention-days 7' \
-  '--default-action Deny' \
   'Key Vault Secrets Officer' \
   '### 7-L. Azure Portal Cloud Shell: GitHub App PEM file 업로드' \
   '**Objects** → **Secrets**' \
@@ -153,10 +139,11 @@ for text in \
   '--name "$GITHUB_APP_KEY_SECRET"' \
   'az keyvault secret set' \
   '--file "$UPLOADED_PEM_FILE"' \
-  '--group-id vault' \
-  'privatelink.vaultcore.azure.net' \
+  'az keyvault network-rule add' \
   'az keyvault update' \
-  '--public-network-access Disabled' \
+  '--public-network-access Enabled' \
+  '--default-action Deny' \
+  '--bypass None' \
   'Key Vault Secrets User' \
   '--scope "$KEY_VAULT_ID"'; do
   assert_contains "$ALL_TEXT" "$text" 'missing foundation marker'
@@ -603,7 +590,7 @@ keyvault_show_line="$(printf '%s\n' "$module_two_step_one" | grep -nF 'KEY_VAULT
   fail 'module 02 must select the subscription and resolve the actual vault before az keyvault show'
 for text in \
   'Module 01에서 만든 Key Vault를 재사용한다.' \
-  'Key Vault Private Endpoint와 runtime RBAC를 완성한다.'; do
+  'ACA subnet rule과 runtime RBAC를 완성한다.'; do
   assert_contains "$FOUNDATION_TEXT" "$text" \
     'module 02 goals must describe Key Vault reuse and hardening'
 done
@@ -630,39 +617,45 @@ if [[ "$module_two_step_two" == *'az group create'* ]]; then
   fail "module 02 must not recreate the Module 01 resource group"
 fi
 
-module_two_step_eight="$(
+module_two_step_seven="$(
   awk '
-    /^## 8\. / { in_section=1 }
+    /^## 7\. / { in_section=1 }
+    /^## 선택: / { exit }
     /^## 트러블슈팅/ { exit }
     in_section { print }
   ' "$FOUNDATION"
 )"
 for text in \
-  '## 8. Key Vault private network와 runtime access 완성' \
-  '--group-id vault' \
-  'privatelink.vaultcore.azure.net' \
+  '## 7. Runtime RBAC와 Key Vault firewall 완성' \
   'Key Vault Secrets User' \
-  '--public-network-access Disabled' \
+  'az keyvault network-rule add' \
+  '--subnet "$SUBNET_ID"' \
+  '--public-network-access Enabled' \
+  '--default-action Deny' \
+  '--bypass None' \
   '--assignee "$KEY_VAULT_BOOTSTRAP_PRINCIPAL_ID"' \
   '--role "Key Vault Secrets Officer"' \
-  'KEY_VAULT_SECRET_URI=' \
-  '## 8-L. Local workstation: private access 검증 후 원본 PEM 삭제'; do
-  assert_contains "$module_two_step_eight" "$text" \
-    'module 02 step 8 Key Vault hardening missing'
+  'KEY_VAULT_SECRET_URI='; do
+  assert_contains "$module_two_step_seven" "$text" \
+    'module 02 step 7 Key Vault hardening missing'
 done
+assert_contains "$FOUNDATION_TEXT" '## 선택: Local workstation의 원본 PEM 삭제' \
+  'module 02 optional PEM deletion heading missing'
+
 for forbidden in \
   'KEY_VAULT_BOOTSTRAP_CIDR' \
   'az keyvault network-rule remove'; do
-  if [[ "$module_two_step_eight" == *"$forbidden"* ]]; then
-    fail "module 02 step 8 must not remove a nonexistent CIDR rule: $forbidden"
+  if [[ "$module_two_step_seven" == *"$forbidden"* ]]; then
+    fail "module 02 step 7 must not remove a nonexistent CIDR rule: $forbidden"
   fi
 done
 for forbidden in \
   'az keyvault create' \
   'az keyvault secret set' \
-  '## 8-L. Local workstation: GitHub App PEM 업로드'; do
-  if [[ "$module_two_step_eight" == *"$forbidden"* ]]; then
-    fail "module 02 step 8 still owns Module 01 bootstrap behavior: $forbidden"
+  '## 8. ' \
+  '## 8-L. '; do
+  if [[ "$module_two_step_seven" == *"$forbidden"* ]]; then
+    fail "module 02 step 7 still owns obsolete content: $forbidden"
   fi
 done
 for forbidden in \
@@ -685,8 +678,8 @@ assert_contains_multiline \
 
 assert_contains_multiline \
   "$FOUNDATION_TEXT" \
-  $'az network private-dns record-set a show \\\n  --resource-group "$RG" \\\n  --zone-name "$KEY_VAULT_DNS_ZONE" \\\n  --name "$KEY_VAULT" \\\n  --query "aRecords[].ipv4Address" \\\n  --output tsv' \
-  'module 02 must validate the Key Vault private DNS A record before PEM deletion'
+  $'az keyvault show \\\n  --resource-group "$RG" \\\n  --name "$KEY_VAULT" \\\n  --query "{publicNetworkAccess:properties.publicNetworkAccess,defaultAction:properties.networkAcls.defaultAction,bypass:properties.networkAcls.bypass,vnetRules:properties.networkAcls.virtualNetworkRules[].{id:id,ignoreMissingVnetServiceEndpoint:ignoreMissingVnetServiceEndpoint}}" \\\n  --output json' \
+  'module 02 must validate the Key Vault firewall state before PEM deletion'
 
 for forbidden in \
   '--value "$GITHUB_APP_PRIVATE_KEY"'; do
@@ -696,8 +689,8 @@ for forbidden in \
 done
 
 last_public_network_access="$(grep -oE -- '--public-network-access (Enabled|Disabled)' "$FOUNDATION" | tail -n1 || true)"
-[[ "$last_public_network_access" == '--public-network-access Disabled' ]] || \
-  fail "final --public-network-access occurrence must be Disabled"
+[[ "$last_public_network_access" == '--public-network-access Enabled' ]] || \
+  fail "final --public-network-access occurrence must be Enabled"
 
 assert_contains \
   "$FOUNDATION_TEXT" \
@@ -715,6 +708,59 @@ legacy_line="$(grep -nF '이전 버전의 워크숍에서 만든 기본 네트�
 [[ -n "$first_run_line" && -n "$legacy_line" ]] || fail "missing section 4 ordering markers"
 [[ "$first_run_line" -lt "$legacy_line" ]] || fail "first-run instruction must appear before legacy migration condition"
 
+
+for text in \
+  'Delegated ACA subnet' \
+  'Microsoft.Storage service endpoint' \
+  'Microsoft.KeyVault service endpoint' \
+  'Storage Blob Data Contributor' \
+  'Key Vault Secrets User' \
+  'publicNetworkAccess=Enabled' \
+  'defaultAction=Deny' \
+  'bypass=None'; do
+  assert_contains "$architecture_section" "$text" \
+    'module 02 service endpoint architecture marker missing'
+done
+
+for text in \
+  '--service-endpoints Microsoft.Storage Microsoft.KeyVault' \
+  'az storage account network-rule add' \
+  '--subnet "$SUBNET_ID"' \
+  'az keyvault network-rule add' \
+  '--public-network-access Enabled' \
+  '--default-action Deny' \
+  '--bypass None'; do
+  assert_contains "$FOUNDATION_TEXT" "$text" \
+    'module 02 service endpoint command missing'
+done
+
+numbered_step_count="$(grep -Ec '^## [1-7]\. ' "$FOUNDATION")"
+[[ "$numbered_step_count" -eq 7 ]] ||
+  fail "module 02 must contain exactly seven numbered steps"
+
+for forbidden in \
+  'snet-private-endpoints' \
+  'PE_SUBNET' \
+  'STORAGE_PE' \
+  'KEY_VAULT_PE' \
+  'PRIVATE_ENDPOINT_CIDR' \
+  'az network private-endpoint' \
+  'az network private-dns' \
+  'privatelink.blob.core.windows.net' \
+  'privatelink.vaultcore.azure.net' \
+  '## 8. '; do
+  if grep -F -- "$forbidden" "$FOUNDATION" >/dev/null; then
+    fail "module 02 still contains obsolete Private Link contract: $forbidden"
+  fi
+done
+
+keyvault_rule_line="$(printf '%s\n' "$module_two_step_seven" | grep -nF 'az keyvault network-rule add' | head -n1 | cut -d: -f1)"
+role_check_line="$(printf '%s\n' "$module_two_step_seven" | grep -nF 'az role assignment list' | head -n1 | cut -d: -f1)"
+bootstrap_delete_line="$(printf '%s\n' "$module_two_step_seven" | grep -nF 'az role assignment delete' | head -n1 | cut -d: -f1)"
+[[ "$keyvault_rule_line" -lt "$role_check_line" &&
+   "$role_check_line" -lt "$bootstrap_delete_line" ]] ||
+  fail 'module 02 must verify runtime access before deleting bootstrap access'
+
 if grep -F '이전 버전의 워크숍에서 만든 기본 네트워크 또는 internal environment가 있는 경우에만 해당합니다. 해당 Environment는 현재 External custom VNet foundation으로 변환할 수 없으므로, 이 워크숍을 처음 실행할 때는 아래 명령으로 새 Environment를 만들고 이전 버전에서 이어오는 경우에는 새 workshop suffix로 다시 만듭니다.' "$FOUNDATION" >/dev/null; then
   fail "legacy-only combined paragraph must be split and reordered"
 fi
@@ -725,7 +771,6 @@ for obsolete in \
   'Personal access tokens' \
   '01-github-fine-grained-pat-settings.png' \
   '--internal-only ''true' \
-  'az storage account network-rule add' \
   'ENV_DEFAULT_''DOMAIN' \
   'ENV_STATIC_''IP' \
   'az network private-dns record-set a add-record' \

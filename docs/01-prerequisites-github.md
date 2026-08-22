@@ -92,12 +92,10 @@ az account show --query "{Name:name,SubscriptionId:id,State:state}" -o table
 
 이 워크숍은 Azure Container Apps Job, Azure Container Registry, Azure Monitor,
 Log Analytics뿐 아니라 External ACA Environment용 Virtual Network,
-delegated subnet, Blob Private Endpoint, Private DNS, Storage Account, Key Vault를 함께
+delegated subnet, Storage·Key Vault service endpoint, Storage Account, Key Vault를 함께
 사용합니다. 따라서 Cloud Shell에서 필요한 extension과 resource provider를
-먼저 준비합니다. `Microsoft.Network`는 VNet, subnet, Private Endpoint,
-Private DNS를 위해 필요하고, `Microsoft.ContainerService`는 ACA custom VNet
-infrastructure provisioning에, `Microsoft.Storage`는 Storage Account와 Blob
-Private Endpoint 생성에, `Microsoft.KeyVault`는 GitHub App private key를 보관할 Key Vault 생성에 필요합니다. `--upgrade`를 함께 지정해야 이전 버전의
+먼저 준비합니다. `Microsoft.Network`는 VNet, subnet, subnet delegation, service endpoint를 위해 필요하고, `Microsoft.ContainerService`는 ACA custom VNet
+infrastructure provisioning에, `Microsoft.Storage`는 Storage Account와 subnet rule 생성에, `Microsoft.KeyVault`는 GitHub App private key를 보관할 Key Vault와 이후 subnet rule 적용에 필요합니다. `--upgrade`를 함께 지정해야 이전 버전의
 `containerapp` extension이 이미 설치된 Cloud Shell에서도 워크숍 기준 버전
 `0.3.55`로 실제 교체됩니다.
 
@@ -121,7 +119,7 @@ az provider register -n Microsoft.Insights --wait
 
 - 여덟 provider 등록 명령과 extension 갱신이 오류 없이 종료됩니다.
 - `--wait`를 사용했으므로 provider 상태가 `Registered`가 될 때까지 반환하지 않습니다.
-- Storage Account, Private Endpoint 또는 Key Vault 생성에서 `MissingSubscriptionRegistration`이 발생하면 `Microsoft.Storage`와 `Microsoft.KeyVault` 등록 상태를 확인합니다.
+- Storage Account, service endpoint 연계 또는 Key Vault 생성에서 `MissingSubscriptionRegistration`이 발생하면 `Microsoft.Storage`와 `Microsoft.KeyVault` 등록 상태를 확인합니다.
 
 ## 3. GitHub에서 조직 소유 실습용 `Private repository` 만들기
 
@@ -344,8 +342,7 @@ GITHUB_APP_INSTALLATION_ID=98765432
 이 단계에서는 Module 01과 이후 Azure 모듈이 함께 사용할 Resource Group, Key Vault,
 비밀 이름을 준비합니다. Cloud Shell에서는 공유 Azure 식별자와 Key Vault를 만들고,
 테스트 편의를 위해 public network access를 임시 허용합니다. Secret 작업은 RBAC 권한이
-있는 사용자만 수행할 수 있으며, Module 02에서 Private Endpoint를 만든 뒤 public access를
-비활성화합니다.
+있는 사용자만 수행할 수 있으며, Module 02에서 ACA subnet rule과 `defaultAction=Deny`를 적용해 data-plane 접근을 제한합니다.
 
 ### 7-C. Cloud Shell: Key Vault bootstrap
 
@@ -530,7 +527,7 @@ Azure Portal의 Key Vault → **Objects** → **Secrets**에서도
 | `Failed to resolve 'kvacarunner.vault.azure.net'` 뒤에 빈 `PASS: Key Vault secret 저장 완료:`가 출력됨 | 이전 7-L 코드가 stale `KEY_VAULT=kvacarunner`를 사용했고 Azure CLI 실패를 `PASS`로 잘못 표시함 | `cd ~/aca-github-runner-workshop && git pull --ff-only`로 최신 script를 받은 뒤 PEM을 다시 upload하고 `bash scripts/store-github-app-private-key.sh "$RG"`를 실행합니다. 새 script는 `$RG`의 실제 vault를 조회하며 실패 시 `PASS`를 출력하지 않습니다. |
 | 7-L secret 저장 또는 step 8 secret download가 `403 Forbidden`으로 실패함 | 현재 Cloud Shell 사용자에게 `Key Vault Secrets Officer`가 없거나 RBAC가 아직 전파되지 않음 | 7-C와 같은 Cloud Shell 계정인지 확인하고 최대 10분 기다린 뒤 7-L 또는 step 8을 다시 실행합니다. |
 | step 8이 GitHub `401` 또는 `404`로 실패함 | App ID, Installation ID, 또는 Key Vault에 저장된 PEM이 서로 다른 GitHub App에 속함 | 5단계 App settings와 installation URL을 다시 확인하고 같은 App의 PEM을 7-L에서 새 secret version으로 다시 저장합니다. |
-| Storage Account, Private Endpoint 또는 Key Vault 생성에서 `MissingSubscriptionRegistration`이 발생함 | `Microsoft.Storage` 또는 `Microsoft.KeyVault` provider가 아직 등록되지 않음 | 2단계의 `az provider register -n Microsoft.Storage --wait`와 `az provider register -n Microsoft.KeyVault --wait`를 다시 실행하고 등록 완료 후 다시 시도합니다. |
+| Storage Account, service endpoint 연계 또는 Key Vault 생성에서 `MissingSubscriptionRegistration`이 발생함 | `Microsoft.Storage` 또는 `Microsoft.KeyVault` provider가 아직 등록되지 않음 | 2단계의 `az provider register -n Microsoft.Storage --wait`와 `az provider register -n Microsoft.KeyVault --wait`를 다시 실행하고 등록 완료 후 다시 시도합니다. |
 
 Key Vault 이름 충돌이 났다면 `SUFFIX`, `RG`, 다른 리소스 이름은 그대로 두고 vault 이름만 바꿉니다.
 

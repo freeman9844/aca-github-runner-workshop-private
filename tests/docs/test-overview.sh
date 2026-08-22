@@ -56,8 +56,9 @@ done
 for text in \
   'Custom VNet 통합 ACA Environment' \
   'ACA Event Job은 ingress를 지원하지 않습니다.' \
-  'Blob Private Endpoint' \
-  'privatelink.blob.core.windows.net' \
+  'Microsoft.Storage service endpoint' \
+  'Storage firewall: default deny' \
+  'standard public DNS' \
   'Storage Blob Data Contributor' \
   'GitHub, ARM, Entra ID, Azure Monitor와 Basic ACR은 public outbound를 사용합니다.'; do
   require "$text" "missing README architecture marker"
@@ -67,8 +68,8 @@ for text in \
   'organization-owned GitHub App' \
   'GitHub App installation' \
   'Azure Key Vault' \
-  'Key Vault Private Endpoint' \
-  'privatelink.vaultcore.azure.net' \
+  'Microsoft.KeyVault service endpoint' \
+  'Key Vault firewall: default deny' \
   'Key Vault Secrets User' \
   'Azure Portal Cloud Shell Bash' \
   'trusted workflow'; do
@@ -76,8 +77,8 @@ for text in \
 done
 
 require '| 01 | [GitHub 사전 준비](docs/01-prerequisites-github.md) | GitHub App 설치, Azure Portal Cloud Shell file upload와 installation 범위 검증 | 30분 |' 'README Module 01 row mismatch'
-require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Blob·Key Vault Private Endpoint·Private DNS와 runtime RBAC | 30분 |' 'README Module 02 row mismatch'
-require '| 06 | [Private Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 private Blob 업로드·다운로드와 checksum 검증 | 20분 |' 'README Module 06 row mismatch'
+require '| 02 | [Azure 기반 리소스 준비](docs/02-azure-foundation.md) | Custom VNet ACA Environment, Storage·Key Vault service endpoint와 runtime RBAC | 30분 |' 'README Module 02 row mismatch'
+require '| 06 | [VNet 제한 Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | Managed Identity 기반 Blob 업로드·다운로드와 checksum 검증 | 20분 |' 'README Module 06 row mismatch'
 require '**약 150분**' 'README top-level duration mismatch'
 require '|  | **워크숍 합계** |  | **150분** |' 'README module table total mismatch'
 require '| 합계 | 전체 워크숍 | 150분 |' 'README schedule total mismatch'
@@ -161,7 +162,8 @@ schedule_total_check="$(
 }
 
 require '| Azure Key Vault |' 'README cost table missing Key Vault row'
-require '| Key Vault Private Endpoint |' 'README cost table missing Key Vault Private Endpoint row'
+require '| Virtual network service endpoint | 추가 요금 없음 |' \
+  'README cost table missing service endpoint row'
 
 for obsolete in \
   'GitHub App が' \

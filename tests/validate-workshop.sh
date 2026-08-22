@@ -82,7 +82,9 @@ for text in \
   'installationID=' \
   'appKey=github-app-private-key' \
   'github-app-private-key=keyvaultref:' \
-  'privatelink.vaultcore.azure.net'; do
+  'Microsoft.Storage' \
+  'Microsoft.KeyVault' \
+  'az keyvault network-rule add'; do
   grep -RF -- "$text" "${core_workshop_paths[@]}" >/dev/null || {
     printf 'FAIL: missing GitHub App configuration: %s\n' "$text" >&2
     exit 1
