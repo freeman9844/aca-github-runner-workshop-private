@@ -26,7 +26,6 @@ for heading in \
   '## 사전 요구사항' \
   '## 모듈 목차' \
   '## 세션이 끊겼을 때' \
-  '## 완료 기준' \
   '## 시간표' \
   '## 비용 개요' \
   '## 태깅 범례' \
@@ -172,9 +171,11 @@ require '|  | **워크숍 합계** |  | **150분** |' 'README module table total
 require '| 합계 | 전체 워크숍 | 150분 |' 'README schedule total mismatch'
 require '> 리소스 그룹 삭제 요청은 150분 일정에 포함되지만' 'README cleanup note total mismatch'
 require '이 워크숍은 Fine-grained PAT를 사용하지 않습니다.' 'README must explicitly state Fine-grained PAT is not used'
-require '- [ ] GitHub App이 `aca-runner-lab` repository에만 설치되어 있습니다.' 'README completion checklist typo or contract mismatch'
 require 'Module 06의 1단계에서 control-plane을 확인하고, 3단계에서 runner의 Blob data-plane 성공과 checksum 결과를 함께 해석합니다.' 'README Module 06 flow summary mismatch'
 require 'GitHub App installation 또는 권한 변경은 organization 보안 정책에 따라 owner 승인 또는 재승인이 필요할 수 있습니다.' 'README missing GitHub App approval caveat'
+if grep -Eq '^## 완료 기준$|^- \[ \] ' "$README"; then
+  fail 'README must not include a separate completion criteria checklist'
+fi
 for obsolete in \
   '- [ ] GitHub에 permanent online ephemeral runner가 남지 않습니다.' \
   'Cloud Shell에서 Step 6/7 data-plane `403`'; do

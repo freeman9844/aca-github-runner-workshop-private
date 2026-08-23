@@ -153,29 +153,6 @@ Modules 03~07에는 `0. 세션 재연결 시 변수 복구 (선택)` 영역이 �
 
 ---
 
-## 완료 기준
-
-- [ ] GitHub App이 `aca-runner-lab` repository에만 설치되어 있습니다.
-- [ ] ACR에 runner image tag가 존재합니다.
-- [ ] ACA Event Job이 예상한 image와 GitHub App KEDA metadata·auth를 사용합니다.
-- [ ] ACA Environment가 External + Custom VNet 통합 상태입니다.
-- [ ] Key Vault가 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None` 상태입니다.
-- [ ] Key Vault에는 ACA subnet만 허용하는 subnet rule이 있습니다.
-- [ ] UAMI에 Key Vault scope의 `Key Vault Secrets User` 역할이 할당되어 있습니다.
-- [ ] Module 04의 Key Vault reference synchronization/execution을 workshop delivery 전 live rehearsal로 직접 성공시켜야 합니다.
-- [ ] KEDA scaler에 `applicationID`, `installationID`, `appKey=github-app-private-key` metadata와 auth가 올바르게 연결됩니다.
-- [ ] workflow에 App 변수(`GITHUB_APP_ID` 등)가 직접 노출되지 않습니다.
-- [ ] matrix 4개 Job이 모두 성공합니다.
-- [ ] active execution이 `0 → N → 0`으로 돌아옵니다.
-- [ ] runner lifecycle marker가 CLI 또는 Log Analytics에 나타납니다.
-- [ ] self-hosted runner가 Managed Identity로 Azure에 로그인하고 VNet 제한 Blob artifact를 업로드·다운로드합니다.
-- [ ] Storage account가 `publicNetworkAccess=Enabled`, `defaultAction=Deny`, `bypass=None`, `allowBlobPublicAccess=False`, `allowSharedKeyAccess=False` 상태입니다.
-- [ ] Storage와 Key Vault 모두 ACA subnet rule과 runtime RBAC가 교차 검증됩니다.
-- [ ] GitHub App installation이 제거되었습니다. App도 삭제합니다.
-- [ ] Azure cleanup 후 조회 결과가 `ResourceGroupNotFound`에 도달합니다.
-
----
-
 ## 시간표
 
 | 구간 | 내용 | 예상 시간 |
