@@ -59,12 +59,51 @@ for module in \
   require "$module" "missing README module link"
 done
 
+architecture_section="$(
+  awk '
+    /^## 아키텍처$/ { in_section=1 }
+    /^## / && in_section && $0 != "## 아키텍처" { exit }
+    in_section { print }
+  ' "$README"
+)"
+
+for text in \
+  '```mermaid' \
+  'flowchart LR' \
+  'GitHub Actions' \
+  'Workflow queue' \
+  'Azure Resource Group' \
+  'Custom VNet' \
+  'Delegated ACA subnet' \
+  'Azure Container Apps' \
+  'Event Job + ephemeral runner<br/>workflow job 실행' \
+  'Azure Blob Storage' \
+  'github ~~~ aca' \
+  'aca -->|"KEDA queue polling<br/>runner job 수신"| github' \
+  'aca -->|"Blob upload / download<br/>service endpoint"| blob'; do
+  [[ "$architecture_section" == *"$text"* ]] ||
+    fail "README simplified architecture marker missing: $text"
+done
+
+for unnecessary_node in \
+  'organization-owned GitHub App] -->' \
+  'root bootstrap wrapper' \
+  'Microsoft.Storage service endpoint]' \
+  'Microsoft.KeyVault service endpoint]' \
+  'kv[(Azure Key Vault' \
+  'acr[(Basic ACR)]' \
+  'azure[Azure control plane]'; do
+  if [[ "$architecture_section" == *"$unnecessary_node"* ]]; then
+    fail "README architecture still contains unnecessary node: $unnecessary_node"
+  fi
+done
+
 for text in \
   'Custom VNet 통합 ACA Environment' \
   'ACA Event Job은 ingress를 지원하지 않습니다.' \
-  'Microsoft.Storage service endpoint' \
-  'Storage firewall: default deny' \
-  'standard public DNS' \
+  'Storage와 Key Vault의 표준 DNS 이름은 public service IP로 해석됩니다.' \
+  'public service endpoint는 유지되지만 `defaultAction=Deny`, `bypass=None`, ACA subnet rule로 data-plane 접근을 제한합니다.' \
+  'service endpoint는 Private Link가 아니며 private IP를 만들지 않습니다.' \
   'Storage Blob Data Contributor' \
   'GitHub, ARM, Entra ID, Azure Monitor와 Basic ACR은 public outbound를 사용합니다.'; do
   require "$text" "missing README architecture marker"
@@ -74,8 +113,8 @@ for text in \
   'organization-owned GitHub App' \
   'GitHub App installation' \
   'Azure Key Vault' \
-  'Microsoft.KeyVault service endpoint' \
-  'Key Vault firewall: default deny' \
+  'Storage·Key Vault service endpoint' \
+  '`defaultAction=Deny`, `bypass=None`' \
   'Key Vault Secrets User' \
   'Azure Portal Cloud Shell Bash' \
   'trusted workflow'; do

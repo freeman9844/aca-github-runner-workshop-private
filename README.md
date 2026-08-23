@@ -35,33 +35,21 @@ cd ~/aca-github-runner-workshop
 
 ```mermaid
 flowchart LR
-  user([참가자]) -->|workflow_dispatch| repo[GitHub Private Repository]
-  repo -->|queued jobs| keda[KEDA github-runner scaler]
-  ghapp[organization-owned GitHub App] -->|App metadata + auth| keda
-  ghapp -->|GitHub App installation token| rootwrap[root bootstrap wrapper]
+  github["GitHub Actions<br/>Workflow queue"]
 
-  subgraph vnet[Custom VNet]
-    subgraph acaSubnet[Delegated ACA subnet]
-      env[ACA Environment]
-      job[ACA Event Job\nephemeral runner]
-      storageSe[Microsoft.Storage service endpoint]
-      keyVaultSe[Microsoft.KeyVault service endpoint]
+  subgraph rg["Azure Resource Group: rg-acarunner-{suffix}"]
+    subgraph vnet["Custom VNet: 10.20.0.0/16"]
+      subgraph acaSubnet["Delegated ACA subnet: 10.20.0.0/27"]
+        aca["Azure Container Apps<br/>Event Job + ephemeral runner<br/>workflow job 실행"]
+      end
     end
+
+    blob["Azure Blob Storage<br/>runner-artifacts container"]
   end
 
-  storage[(Storage Blob\nStorage firewall: default deny\nstandard public DNS)]
-  kv[(Azure Key Vault\nKey Vault firewall: default deny\nstandard public DNS\ngithub-app-private-key)]
-  acr[(Basic ACR)]
-  azure[Azure control plane]
-
-  keda -->|0..5 executions| job
-  job -->|runner registration via installation token| repo
-  job -->|Managed Identity + Storage Blob Data Contributor| storageSe
-  storageSe --> storage
-  job -->|Key Vault reference + Key Vault Secrets User| keyVaultSe
-  keyVaultSe --> kv
-  acr -->|public image pull| job
-  job -->|public ARM/Entra/Monitor| azure
+  github ~~~ aca
+  aca -->|"KEDA queue polling<br/>runner job 수신"| github
+  aca -->|"Blob upload / download<br/>service endpoint"| blob
 ```
 
 이 워크숍의 네트워크 계약은 다음과 같습니다.
