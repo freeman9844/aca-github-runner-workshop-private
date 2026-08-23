@@ -67,6 +67,36 @@ architecture_section="$(
   ' "$README"
 )"
 
+architecture_diagram="$(
+  awk '
+    /^## 아키텍처$/ { in_architecture=1; next }
+    in_architecture && /^```mermaid$/ { in_mermaid=1 }
+    in_mermaid { print }
+    in_mermaid && /^```$/ { exit }
+  ' "$README"
+)"
+
+resource_group_block="$(
+  awk '
+    /subgraph rg\[/ {
+      in_resource_group=1
+      depth=1
+    }
+    in_resource_group {
+      print
+      if ($0 !~ /subgraph rg\[/ && $0 ~ /^[[:space:]]*subgraph /) {
+        depth++
+      }
+      if ($0 ~ /^[[:space:]]*end[[:space:]]*$/) {
+        depth--
+        if (depth == 0) {
+          exit
+        }
+      }
+    }
+  ' <<<"$architecture_diagram"
+)"
+
 for text in \
   '```mermaid' \
   'flowchart LR' \
@@ -78,11 +108,22 @@ for text in \
   'Azure Container Apps' \
   'Event Job + ephemeral runner<br/>workflow job 실행' \
   'Azure Blob Storage' \
-  'github ~~~ aca' \
-  'aca -->|"KEDA queue polling<br/>runner job 수신"| github' \
-  'aca -->|"Blob upload / download<br/>service endpoint"| blob'; do
-  [[ "$architecture_section" == *"$text"* ]] ||
+  'aca -->|"KEDA queue polling"| github' \
+  'github -->|"queued job response"| aca' \
+  'aca -->|"Blob upload / download<br/>service endpoint"| blob' \
+  'acr -.->|"runner image pull"| aca' \
+  'kv -.->|"secret reference"| aca' \
+  'aca -.->|"console / system logs"| log'; do
+  [[ "$architecture_diagram" == *"$text"* ]] ||
     fail "README simplified architecture marker missing: $text"
+done
+
+for resource_node in \
+  'acr["Azure Container Registry<br/>runner image"]' \
+  'kv["Azure Key Vault<br/>GitHub App private key"]' \
+  'log["Log Analytics<br/>execution logs"]'; do
+  [[ "$resource_group_block" == *"$resource_node"* ]] ||
+    fail "README supporting resource must stay inside Azure Resource Group: $resource_node"
 done
 
 for unnecessary_node in \
@@ -90,10 +131,11 @@ for unnecessary_node in \
   'root bootstrap wrapper' \
   'Microsoft.Storage service endpoint]' \
   'Microsoft.KeyVault service endpoint]' \
-  'kv[(Azure Key Vault' \
-  'acr[(Basic ACR)]' \
+  'uami[' \
+  'Managed Identity + Storage Blob Data Contributor' \
+  'Key Vault reference + Key Vault Secrets User' \
   'azure[Azure control plane]'; do
-  if [[ "$architecture_section" == *"$unnecessary_node"* ]]; then
+  if [[ "$architecture_diagram" == *"$unnecessary_node"* ]]; then
     fail "README architecture still contains unnecessary node: $unnecessary_node"
   fi
 done

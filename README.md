@@ -45,12 +45,23 @@ flowchart LR
     end
 
     blob["Azure Blob Storage<br/>runner-artifacts container"]
+
+    subgraph support["Supporting resources"]
+      acr["Azure Container Registry<br/>runner image"]
+      kv["Azure Key Vault<br/>GitHub App private key"]
+      log["Log Analytics<br/>execution logs"]
+    end
   end
 
-  github ~~~ aca
-  aca -->|"KEDA queue polling<br/>runner job 수신"| github
+  aca -->|"KEDA queue polling"| github
+  github -->|"queued job response"| aca
   aca -->|"Blob upload / download<br/>service endpoint"| blob
+  acr -.->|"runner image pull"| aca
+  kv -.->|"secret reference"| aca
+  aca -.->|"console / system logs"| log
 ```
+
+실선은 workflow와 Blob data-plane의 주 실행 흐름이고, 점선은 runner image, secret, log를 제공하는 보조 리소스 연결입니다.
 
 이 워크숍의 네트워크 계약은 다음과 같습니다.
 
