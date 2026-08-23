@@ -4,44 +4,30 @@
 
 ## 아키텍처 참고
 
-아래 다이어그램은 이 모듈에서 준비하는 Azure foundation과 주요 연결을 요약합니다. ACA Event Job은 아직 만들지 않으며 Module 04에서 이 foundation에 연결합니다.
+아래 다이어그램은 전체 워크숍의 실제 호출 흐름을 리소스 관점으로 단순화한 것입니다. Module 02에서는 ACA Environment와 Blob Storage 기반을 준비하고, ACA Event Job과 ephemeral runner는 Module 04에서 추가합니다.
 
 ```mermaid
-flowchart TB
-  next["Module 04에서 추가<br/>ACA Event Job<br/>(Module 02에서는 미생성)"]
+flowchart LR
+  github["GitHub Actions<br/>Workflow queue"]
 
-  subgraph rg["Resource Group: rg-acarunner-{suffix}"]
-    log["Log Analytics<br/>ContainerAppConsoleLogs"]
-    acr["Basic ACR<br/>Admin disabled · ARM authentication"]
-    uami["User-Assigned Managed Identity"]
-    storage["Storage Account<br/>Storage firewall: default deny<br/>standard public DNS<br/>publicNetworkAccess=Enabled<br/>defaultAction=Deny<br/>bypass=None"]
-    kv["Key Vault<br/>Key Vault firewall: default deny<br/>standard public DNS<br/>publicNetworkAccess=Enabled<br/>defaultAction=Deny<br/>bypass=None"]
-
+  subgraph rg["Azure Resource Group: rg-acarunner-{suffix}"]
     subgraph vnet["Custom VNet: 10.20.0.0/16"]
       subgraph acaSubnet["Delegated ACA subnet: 10.20.0.0/27"]
-        env["External ACA Environment<br/>Microsoft.App/environments delegation"]
-        storageSe["Microsoft.Storage service endpoint"]
-        keyVaultSe["Microsoft.KeyVault service endpoint"]
+        aca["Azure Container Apps<br/>Event Job + ephemeral runner<br/>workflow job 실행<br/>(Module 04)"]
       end
     end
+
+    blob["Azure Blob Storage<br/>runner-artifacts container"]
   end
 
-  env -->|"Diagnostic settings"| log
-  env -->|"service endpoint"| storageSe
-  storageSe --> storage
-  env -->|"service endpoint"| keyVaultSe
-  keyVaultSe --> kv
-  uami -->|"AcrPull"| acr
-  uami -->|"Storage Blob Data Contributor"| storage
-  uami -->|"Key Vault Secrets User"| kv
-  next -.->|"Custom VNet + UAMI + secret reference 사용"| env
+  github ~~~ aca
+  aca -->|"KEDA queue polling<br/>runner job 수신"| github
+  aca -->|"Blob upload / download<br/>service endpoint"| blob
 ```
 
-- External ACA Environment는 custom VNet에 통합되지만 internal environment는 아니며, Module 04에서 추가할 ACA Event Job은 ingress를 제공하지 않습니다.
-- Module 01에서 만든 Key Vault를 재사용한다. Module 02는 vault 자체를 다시 만들거나 GitHub App private key를 다시 업로드하지 않습니다.
-- ACA subnet rule과 runtime RBAC를 완성한다. Storage와 Key Vault는 public endpoint를 유지하되 `defaultAction=Deny`, `bypass=None`, ACA subnet rule로 data-plane 접근을 제한합니다.
-- service endpoint는 Private Link가 아니며 private IP를 만들지 않습니다. Storage와 Key Vault의 표준 DNS 이름은 public service IP로 해석됩니다.
-- GitHub, ARM, Entra ID, Azure Monitor와 Basic ACR은 public outbound를 사용합니다.
+- GitHub Actions에 workflow가 queued되면 ACA Event Job의 KEDA scaler가 GitHub API를 outbound polling하고 ephemeral runner execution을 시작합니다.
+- runner는 workflow job을 실행하면서 ACA subnet의 service endpoint 경로로 Azure Blob Storage에 artifact를 upload/download합니다.
+- 이 그림은 runtime 호출 흐름만 보여줍니다. 방화벽, 인증, image pull, secret, logging의 상세 설정은 Module 02~06의 실행 단계에서 다룹니다.
 
 ## 목표
 

@@ -76,24 +76,34 @@ architecture_section="$(
 
 for text in \
   '```mermaid' \
-  'flowchart TB' \
-  'Resource Group' \
+  'flowchart LR' \
+  'GitHub Actions' \
+  'Workflow queue' \
+  'Azure Resource Group' \
   'Custom VNet' \
   'Delegated ACA subnet' \
-  'External ACA Environment' \
-  'Microsoft.Storage service endpoint' \
-  'Microsoft.KeyVault service endpoint' \
-  'Storage firewall: default deny' \
-  'Key Vault firewall: default deny' \
-  'standard public DNS' \
-  'Log Analytics' \
-  'Basic ACR' \
+  'Azure Container Apps' \
+  'Event Job + ephemeral runner<br/>workflow job 실행<br/>(Module 04)' \
+  'Azure Blob Storage' \
+  'github ~~~ aca' \
+  'aca -->|"KEDA queue polling<br/>runner job 수신"| github' \
+  'Blob upload / download' \
+  'service endpoint' \
+  'Module 04'; do
+  assert_contains "$architecture_section" "$text" 'module 02 architecture diagram missing marker'
+done
+
+for unnecessary_node in \
   'User-Assigned Managed Identity' \
   'AcrPull' \
   'Storage Blob Data Contributor' \
   'Key Vault Secrets User' \
-  'Module 04'; do
-  assert_contains "$architecture_section" "$text" 'module 02 architecture diagram missing marker'
+  'Basic ACR' \
+  'Log Analytics' \
+  'Key Vault'; do
+  if grep -F -- "$unnecessary_node" <<<"$architecture_section" >/dev/null; then
+    fail "module 02 architecture diagram contains unnecessary node: $unnecessary_node"
+  fi
 done
 
 architecture_line="$(grep -nF '## 아키텍처 참고' "$FOUNDATION" | head -n1 | cut -d: -f1)"
@@ -803,15 +813,16 @@ legacy_line="$(grep -nF '이전 버전의 워크숍에서 만든 기본 네트�
 
 for text in \
   'Delegated ACA subnet' \
-  'Microsoft.Storage service endpoint' \
-  'Microsoft.KeyVault service endpoint' \
+  'Microsoft.Storage' \
+  'Microsoft.KeyVault' \
+  'service endpoint' \
   'Storage Blob Data Contributor' \
   'Key Vault Secrets User' \
   'publicNetworkAccess=Enabled' \
   'defaultAction=Deny' \
   'bypass=None'; do
-  assert_contains "$architecture_section" "$text" \
-    'module 02 service endpoint architecture marker missing'
+  assert_contains "$FOUNDATION_TEXT" "$text" \
+    'module 02 service endpoint foundation marker missing'
 done
 
 for text in \
