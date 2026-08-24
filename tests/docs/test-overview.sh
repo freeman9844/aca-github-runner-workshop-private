@@ -24,9 +24,9 @@ for heading in \
   '## 아키텍처' \
   '## 학습 목표' \
   '## 사전 요구사항' \
+  '## 진행 전 확인' \
   '## 모듈 목차' \
   '## 세션이 끊겼을 때' \
-  '## 시간표' \
   '## 비용 개요' \
   '## 태깅 범례' \
   '## 트러블슈팅 색인' \
@@ -168,27 +168,22 @@ require '| 05 | [병렬 실행과 스케일 검증](docs/05-parallel-scale-valid
 require '| 06 | [VNet 제한 Blob 배포와 결과 확인](docs/06-azure-sample-deployment.md) | control-plane 사전 확인과 Managed Identity 기반 Blob checksum 검증 | 20분 |' 'README Module 06 row mismatch'
 require '**약 150분**' 'README top-level duration mismatch'
 require '|  | **워크숍 합계** |  | **150분** |' 'README module table total mismatch'
-require '| 합계 | 전체 워크숍 | 150분 |' 'README schedule total mismatch'
-require '> 리소스 그룹 삭제 요청은 150분 일정에 포함되지만' 'README cleanup note total mismatch'
 require '이 워크숍은 Fine-grained PAT를 사용하지 않습니다.' 'README must explicitly state Fine-grained PAT is not used'
-require 'Module 06의 1단계에서 control-plane을 확인하고, 3단계에서 runner의 Blob data-plane 성공과 checksum 결과를 함께 해석합니다.' 'README Module 06 flow summary mismatch'
+require 'Cloud Shell에서 VNet 제한 Blob에 직접 접근할 때 발생하는 `403`은 예상된 결과입니다.' 'README missing expected Cloud Shell 403 guidance'
+require 'Module 04의 Key Vault secret reference는 workshop delivery 전에 운영자가 live rehearsal로 검증해야 합니다.' 'README missing concise Key Vault rehearsal guidance'
 require 'GitHub App installation 또는 권한 변경은 organization 보안 정책에 따라 owner 승인 또는 재승인이 필요할 수 있습니다.' 'README missing GitHub App approval caveat'
 if grep -Eq '^## 완료 기준$|^- \[ \] ' "$README"; then
   fail 'README must not include a separate completion criteria checklist'
 fi
 for obsolete in \
+  '## 시간표' \
+  '검증된 범위와 남은 전제' \
+  'Module 06의 1단계에서 control-plane을 확인하고, 3단계에서 runner의 Blob data-plane 성공과 checksum 결과를 함께 해석합니다.' \
   '- [ ] GitHub에 permanent online ephemeral runner가 남지 않습니다.' \
   'Cloud Shell에서 Step 6/7 data-plane `403`'; do
   if grep -F -- "$obsolete" "$README" >/dev/null; then
     fail "README still references removed module content: $obsolete"
   fi
-done
-for text in \
-  'Module 04의 Key Vault reference synchronization/execution을 workshop delivery 전 live rehearsal로 직접 성공시켜야 합니다.' \
-  '저장소 테스트만으로 증명할 수 없습니다.' \
-  '모든 identity/service endpoint/subnet rule/firewall 점검이 통과했는데도 reference synchronization이 실패하면 워크숍 delivery를 중단하고 환경별 platform path를 조사하세요.' \
-  '`defaultAction=Deny`를 완화하거나 성공처럼 보이는 fallback을 추가하지 마세요.'; do
-  require "$text" 'README missing Key Vault service-endpoint caveat'
 done
 
 module_total_check="$(
@@ -228,42 +223,19 @@ module_total_check="$(
   esac
 }
 
-schedule_total_check="$(
-  awk -F'|' '
-    function minutes(value,    cleaned) {
-      cleaned = value
-      gsub(/\*\*/, "", cleaned)
-      gsub(/[[:space:]]/, "", cleaned)
-      sub(/분$/, "", cleaned)
-      return cleaned + 0
-    }
-    /^## 시간표$/ { in_section=1; next }
-    /^## / && in_section { exit }
-    !in_section || $0 !~ /^\|/ { next }
-    $2 ~ /^[[:space:]]*구간[[:space:]]*$/ { next }
-    $2 ~ /^[[:space:]]*-+[[:space:]]*$/ { next }
-    $2 ~ /^[[:space:]]*합계[[:space:]]*$/ {
-      stated_total = minutes($4)
-      next
-    }
-    $4 ~ /분/ { sum += minutes($4) }
-    END {
-      if (stated_total == "") {
-        print "missing:schedule-total"
-        exit 1
-      }
-      print sum ":" stated_total
-      if (sum != stated_total) {
-        exit 2
-      }
-    }
+troubleshooting_section="$(
+  awk '
+    /^## 트러블슈팅 색인$/ { in_section=1 }
+    /^## / && in_section && $0 != "## 트러블슈팅 색인" { exit }
+    in_section { print }
   ' "$README"
-)" || {
-  case "$schedule_total_check" in
-    missing:schedule-total) fail 'README schedule total row missing' ;;
-    *) fail "README schedule arithmetic mismatch: ${schedule_total_check:-unknown}" ;;
-  esac
-}
+)"
+
+for module_number in 01 02 03 04 05 06 07; do
+  count="$(grep -Ec "docs/${module_number}-[^)]*#트러블슈팅" <<<"$troubleshooting_section")"
+  [[ "$count" -eq 1 ]] ||
+    fail "README troubleshooting index must link Module ${module_number} exactly once"
+done
 
 require '| Azure Key Vault |' 'README cost table missing Key Vault row'
 require '| Virtual network service endpoint | 추가 요금 없음 |' \
