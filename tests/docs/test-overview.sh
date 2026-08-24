@@ -19,7 +19,6 @@ require() {
 
 for heading in \
   '# Azure Container Apps GitHub Actions Runner 워크숍' \
-  '## 빠른 시작' \
   '## 두 GitHub 저장소 구분' \
   '## 아키텍처' \
   '## 학습 목표' \
@@ -40,12 +39,9 @@ for module in "$ROOT"/docs/0[1-7]-*.md; do
   fi
 done
 
-require '처음 Cloud Shell을 사용하는 경우 **Mount storage account**를 선택해 영구 스토리지를 연결한 뒤 Bash를 엽니다.' 'missing README first-run storage guidance'
-
-storage_line=$(grep -nF '처음 Cloud Shell을 사용하는 경우 **Mount storage account**를 선택해 영구 스토리지를 연결한 뒤 Bash를 엽니다.' "$README" | cut -d: -f1)
-clone_line=$(grep -nF 'git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop' "$README" | cut -d: -f1)
-[[ -n "$storage_line" && -n "$clone_line" && "$storage_line" -lt "$clone_line" ]] ||
-  fail 'README must establish persistent Cloud Shell storage before cloning'
+if grep -F -- '## 빠른 시작' "$README" >/dev/null; then
+  fail 'README must not include a quick start section'
+fi
 
 for module in \
   'docs/01-prerequisites-github.md' \

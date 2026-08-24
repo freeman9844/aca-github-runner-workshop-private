@@ -4,22 +4,6 @@
 
 ---
 
-## 빠른 시작
-
-1. Azure Portal에서 **Cloud Shell**을 엽니다. 처음 Cloud Shell을 사용하는 경우 **Mount storage account**를 선택해 영구 스토리지를 연결한 뒤 Bash를 엽니다. 임시 **No storage account required** 세션은 재연결 시 clone과 작업 파일이 유지되지 않으므로 이 워크숍의 기본 경로로 사용하지 않습니다.
-2. Public workshop source를 고정 경로에 clone합니다. GitHub CLI 로그인은 필요하지 않습니다.
-
-```bash
-git clone https://github.com/freeman9844/aca-github-runner-workshop-private.git ~/aca-github-runner-workshop
-cd ~/aca-github-runner-workshop
-```
-
-3. [Module 01: GitHub 사전 준비](docs/01-prerequisites-github.md)를 엽니다. 위에서 source를 clone했으므로 Module 01의 4단계는 건너뛰고, 나머지 단계와 Module 02~07을 순서대로 진행합니다. Module 07 cleanup은 필수입니다.
-
-변수 설정, 예상 출력과 오류 해결 방법은 각 모듈에서 안내합니다.
-
----
-
 ## 두 GitHub 저장소 구분
 
 | Repository | 역할 | 생성 주체 | 사용 위치 |
